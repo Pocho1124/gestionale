@@ -5,6 +5,7 @@ import { useSessione } from "../lib/sessione";
 import { useAvviso } from "../componenti/Avviso";
 import { messaggioErrore } from "../lib/errori";
 import { ALLERGENI, ETICHETTE, type Categoria, type Prodotto } from "../lib/tipi";
+import { comprimiFoto } from "../lib/immagini";
 
 const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
@@ -190,6 +191,31 @@ function RigaProdotto(props: {
   const { p, modificabile, onAggiorna } = props;
   const [aperto, setAperto] = useState(false);
   const [prezzo, setPrezzo] = useState(euroTesto(p.prezzo_cent));
+  const [foto, setFoto] = useState<string | null | undefined>(undefined);   // undefined = non ancora caricata
+  const avvisa = useAvviso();
+
+  useEffect(() => {
+    if (!aperto || foto !== undefined) return;
+    void sb().from("foto_prodotti").select("dati").eq("prodotto_id", p.id).maybeSingle()
+      .then(({ data }) => setFoto((data?.dati as string | undefined) ?? null));
+  }, [aperto, foto, p.id]);
+
+  async function caricaFoto(file: File | undefined) {
+    if (!file) return;
+    try {
+      const dati = await comprimiFoto(file, 880_000, [[1280, 0.8], [1024, 0.72], [800, 0.65]]);
+      const { error } = await sb().from("foto_prodotti").upsert({ prodotto_id: p.id, locale_id: p.locale_id, dati });
+      if (error) throw error;
+      setFoto(dati); avvisa("Foto salvata");
+    } catch (e) { avvisa(e instanceof Error ? e.message : messaggioErrore(e), "errore"); }
+  }
+
+  async function rimuoviFoto() {
+    if (!confirm(`Rimuovere la foto di «${p.nome}»?`)) return;
+    const { error } = await sb().from("foto_prodotti").delete().eq("prodotto_id", p.id);
+    if (error) { avvisa(messaggioErrore(error), "errore"); return; }
+    setFoto(null); avvisa("Foto rimossa");
+  }
   useEffect(() => { setPrezzo(euroTesto(p.prezzo_cent)); }, [p.prezzo_cent]);
 
   function salvaPrezzo() {
@@ -239,6 +265,16 @@ function RigaProdotto(props: {
 
       {modificabile && aperto && (
         <div className="piatto-dettagli">
+          <div className="foto-piatto">
+            {foto ? <img src={foto} alt={`Foto di ${p.nome}`} /> : <div className="foto-vuota">{foto === undefined ? "…" : "Nessuna foto"}</div>}
+            <div className="riga-form">
+              <label className="btn btn-piccolo">{foto ? "Sostituisci foto" : "Aggiungi foto"}
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void caricaFoto(e.target.files?.[0])} />
+              </label>
+              {foto && <button className="btn btn-pericolo" onClick={() => void rimuoviFoto()}>Rimuovi foto</button>}
+              <span className="muto piccolo">I clienti la vedono toccando il piatto. Puoi inviarla anche dal bot Telegram.</span>
+            </div>
+          </div>
           <label className="campo">Descrizione
             <textarea defaultValue={p.descrizione} maxLength={500} rows={2}
                       onBlur={(e) => { if (e.target.value !== p.descrizione) onAggiorna({ descrizione: e.target.value }); }} />

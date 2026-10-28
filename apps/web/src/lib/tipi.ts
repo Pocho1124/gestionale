@@ -28,7 +28,7 @@ export interface MenuPubblico {
     id: string; nome: string; descrizione: string;
     prodotti: {
       id: string; nome: string; descrizione: string; prezzo_cent: number; disponibile: boolean;
-      allergeni: string[]; etichette: string[]; immagine_url: string | null;
+      allergeni: string[]; etichette: string[]; immagine_url: string | null; foto?: number | null;
       opzioni: { nome: string; min: number; max: number; scelte: { nome: string; sovrapprezzo_cent: number }[] }[];
     }[];
   }[];

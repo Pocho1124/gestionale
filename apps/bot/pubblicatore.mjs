@@ -37,7 +37,7 @@ const PREDEFINITO = {
 
 // ---------------------------------------------------------------- Pagina statica
 /** logoFile / sfondoFile: file pubblicati accanto alla pagina (es. «logo.png?v=…»), se presenti. */
-export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null) {
+export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fotoPiatti = {}) {
   const a = { ...PREDEFINITO, ...(menu.aspetto ?? {}) };
   const colore = (v, d) => (COLORE.test(v) ? v : d);
   const font = (v, d) => (FONT_AMMESSI.has(v) ? v : d);
@@ -58,9 +58,9 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null) {
       <h2>${esc(c.nome)}</h2>
       ${a.mostra_descrizioni && c.descrizione ? `<p class="cat-desc">${esc(c.descrizione)}</p>` : ""}
       <div class="piatti">${c.prodotti.map((p) => `
-        <article class="piatto${p.disponibile ? "" : " esaurito"}">
+        <article class="piatto${p.disponibile ? "" : " esaurito"}${fotoPiatti[p.id] || p.descrizione ? " apribile" : ""}"${fotoPiatti[p.id] || p.descrizione ? ` tabindex="0" role="button" data-nome="${esc(p.nome)}" data-prezzo="${esc(euro(p.prezzo_cent))}" data-desc="${esc(p.descrizione)}" data-allergeni="${esc((p.allergeni ?? []).join(", "))}"${fotoPiatti[p.id] ? ` data-foto="${esc(fotoPiatti[p.id])}"` : ""}` : ""}>
           ${layout === "griglia" && /^https:\/\//.test(p.immagine_url ?? "") ? `<img class="foto" src="${esc(p.immagine_url)}" alt="" loading="lazy">` : ""}
-          <div class="riga"><h3>${esc(p.nome)}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${esc(euro(p.prezzo_cent))}</span></div>
+          <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${esc(euro(p.prezzo_cent))}</span></div>
           ${a.mostra_descrizioni && p.descrizione ? `<p class="desc">${esc(p.descrizione)}</p>` : ""}
           ${p.etichette?.length ? `<ul class="etichette">${p.etichette.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
           ${a.mostra_allergeni && p.allergeni?.length ? `<p class="allergeni">Allergeni: ${esc(p.allergeni.join(", "))}</p>` : ""}
@@ -131,6 +131,20 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .elegante .etichette li{background:transparent;color:var(--p);border:1px solid currentColor;font-weight:600}
 .elegante .badge{background:var(--a)}
 .elegante footer{border-top:1px solid color-mix(in srgb,var(--p) 35%,transparent);padding-top:18px;letter-spacing:.05em}
+.apribile{cursor:pointer}
+.apribile:focus-visible{outline:2px solid var(--p);outline-offset:4px;border-radius:6px}
+.icona-foto{font-size:.7em;color:var(--p);vertical-align:middle}
+.scheda-sfondo{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);display:grid;place-items:end center;padding:16px}
+.scheda-sfondo[hidden]{display:none}
+@media (min-width:640px){.scheda-sfondo{place-items:center}}
+.scheda{position:relative;width:min(520px,100%);max-height:90vh;overflow:auto;background:var(--s);color:var(--t);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.scheda-foto{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;border-radius:18px 18px 0 0}
+.scheda-corpo{padding:16px 20px 22px;display:grid;gap:8px}
+.scheda-corpo h3{font-family:var(--ft);font-weight:400;font-size:1.5rem;margin:0}
+.scheda-corpo .riga{justify-content:space-between}
+.scheda-corpo .prezzo{color:var(--p);font-size:1.15rem}
+.scheda-corpo p{margin:0}
+.scheda-chiudi{position:absolute;top:10px;right:10px;z-index:1;width:36px;height:36px;border-radius:999px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:1.4rem;line-height:1;cursor:pointer}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
 </head>
@@ -144,12 +158,36 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
   </header>
   ${menu.categorie.length ? `<nav aria-label="Categorie">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
   ${categorie || '<p class="vuoto">Il menu sarà disponibile a breve.</p>'}
+  <div class="scheda-sfondo" hidden><div class="scheda" role="dialog" aria-modal="true">
+    <button class="scheda-chiudi" aria-label="Chiudi">×</button><img class="scheda-foto" alt="" hidden>
+    <div class="scheda-corpo"><div class="riga"><h3></h3><span class="prezzo"></span></div><p class="desc"></p><p class="allergeni"></p></div>
+  </div></div>
   <footer>
     ${a.testo_piede ? `<p>${esc(a.testo_piede)}</p>` : ""}
     <p>Per informazioni sugli allergeni rivolgersi al personale.</p>
     <p>Aggiornato il ${esc(aggiornato)}</p>
   </footer>
 </div>
+<script>
+(() => {
+  const sfondo = document.querySelector(".scheda-sfondo"), foto = sfondo.querySelector(".scheda-foto");
+  const imposta = (sel, v) => { const el = sfondo.querySelector(sel); el.textContent = v || ""; el.hidden = !v; };
+  const apri = (art) => {
+    imposta("h3", art.dataset.nome); imposta(".scheda .prezzo", art.dataset.prezzo); imposta(".scheda .desc", art.dataset.desc);
+    imposta(".scheda .allergeni", art.dataset.allergeni ? "Allergeni: " + art.dataset.allergeni : "");
+    if (art.dataset.foto) { foto.src = art.dataset.foto; foto.alt = art.dataset.nome; foto.hidden = false; } else { foto.hidden = true; foto.removeAttribute("src"); }
+    sfondo.hidden = false; sfondo.querySelector(".scheda-chiudi").focus();
+  };
+  const chiudi = () => { sfondo.hidden = true; };
+  document.querySelectorAll(".apribile").forEach((art) => {
+    art.addEventListener("click", () => apri(art));
+    art.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(art); } });
+  });
+  sfondo.addEventListener("click", (e) => { if (e.target === sfondo) chiudi(); });
+  sfondo.querySelector(".scheda-chiudi").addEventListener("click", chiudi);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") chiudi(); });
+})();
+</script>
 </body>
 </html>
 `;
@@ -209,6 +247,41 @@ async function immagine(slug, nome, dati) {
   return `${nome}.${est}?v=${impronta}`;   // il parametro forza il browser a ricaricare l'immagine nuova
 }
 
+/** Pubblica le foto dei piatti cambiate e rimuove dal sito quelle non più usate. Restituisce id -> percorso relativo. */
+async function fotoDeiPiatti(slug, menu) {
+  const percorsi = {};
+  for (const c of menu.categorie) {
+    for (const p of c.prodotti) {
+      if (!p.foto) continue;
+      const chiave = `${slug}/foto/${p.id}`;
+      if (ultimeImmagini.get(chiave) !== String(p.foto)) {
+        const r = await fetch(`${C.url}/rest/v1/rpc/foto_prodotto`, {
+          method: "POST",
+          headers: { apikey: C.anon, Authorization: `Bearer ${C.anon}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ p_prodotto: p.id }),
+        });
+        const dati = r.ok ? await r.json() : null;
+        const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(dati ?? "");
+        if (!m) continue;
+        await pubblicaBinario(`${chiave}.jpg`, m[2], `Foto ${p.nome} aggiornata`);
+        ultimeImmagini.set(chiave, String(p.foto));
+      }
+      percorsi[p.id] = `foto/${p.id}.jpg?v=${p.foto}`;
+    }
+  }
+  // Le foto di piatti rimossi o nascosti non devono restare raggiungibili sul sito pubblico
+  const presenti = await github(`${slug}/foto`).catch(() => null);
+  if (Array.isArray(presenti)) {
+    for (const f of presenti) {
+      const id = f.name.replace(/\.jpg$/, "");
+      if (percorsi[id]) continue;
+      await github(f.path, { method: "DELETE", body: JSON.stringify({ message: `Foto rimossa`, sha: f.sha }) });
+      ultimeImmagini.delete(`${slug}/foto/${id}`);
+    }
+  }
+  return percorsi;
+}
+
 async function giro() {
   for (const slug of C.slugs) {
     try {
@@ -219,9 +292,10 @@ async function giro() {
       const ora = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Rome" }).format(new Date());
       const logoFile = await immagine(slug, "logo", menu.aspetto?.logo_dati);
       const sfondoFile = await immagine(slug, "sfondo", menu.aspetto?.sfondo_dati);
+      const fotoPiatti = await fotoDeiPiatti(slug, menu);
       const { aspetto, ...resto } = menu;
       const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null } : aspetto };
-      await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile), `Menu ${slug} aggiornato`);
+      await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti), `Menu ${slug} aggiornato`);
       ultimo.set(slug, impronta);
       log(`Pubblicato il menu «${slug}»`);
     } catch (e) {

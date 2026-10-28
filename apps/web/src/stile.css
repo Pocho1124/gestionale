@@ -169,3 +169,25 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu.con-foto { position: relative; isolation: isolate; }
 .menu-foto { position: fixed; inset: -20px; z-index: -1; background-size: cover; background-position: center; pointer-events: none; }
 .con-foto .menu-nav { background: color-mix(in srgb, var(--m-sfondo) 88%, transparent); backdrop-filter: blur(6px); }
+
+/* Scheda del piatto (foto e dettagli) */
+.menu-piatto.apribile { cursor: pointer; }
+.menu-piatto.apribile:focus-visible { outline: 2px solid var(--m-primario); outline-offset: 4px; border-radius: 6px; }
+.menu-icona-foto { font-size: .7em; color: var(--m-primario); vertical-align: middle; }
+.scheda-sfondo { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.6); display: grid; place-items: end center; padding: 16px; }
+@media (min-width: 640px) { .scheda-sfondo { place-items: center; } }
+.scheda-piatto { position: relative; width: min(520px, 100%); max-height: 90vh; overflow: auto; background: var(--m-sfondo); color: var(--m-testo);
+  border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); font-family: var(--m-font-testo); }
+.scheda-foto { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; border-radius: 18px 18px 0 0; }
+.scheda-attesa { background: color-mix(in srgb, var(--m-testo) 10%, transparent); }
+.scheda-corpo { padding: 16px 20px 22px; display: grid; gap: 8px; }
+.scheda-corpo h3 { font-family: var(--m-font-titoli); font-weight: 400; font-size: 1.5rem; margin: 0; }
+.scheda-corpo .menu-riga { justify-content: space-between; }
+.scheda-corpo .menu-prezzo { color: var(--m-primario); font-size: 1.15rem; }
+.scheda-corpo p { margin: 0; }
+.scheda-chiudi { position: absolute; top: 10px; right: 10px; z-index: 1; width: 36px; height: 36px; border-radius: 999px; border: 0;
+  background: rgba(0,0,0,.55); color: #fff; font-size: 1.4rem; line-height: 1; cursor: pointer; }
+
+.foto-piatto { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: center; }
+.foto-piatto img, .foto-vuota { width: 120px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--linea); }
+.foto-vuota { display: grid; place-items: center; color: var(--muto); font-size: .8rem; }

@@ -1,12 +1,16 @@
-import { useEffect, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { centesimi, formatta } from "@gest/core";
 import type { Aspetto, MenuPubblico } from "../lib/tipi";
 import { caricaFont, pilaFont } from "../lib/font";
+import { SchedaPiatto } from "./SchedaPiatto";
 
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 
 /** Il menu come lo vedono i clienti: usato sia dalla pagina pubblica sia dall'anteprima di Aspetto. */
 export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspetto }) {
+  type Piatto = MenuPubblico["categorie"][number]["prodotti"][number];
+  const [aperto, setAperto] = useState<Piatto | null>(null);
+  const chiudi = useCallback(() => setAperto(null), []);
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); },
     [aspetto.font_titoli, aspetto.font_testo]);
 
@@ -51,10 +55,15 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
           {aspetto.mostra_descrizioni && c.descrizione && <p className="menu-cat-desc">{c.descrizione}</p>}
           <div className="menu-prodotti">
             {c.prodotti.map((p) => (
-              <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}`}>
+              <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}${p.foto || p.descrizione ? " apribile" : ""}`}
+                {...(p.foto || p.descrizione ? {
+                  role: "button", tabIndex: 0, "aria-label": `${p.nome}: apri la scheda`,
+                  onClick: () => setAperto(p),
+                  onKeyDown: (e: { key: string; preventDefault: () => void }) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAperto(p); } },
+                } : {})}>
                 {p.immagine_url && aspetto.layout === "griglia" && <img src={p.immagine_url} alt="" className="menu-foto" />}
                 <div className="menu-riga">
-                  <h3>{p.nome}</h3>
+                  <h3>{p.nome}{p.foto ? <span className="menu-icona-foto" aria-hidden="true"> ◉</span> : null}</h3>
                   {!p.disponibile && <span className="menu-badge">Esaurito</span>}
                   {aspetto.layout !== "elegante" && <span className="menu-puntini" aria-hidden="true" />}
                   <span className="menu-prezzo">{formatta(centesimi(p.prezzo_cent))}</span>
@@ -71,6 +80,8 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
           </div>
         </section>
       ))}
+
+      {aperto && <SchedaPiatto piatto={aperto} onChiudi={chiudi} />}
 
       <footer className="menu-piede">
         {aspetto.testo_piede && <p>{aspetto.testo_piede}</p>}

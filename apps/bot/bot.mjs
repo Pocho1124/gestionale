@@ -53,12 +53,12 @@ async function jwt() {
   return sessione.token;
 }
 
-async function db(percorso, { metodo = "GET", corpo } = {}) {
+async function db(percorso, { metodo = "GET", corpo, unisci = false } = {}) {
   const r = await fetch(`${C.url}/rest/v1/${percorso}`, {
     method: metodo,
     headers: {
       apikey: C.anon, Authorization: `Bearer ${await jwt()}`,
-      "Content-Type": "application/json", Prefer: "return=representation",
+      "Content-Type": "application/json", Prefer: `return=representation${unisci ? ",resolution=merge-duplicates" : ""}`,
     },
     body: corpo === undefined ? undefined : JSON.stringify(corpo),
   });
@@ -160,8 +160,19 @@ export function interpretaConRegole(testo, cat) {
   const t = norm(testo);
   const prodotto = () => trova(testo, cat.prodotti);
 
+  const descr = testo.match(/^\s*descrizione\s+(?:della|dello|del|dei|degli|delle|di|per|alla|al|la|il)?\s*(.+?)\s*[:\-–]\s*(.+)$/is);
+  if (descr) {
+    const p = trova(descr[1], cat.prodotti);
+    return p ? { azione: "imposta_descrizione", prodotto: p, testo: descr[2].trim().slice(0, 500) } : { azione: "non_trovato", cosa: descr[1] };
+  }
+  const viaFoto = testo.match(/^\s*(?:togli|rimuovi|elimina|cancella)\s+(?:la\s+)?foto\s+(?:della|dello|del|di|alla|al|a)?\s*(.+)$/i);
+  if (viaFoto) {
+    const p = trova(viaFoto[1], cat.prodotti);
+    return p ? { azione: "rimuovi_foto", prodotto: p } : { azione: "non_trovato", cosa: viaFoto[1] };
+  }
+
   const via = testo.match(/^\s*(?:elimina|cancella|rimuovi|togli)\s+(?:la\s+|il\s+)?(categoria|piatto)?\s*(.+)$/i);
-  if (via && !/\bdal menu\b/i.test(testo)) {
+  if (via && !/\bdal menu\b|\bfoto\b/i.test(testo)) {
     if ((via[1] ?? "").toLowerCase() === "categoria") {
       const c = trova(via[2], cat.categorie);
       return c ? { azione: "elimina_categoria", categoria: c } : { azione: "non_trovato", cosa: via[2] };
@@ -298,6 +309,13 @@ export function anteprima(a, cat) {
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "DI NUOVO DISPONIBILE" : "ESAURITO"}` };
     case "visibilita":
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "VISIBILE nel menu" : "NASCOSTO dal menu"}` };
+    case "imposta_foto":
+      return { testo: `📷 Foto per «${a.prodotto.nome}» (${Math.round(a.dati.length * 0.75 / 1024)} KB)` +
+        (a.descrizione ? `\nNuova descrizione: «${a.descrizione}»` : "") + "\nI clienti la vedranno toccando il piatto nel menu." };
+    case "imposta_descrizione":
+      return { testo: `✏️ Descrizione di «${a.prodotto.nome}»:\n«${a.testo}»` };
+    case "rimuovi_foto":
+      return { testo: `Tolgo la foto di «${a.prodotto.nome}».` };
     case "elimina_piatto":
       return { testo: `🗑 Elimino il piatto «${a.prodotto.nome}» (${euro(a.prodotto.prezzo_cent)}).\nSe vuoi solo toglierlo dal menu per un po', scrivi invece «nascondi ${a.prodotto.nome}».` };
     case "elimina_categoria": {
@@ -350,6 +368,29 @@ async function esegui(a, cat) {
     case "visibilita":
       await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
       return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+    case "imposta_foto": {
+      const [prima] = await db(`foto_prodotti?prodotto_id=eq.${a.prodotto.id}&select=*`);
+      await db("foto_prodotti", { metodo: "POST", unisci: true, corpo: { prodotto_id: a.prodotto.id, locale_id: C.locale, dati: a.dati } });
+      const annulla = [prima ? { tabella: "foto_prodotti", inserisci: [prima], unisci: true }
+                             : { tabella: "foto_prodotti", filtro: `prodotto_id=eq.${a.prodotto.id}`, elimina: true }];
+      if (a.descrizione) {
+        const [riga] = await db(`prodotti?id=eq.${a.prodotto.id}&select=descrizione`);
+        await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { descrizione: a.descrizione } });
+        annulla.push({ tabella: "prodotti", id: a.prodotto.id, patch: { descrizione: riga?.descrizione ?? "" } });
+      }
+      return { esito: "Foto salvata.", annulla };
+    }
+    case "imposta_descrizione": {
+      const [riga] = await db(`prodotti?id=eq.${a.prodotto.id}&select=descrizione`);
+      await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { descrizione: a.testo } });
+      return { esito: "Descrizione aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { descrizione: riga?.descrizione ?? "" } }] };
+    }
+    case "rimuovi_foto": {
+      const [prima] = await db(`foto_prodotti?prodotto_id=eq.${a.prodotto.id}&select=*`);
+      if (!prima) throw new Error("questo piatto non ha una foto");
+      await db(`foto_prodotti?prodotto_id=eq.${a.prodotto.id}`, { metodo: "DELETE" });
+      return { esito: "Foto rimossa.", annulla: [{ tabella: "foto_prodotti", inserisci: [prima], unisci: true }] };
+    }
     case "elimina_piatto": {
       const [riga] = await db(`prodotti?id=eq.${a.prodotto.id}&select=*`);
       if (!riga) throw new Error("Il piatto non esiste più");
@@ -413,14 +454,60 @@ const AIUTO =
   "• aumenta del 5% le pizze\n• la genovese è esaurita\n• la margherita costa 7 euro\n• nascondi la marinara\n" +
   "• crea la categoria Dolci\n• aggiungi alle pizze rosse la diavola a 8 euro con salame piccante\n" +
   "• elimina la diavola\n• elimina la categoria Dolci\n" +
+  "• descrizione margherita: pomodoro, fior di latte e basilico\n" +
+  "• 📷 invia una foto con didascalia «Margherita» (o «Margherita: descrizione») per metterla sul piatto\n" +
+  "• togli la foto alla margherita\n" +
   "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
 
+const fotoInAttesa = new Map();   // chat -> { dati, descrizione, scade }: foto ricevuta senza il nome del piatto
+
+/** Scarica la foto più grande che sta nel limite (Telegram invia sempre JPEG). */
+async function scaricaFoto(formati) {
+  const ordinati = [...formati].sort((a, b) => (b.file_size ?? 0) - (a.file_size ?? 0));
+  const scelto = ordinati.find((f) => (f.file_size ?? 0) <= 640_000) ?? ordinati[ordinati.length - 1];
+  const file = await tg("getFile", { file_id: scelto.file_id });
+  const r = await fetch(`https://api.telegram.org/file/bot${C.token}/${file.file_path}`, { signal: AbortSignal.timeout(60_000) });
+  if (!r.ok) throw new Error("Download della foto non riuscito");
+  const dati = `data:image/jpeg;base64,${Buffer.from(await r.arrayBuffer()).toString("base64")}`;
+  if (dati.length > 880_000) throw new Error("Foto troppo pesante: inviala come foto compressa, non come file.");
+  return dati;
+}
+
+async function riceviFoto(m, cat) {
+  const chat = m.chat.id;
+  await tg("sendChatAction", { chat_id: chat, action: "upload_photo" });
+  const dati = await scaricaFoto(m.photo);
+  // Didascalia: «Margherita» oppure «Margherita: pomodoro, fior di latte e basilico»
+  const didascalia = (m.caption || "").trim();
+  const [nome, ...resto] = didascalia.split(":");
+  const descrizione = resto.join(":").trim().slice(0, 500);
+  const p = nome ? trova(nome.replace(/\bfoto\b/i, ""), cat.prodotti) : null;
+  if (p) return chiediConferma(chat, { azione: "imposta_foto", prodotto: p, dati, descrizione }, cat);
+  fotoInAttesa.set(chat, { dati, descrizione, scade: Date.now() + 10 * 60_000 });
+  return invia(chat, didascalia ? `Non trovo «${nome.trim()}» nel menu. Scrivimi il nome del piatto per questa foto.` : "A quale piatto associo questa foto? Scrivimi il nome.");
+}
+
 async function gestisciMessaggio(m) {
   const chat = m.chat.id;
+  if (m.photo?.length) return riceviFoto(m, await catalogo());
+  if (m.document && /^image\//.test(m.document.mime_type ?? "")) {
+    return invia(chat, "Invia l'immagine come foto (non come file), così Telegram la comprime: la uso per il menu.");
+  }
   const testo = (m.text || "").trim();
   if (!testo) return;
+
+  const attesa = fotoInAttesa.get(chat);
+  if (attesa && !testo.startsWith("/")) {
+    fotoInAttesa.delete(chat);
+    if (attesa.scade > Date.now()) {
+      const cat = await catalogo();
+      const p = trova(testo, cat.prodotti);
+      if (!p) return invia(chat, `Non trovo «${testo}» nel menu: invia di nuovo la foto con il nome del piatto nella didascalia.`);
+      return chiediConferma(chat, { azione: "imposta_foto", prodotto: p, dati: attesa.dati, descrizione: attesa.descrizione }, cat);
+    }
+  }
 
   if (testo === "/start" || testo === "/aiuto") return invia(chat, AIUTO);
 
@@ -439,8 +526,8 @@ async function gestisciMessaggio(m) {
   if (testo === "/annulla") {
     if (!ultimaModifica) return invia(chat, "Non c'è nessuna modifica da annullare.");
     for (const op of ultimaModifica) {
-      if (op.inserisci) await db(op.tabella, { metodo: "POST", corpo: op.inserisci });
-      else await db(`${op.tabella}?id=eq.${op.id}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
+      if (op.inserisci) await db(op.tabella, { metodo: "POST", corpo: op.inserisci, unisci: !!op.unisci });
+      else await db(`${op.tabella}?${op.filtro ?? `id=eq.${op.id}`}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
     }
     ultimaModifica = null;
     return invia(chat, "↩️ Ultima modifica annullata.");
