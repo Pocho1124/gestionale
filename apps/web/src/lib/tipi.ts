@@ -15,8 +15,8 @@ export interface Prodotto {
 export interface Aspetto {
   locale_id?: string;
   colore_primario: string; colore_accento: string; colore_sfondo: string; colore_testo: string;
-  font_titoli: string; font_testo: string; logo_url: string | null;
-  layout: "lista" | "griglia" | "compatto";
+  font_titoli: string; font_testo: string; logo_url: string | null; logo_dati: string | null; mostra_nome: boolean;
+  layout: "lista" | "griglia" | "compatto" | "elegante";
   mostra_allergeni: boolean; mostra_descrizioni: boolean; testo_piede: string;
 }
 
@@ -38,7 +38,7 @@ export const ALLERGENI = ["Glutine", "Crostacei", "Uova", "Pesce", "Arachidi", "
 
 export const ETICHETTE = ["Vegetariano", "Vegano", "Piccante", "Senza glutine", "Novità", "Consigliato", "Surgelato"] as const;
 
-export const FONT_TITOLI = ["Young Serif", "Playfair Display", "Lora", "Merriweather", "Oswald",
+export const FONT_TITOLI = ["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather", "Oswald",
   "Montserrat", "Poppins", "Figtree", "Inter", "Nunito"] as const;
 
-export const FONT_TESTO = ["Figtree", "Inter", "Nunito", "Poppins", "Montserrat", "Lora", "Merriweather"] as const;
+export const FONT_TESTO = ["Figtree", "Inter", "Nunito", "Poppins", "Montserrat", "Lora", "Merriweather", "Cormorant Garamond"] as const;

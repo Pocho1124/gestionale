@@ -23,26 +23,30 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const euro = (c) => new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
 const COLORE = /^#[0-9A-Fa-f]{6}$/;
-const SERIF = new Set(["Young Serif", "Playfair Display", "Lora", "Merriweather"]);
-const FONT_AMMESSI = new Set(["Young Serif", "Playfair Display", "Lora", "Merriweather", "Oswald", "Montserrat", "Poppins", "Figtree", "Inter", "Nunito"]);
+const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
+const FONT_AMMESSI = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather", "Oswald", "Montserrat", "Poppins", "Figtree", "Inter", "Nunito"]);
+// Pesi richiesti a Google Fonts: il corsivo solo dove esiste (una famiglia senza corsivo farebbe fallire la richiesta)
+const PESI = { "Cormorant Garamond": "ital,wght@0,400;0,600;1,400", "Lora": "ital,wght@0,400;0,700;1,400", "Playfair Display": "ital,wght@0,400;0,700;1,400" };
 
 const PREDEFINITO = {
   colore_primario: "#1F4FA8", colore_accento: "#F2C230", colore_sfondo: "#F2F5F8", colore_testo: "#13233A",
-  font_titoli: "Young Serif", font_testo: "Figtree", logo_url: null, layout: "lista",
+  font_titoli: "Young Serif", font_testo: "Figtree", logo_url: null, logo_dati: null, mostra_nome: true, layout: "lista",
   mostra_allergeni: true, mostra_descrizioni: true, testo_piede: "",
 };
 
 // ---------------------------------------------------------------- Pagina statica
-export function pagina(menu, aggiornato) {
+/** logoFile: nome del file del logo pubblicato accanto alla pagina (es. «logo.png?v=…»), se presente. */
+export function pagina(menu, aggiornato, logoFile = null) {
   const a = { ...PREDEFINITO, ...(menu.aspetto ?? {}) };
   const colore = (v, d) => (COLORE.test(v) ? v : d);
   const font = (v, d) => (FONT_AMMESSI.has(v) ? v : d);
   const ft = font(a.font_titoli, "Young Serif");
   const fc = font(a.font_testo, "Figtree");
   const pila = (f) => `"${f}", ${SERIF.has(f) ? 'Georgia, serif' : 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'}`;
-  const famiglie = [...new Set([ft, fc])].map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;700`).join("&");
-  const layout = ["lista", "griglia", "compatto"].includes(a.layout) ? a.layout : "lista";
-  const logo = typeof a.logo_url === "string" && /^https:\/\//.test(a.logo_url) ? a.logo_url : null;
+  const famiglie = [...new Set([ft, fc])].map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:${PESI[f] ?? "wght@400;700"}`).join("&");
+  const layout = ["lista", "griglia", "compatto", "elegante"].includes(a.layout) ? a.layout : "lista";
+  const logo = logoFile ?? (typeof a.logo_url === "string" && /^https:\/\//.test(a.logo_url) ? a.logo_url : null);
+  const mostraNome = !logo || a.mostra_nome !== false;
 
   const categorie = menu.categorie.map((c) => `
     <section class="cat" id="c-${esc(c.id)}">
@@ -51,7 +55,7 @@ export function pagina(menu, aggiornato) {
       <div class="piatti">${c.prodotti.map((p) => `
         <article class="piatto${p.disponibile ? "" : " esaurito"}">
           ${layout === "griglia" && /^https:\/\//.test(p.immagine_url ?? "") ? `<img class="foto" src="${esc(p.immagine_url)}" alt="" loading="lazy">` : ""}
-          <div class="riga"><h3>${esc(p.nome)}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}<span class="punti" aria-hidden="true"></span><span class="prezzo">${esc(euro(p.prezzo_cent))}</span></div>
+          <div class="riga"><h3>${esc(p.nome)}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${esc(euro(p.prezzo_cent))}</span></div>
           ${a.mostra_descrizioni && p.descrizione ? `<p class="desc">${esc(p.descrizione)}</p>` : ""}
           ${p.etichette?.length ? `<ul class="etichette">${p.etichette.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
           ${a.mostra_allergeni && p.allergeni?.length ? `<p class="allergeni">Allergeni: ${esc(p.allergeni.join(", "))}</p>` : ""}
@@ -102,14 +106,33 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .griglia .riga{flex-wrap:wrap}.griglia .punti{display:none}.griglia .prezzo{width:100%;color:var(--p)}
 .foto{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;margin-bottom:6px}
 .compatto .piatto{padding:5px 0}.compatto .desc{display:none}.compatto .cat h2{font-size:1.2rem}
+.elegante{padding:0 22px calc(40px + env(safe-area-inset-bottom,0px))}
+.elegante header{border-bottom:0;padding-bottom:6px}
+.elegante header::after{content:"◆";display:block;color:var(--p);font-size:.7rem;margin-top:20px}
+.elegante .logo{max-height:150px;max-width:80%;margin-bottom:6px}
+.elegante header h1{letter-spacing:.04em}
+.elegante nav{justify-content:safe center;gap:20px;border-bottom:1px solid color-mix(in srgb,var(--p) 35%,transparent)}
+.elegante nav a{border:0;border-radius:0;padding:6px 0;text-transform:uppercase;letter-spacing:.16em;font-size:.7rem;opacity:.85}
+.elegante .cat{padding-top:36px}
+.elegante .cat h2{display:flex;align-items:center;gap:14px;font-family:var(--fc);font-size:.9rem;font-weight:600;text-transform:uppercase;letter-spacing:.24em}
+.elegante .cat h2::before,.elegante .cat h2::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--p) 45%,transparent)}
+.elegante .cat-desc{text-align:center;font-style:italic}
+.elegante .piatto{border-bottom:0;padding:12px 0}
+.elegante .riga{justify-content:space-between}
+.elegante .riga h3{font-family:var(--ft);font-size:1.3rem;font-weight:400;letter-spacing:.01em}
+.elegante .prezzo{color:var(--p);font-weight:600;margin-left:auto}
+.elegante .desc{font-style:italic}
+.elegante .etichette li{background:transparent;color:var(--p);border:1px solid currentColor;font-weight:600}
+.elegante .badge{background:var(--a)}
+.elegante footer{border-top:1px solid color-mix(in srgb,var(--p) 35%,transparent);padding-top:18px;letter-spacing:.05em}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
 </head>
 <body>
 <div class="menu ${layout}">
   <header>
-    ${logo ? `<img class="logo" src="${esc(logo)}" alt="">` : ""}
-    <h1>${esc(menu.locale.nome)}</h1>
+    ${logo ? `<img class="logo" src="${esc(logo)}" alt="${mostraNome ? "" : esc(menu.locale.nome)}">` : ""}
+    ${mostraNome ? `<h1>${esc(menu.locale.nome)}</h1>` : ""}
     ${menu.locale.indirizzo ? `<p>${esc(menu.locale.indirizzo)}</p>` : ""}
   </header>
   ${menu.categorie.length ? `<nav aria-label="Categorie">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
@@ -152,15 +175,18 @@ async function github(percorso, opzioni = {}) {
   return j;
 }
 
-async function pubblica(percorso, contenuto, messaggio) {
+async function pubblicaBinario(percorso, base64, messaggio) {
   const esistente = await github(percorso);
   await github(percorso, {
     method: "PUT",
-    body: JSON.stringify({ message: messaggio, content: Buffer.from(contenuto).toString("base64"), ...(esistente ? { sha: esistente.sha } : {}) }),
+    body: JSON.stringify({ message: messaggio, content: base64, ...(esistente ? { sha: esistente.sha } : {}) }),
   });
 }
 
-const ultimo = new Map();   // slug -> impronta dell'ultimo menu pubblicato
+const pubblica = (percorso, testo, messaggio) => pubblicaBinario(percorso, Buffer.from(testo).toString("base64"), messaggio);
+
+const ultimo = new Map();      // slug -> impronta dell'ultimo menu pubblicato
+const ultimoLogo = new Map();  // slug -> impronta dell'ultimo logo pubblicato
 
 async function giro() {
   for (const slug of C.slugs) {
@@ -170,7 +196,20 @@ async function giro() {
       const impronta = createHash("sha256").update(JSON.stringify(menu)).digest("hex");
       if (ultimo.get(slug) === impronta) continue;
       const ora = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Rome" }).format(new Date());
-      await pubblica(`${slug}/index.html`, pagina(menu, ora), `Menu ${slug} aggiornato`);
+      let logoFile = null;
+      const logo = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(menu.aspetto?.logo_dati ?? "");
+      if (logo) {
+        const est = logo[1] === "jpeg" ? "jpg" : logo[1];
+        const impLogo = createHash("sha256").update(logo[2]).digest("hex").slice(0, 10);
+        if (ultimoLogo.get(slug) !== impLogo) {
+          await pubblicaBinario(`${slug}/logo.${est}`, logo[2], `Logo ${slug} aggiornato`);
+          ultimoLogo.set(slug, impLogo);
+        }
+        logoFile = `logo.${est}?v=${impLogo}`;   // il parametro forza il browser a ricaricare il logo nuovo
+      }
+      const { aspetto, ...resto } = menu;
+      const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null } : aspetto };
+      await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile), `Menu ${slug} aggiornato`);
       ultimo.set(slug, impronta);
       log(`Pubblicato il menu «${slug}»`);
     } catch (e) {

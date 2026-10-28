@@ -3,13 +3,14 @@ import { centesimi, formatta } from "@gest/core";
 import type { Aspetto, MenuPubblico } from "../lib/tipi";
 import { caricaFont, pilaFont } from "../lib/font";
 
-const SERIF = new Set(["Young Serif", "Playfair Display", "Lora", "Merriweather"]);
+const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 
 /** Il menu come lo vedono i clienti: usato sia dalla pagina pubblica sia dall'anteprima di Aspetto. */
 export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspetto }) {
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); },
     [aspetto.font_titoli, aspetto.font_testo]);
 
+  const logo = aspetto.logo_dati || aspetto.logo_url || null;
   const stile = {
     "--m-primario": aspetto.colore_primario,
     "--m-accento": aspetto.colore_accento,
@@ -22,8 +23,8 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
   return (
     <div className={`menu menu-${aspetto.layout}`} style={stile}>
       <header className="menu-testata">
-        {aspetto.logo_url && <img className="menu-logo" src={aspetto.logo_url} alt="" />}
-        <h1>{menu.locale.nome}</h1>
+        {logo && <img className="menu-logo" src={logo} alt={aspetto.mostra_nome ? "" : menu.locale.nome} />}
+        {(!logo || aspetto.mostra_nome) && <h1>{menu.locale.nome}</h1>}
         {menu.locale.indirizzo && <p>{menu.locale.indirizzo}</p>}
       </header>
 
@@ -46,7 +47,7 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
                 <div className="menu-riga">
                   <h3>{p.nome}</h3>
                   {!p.disponibile && <span className="menu-badge">Esaurito</span>}
-                  <span className="menu-puntini" aria-hidden="true" />
+                  {aspetto.layout !== "elegante" && <span className="menu-puntini" aria-hidden="true" />}
                   <span className="menu-prezzo">{formatta(centesimi(p.prezzo_cent))}</span>
                 </div>
                 {aspetto.mostra_descrizioni && p.descrizione && <p className="menu-desc">{p.descrizione}</p>}

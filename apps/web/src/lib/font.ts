@@ -2,6 +2,7 @@
 const caricatori: Record<string, () => Promise<unknown>> = {
   "Young Serif": () => import("@fontsource/young-serif/400.css"),
   "Playfair Display": () => Promise.all([import("@fontsource/playfair-display/400.css"), import("@fontsource/playfair-display/700.css")]),
+  "Cormorant Garamond": () => Promise.all([import("@fontsource/cormorant-garamond/400.css"), import("@fontsource/cormorant-garamond/600.css"), import("@fontsource/cormorant-garamond/400-italic.css")]),
   "Lora": () => Promise.all([import("@fontsource/lora/400.css"), import("@fontsource/lora/700.css")]),
   "Merriweather": () => Promise.all([import("@fontsource/merriweather/400.css"), import("@fontsource/merriweather/700.css")]),
   "Oswald": () => Promise.all([import("@fontsource/oswald/400.css"), import("@fontsource/oswald/600.css")]),

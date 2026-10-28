@@ -133,3 +133,33 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu-griglia .menu-riga { flex-wrap: wrap; } .menu-griglia .menu-puntini { display: none; } .menu-griglia .menu-prezzo { width: 100%; color: var(--m-primario); }
 .menu-foto { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 6px; }
 .menu-compatto .menu-piatto { padding: 5px 0; } .menu-compatto .menu-desc { display: none; } .menu-compatto .menu-categoria h2 { font-size: 1.2rem; }
+
+/* Temi pronti e logo nel pannello Aspetto */
+.temi { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.tema { display: grid; gap: 2px; text-align: left; border: 2px solid; border-radius: 10px; padding: 10px; cursor: pointer; font-size: .82rem; }
+.tema strong { font-size: .95rem; }
+.logo-anteprima { border-radius: 10px; padding: 16px; display: grid; place-items: center; border: 1px solid var(--linea); }
+.logo-anteprima img { max-height: 90px; max-width: 100%; }
+
+/* Impaginazione «elegante» del menu */
+.menu-elegante { padding: 0 22px 40px; }
+.menu-elegante .menu-testata { border-bottom: 0; padding: 44px 0 6px; }
+.menu-elegante .menu-testata::after { content: "◆"; display: block; color: var(--m-primario); font-size: .7rem; margin-top: 20px; }
+.menu-elegante .menu-logo { max-height: 150px; max-width: 80%; margin-bottom: 6px; }
+.menu-elegante .menu-testata h1 { letter-spacing: .04em; font-weight: 400; }
+.menu-elegante .menu-nav { justify-content: safe center; gap: 20px; border-bottom: 1px solid color-mix(in srgb, var(--m-primario) 35%, transparent); }
+.menu-elegante .menu-nav a { border: 0; border-radius: 0; padding: 6px 0; text-transform: uppercase; letter-spacing: .16em; font-size: .7rem; opacity: .85; }
+.menu-elegante .menu-categoria { padding-top: 36px; }
+.menu-elegante .menu-categoria h2 { display: flex; align-items: center; gap: 14px; font-family: var(--m-font-testo); font-size: .9rem;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .24em; }
+.menu-elegante .menu-categoria h2::before, .menu-elegante .menu-categoria h2::after { content: ""; flex: 1; height: 1px;
+  background: color-mix(in srgb, var(--m-primario) 45%, transparent); }
+.menu-elegante .menu-cat-desc { text-align: center; font-style: italic; }
+.menu-elegante .menu-piatto { border-bottom: 0; padding: 12px 0; }
+.menu-elegante .menu-riga { justify-content: space-between; }
+.menu-elegante .menu-riga h3 { font-family: var(--m-font-titoli); font-size: 1.3rem; font-weight: 400; letter-spacing: .01em; }
+.menu-elegante .menu-prezzo { color: var(--m-primario); font-weight: 600; margin-left: auto; }
+.menu-elegante .menu-desc { font-style: italic; }
+.menu-elegante .menu-etichette li { background: transparent; color: var(--m-primario); border: 1px solid currentColor; font-weight: 600; }
+.menu-elegante .menu-badge { background: var(--m-accento); }
+.menu-elegante .menu-piede { border-top: 1px solid color-mix(in srgb, var(--m-primario) 35%, transparent); padding-top: 18px; letter-spacing: .05em; }
