@@ -24,7 +24,18 @@ jobs:
           npm install --no-package-lock --no-audit --no-fund
           npx tsc --noEmit
           npx vitest run
-
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Compila il backoffice
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
   database:
     runs-on: ubuntu-latest
     services:
@@ -50,7 +61,7 @@ jobs:
         run: sh deploy/migrator/test.sh supabase/tests/database
 
   rilascio:
-    needs: [core, database]
+    needs: [core, web, database]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
