@@ -1,0 +1,6 @@
+{
+  "name": "@gest/db",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/types.ts" }
+}
