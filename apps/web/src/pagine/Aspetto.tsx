@@ -44,6 +44,22 @@ async function preparaLogo(file: File): Promise<string> {
   return dati;
 }
 
+/** Foto di sfondo: max 1600 px in JPEG (le foto non hanno trasparenza), compressione crescente se serve. */
+async function preparaSfondo(file: File): Promise<string> {
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Formato non supportato: usa JPG, PNG o WebP.");
+  const img = await createImageBitmap(file);
+  for (const [lato, qualita] of [[1600, 0.8], [1280, 0.7], [1024, 0.6]] as const) {
+    const scala = Math.min(1, lato / Math.max(img.width, img.height));
+    const tela = document.createElement("canvas");
+    tela.width = Math.max(1, Math.round(img.width * scala));
+    tela.height = Math.max(1, Math.round(img.height * scala));
+    tela.getContext("2d")!.drawImage(img, 0, 0, tela.width, tela.height);
+    const dati = tela.toDataURL("image/jpeg", qualita);
+    if (dati.startsWith("data:image/jpeg;base64,") && dati.length <= 1_350_000) return dati;
+  }
+  throw new Error("Foto troppo pesante anche dopo la riduzione: prova con un'altra immagine.");
+}
+
 const COLORI: { campo: keyof TAspetto; etichetta: string }[] = [
   { campo: "colore_primario", etichetta: "Colore principale" },
   { campo: "colore_accento", etichetta: "Colore di accento" },
@@ -79,6 +95,15 @@ export function Aspetto() {
   const modificato = JSON.stringify(bozza) !== JSON.stringify(salvato);
   const logoAttuale = bozza.logo_dati || bozza.logo_url || null;
 
+  async function caricaSfondo(file: File | undefined) {
+    if (!file || !bozza) return;
+    try {
+      const dati = await preparaSfondo(file);
+      setBozza({ ...bozza, sfondo_dati: dati });
+      avvisa("Foto caricata: regola visibilità e sfocatura, poi pubblica");
+    } catch (e) { avvisa(e instanceof Error ? e.message : "Foto non valida", "errore"); }
+  }
+
   async function caricaLogo(file: File | undefined) {
     if (!file || !bozza) return;
     try {
@@ -93,7 +118,7 @@ export function Aspetto() {
     if (!bozza || !locale) return;
     setAttesa(true);
     const { locale_id: _ignora, ...campi } = bozza;
-    const { error } = await sb().from("aspetto").update({ ...campi, logo_url: campi.logo_url?.trim() || null, logo_dati: campi.logo_dati || null }).eq("locale_id", locale.id);
+    const { error } = await sb().from("aspetto").update({ ...campi, logo_url: campi.logo_url?.trim() || null, logo_dati: campi.logo_dati || null, sfondo_dati: campi.sfondo_dati || null }).eq("locale_id", locale.id);
     setAttesa(false);
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
     setSalvato(bozza); avvisa("Aspetto pubblicato: il menu dei clienti è aggiornato");
@@ -142,6 +167,35 @@ export function Aspetto() {
           <label className="interruttore"><input type="checkbox" checked={bozza.mostra_nome} disabled={!logoAttuale}
             onChange={(e) => imposta("mostra_nome", e.target.checked)} />Mostra anche il nome sotto il logo</label>
           <p className="muto piccolo">Meglio un PNG con sfondo trasparente: si adatta sia ai temi chiari sia a quelli scuri.</p>
+        </fieldset>
+
+        <fieldset className="gruppo"><legend>Foto di sfondo</legend>
+          {bozza.sfondo_dati ? (
+            <>
+              <div className="riga-form">
+                <label className="btn">Sostituisci foto
+                  <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void caricaSfondo(e.target.files?.[0])} />
+                </label>
+                <button type="button" className="btn btn-pericolo" onClick={() => setBozza({ ...bozza, sfondo_dati: null })}>Rimuovi</button>
+              </div>
+              <label className="campo">Visibilità della foto: {bozza.sfondo_opacita}%
+                <input type="range" min={5} max={70} value={bozza.sfondo_opacita} onChange={(e) => imposta("sfondo_opacita", Number(e.target.value))} />
+              </label>
+              <label className="campo">Sfocatura: {bozza.sfondo_sfocatura === 0 ? "nessuna" : `${bozza.sfondo_sfocatura} px`}
+                <input type="range" min={0} max={12} value={bozza.sfondo_sfocatura} onChange={(e) => imposta("sfondo_sfocatura", Number(e.target.value))} />
+              </label>
+              <label className="interruttore"><input type="checkbox" checked={bozza.sfondo_bn}
+                onChange={(e) => imposta("sfondo_bn", e.target.checked)} />Bianco e nero</label>
+              <p className="muto piccolo">Per l'effetto «vedo non vedo»: visibilità 15-30% e un po' di sfocatura. Controlla che i prezzi restino ben leggibili.</p>
+            </>
+          ) : (
+            <>
+              <p className="muto piccolo">Una foto del locale, di un vigneto o dei piatti, appena visibile dietro al menu.</p>
+              <label className="btn" style={{ justifySelf: "start" }}>Carica foto
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void caricaSfondo(e.target.files?.[0])} />
+              </label>
+            </>
+          )}
         </fieldset>
 
         <fieldset className="gruppo"><legend>Colori</legend>
@@ -199,7 +253,7 @@ export function Aspetto() {
 
       <div className="anteprima" aria-label="Anteprima del menu">
         <div className="anteprima-telefono">
-          <MenuVista menu={anteprima} aspetto={bozza} />
+          <div className="anteprima-scorri"><MenuVista menu={anteprima} aspetto={bozza} /></div>
         </div>
       </div>
     </div>

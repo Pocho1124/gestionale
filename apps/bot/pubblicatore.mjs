@@ -32,11 +32,12 @@ const PREDEFINITO = {
   colore_primario: "#1F4FA8", colore_accento: "#F2C230", colore_sfondo: "#F2F5F8", colore_testo: "#13233A",
   font_titoli: "Young Serif", font_testo: "Figtree", logo_url: null, logo_dati: null, mostra_nome: true, layout: "lista",
   mostra_allergeni: true, mostra_descrizioni: true, testo_piede: "",
+  sfondo_dati: null, sfondo_opacita: 22, sfondo_sfocatura: 3, sfondo_bn: false,
 };
 
 // ---------------------------------------------------------------- Pagina statica
-/** logoFile: nome del file del logo pubblicato accanto alla pagina (es. «logo.png?v=…»), se presente. */
-export function pagina(menu, aggiornato, logoFile = null) {
+/** logoFile / sfondoFile: file pubblicati accanto alla pagina (es. «logo.png?v=…»), se presenti. */
+export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null) {
   const a = { ...PREDEFINITO, ...(menu.aspetto ?? {}) };
   const colore = (v, d) => (COLORE.test(v) ? v : d);
   const font = (v, d) => (FONT_AMMESSI.has(v) ? v : d);
@@ -47,6 +48,10 @@ export function pagina(menu, aggiornato, logoFile = null) {
   const layout = ["lista", "griglia", "compatto", "elegante"].includes(a.layout) ? a.layout : "lista";
   const logo = logoFile ?? (typeof a.logo_url === "string" && /^https:\/\//.test(a.logo_url) ? a.logo_url : null);
   const mostraNome = !logo || a.mostra_nome !== false;
+  const entro = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
+  const foto = sfondoFile
+    ? `<div class="foto" aria-hidden="true" style="background-image:url('${esc(sfondoFile)}');opacity:${entro(a.sfondo_opacita, 0, 100, 22) / 100};filter:blur(${entro(a.sfondo_sfocatura, 0, 20, 3)}px)${a.sfondo_bn ? " grayscale(1)" : ""}"></div>`
+    : "";
 
   const categorie = menu.categorie.map((c) => `
     <section class="cat" id="c-${esc(c.id)}">
@@ -77,7 +82,8 @@ export function pagina(menu, aggiornato, logoFile = null) {
 *{box-sizing:border-box}
 html{scroll-padding-top:56px}
 body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit-font-smoothing:antialiased}
-.menu{max-width:720px;margin:0 auto;padding:0 18px calc(30px + env(safe-area-inset-bottom,0px))}
+.menu{max-width:720px;margin:0 auto;padding:0 18px calc(30px + env(safe-area-inset-bottom,0px));position:relative;isolation:isolate}
+.foto{position:fixed;inset:-20px;z-index:-1;background-size:cover;background-position:center;pointer-events:none}
 header{text-align:center;padding:calc(28px + env(safe-area-inset-top,0px)) 0 16px;border-bottom:6px double var(--p)}
 header h1{font-family:var(--ft);font-weight:400;font-size:clamp(1.9rem,7vw,2.8rem);line-height:1.1;margin:0}
 header p{margin:6px 0 0;opacity:.75}
@@ -130,6 +136,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 </head>
 <body>
 <div class="menu ${layout}">
+  ${foto}
   <header>
     ${logo ? `<img class="logo" src="${esc(logo)}" alt="${mostraNome ? "" : esc(menu.locale.nome)}">` : ""}
     ${mostraNome ? `<h1>${esc(menu.locale.nome)}</h1>` : ""}
@@ -186,7 +193,21 @@ async function pubblicaBinario(percorso, base64, messaggio) {
 const pubblica = (percorso, testo, messaggio) => pubblicaBinario(percorso, Buffer.from(testo).toString("base64"), messaggio);
 
 const ultimo = new Map();      // slug -> impronta dell'ultimo menu pubblicato
-const ultimoLogo = new Map();  // slug -> impronta dell'ultimo logo pubblicato
+const ultimeImmagini = new Map();  // "slug/nome" -> impronta dell'ultima immagine pubblicata
+
+/** Pubblica un'immagine incorporata come file accanto alla pagina (solo se cambiata). */
+async function immagine(slug, nome, dati) {
+  const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(dati ?? "");
+  if (!m) return null;
+  const est = m[1] === "jpeg" ? "jpg" : m[1];
+  const impronta = createHash("sha256").update(m[2]).digest("hex").slice(0, 10);
+  const chiave = `${slug}/${nome}`;
+  if (ultimeImmagini.get(chiave) !== impronta) {
+    await pubblicaBinario(`${slug}/${nome}.${est}`, m[2], `${nome} ${slug} aggiornato`);
+    ultimeImmagini.set(chiave, impronta);
+  }
+  return `${nome}.${est}?v=${impronta}`;   // il parametro forza il browser a ricaricare l'immagine nuova
+}
 
 async function giro() {
   for (const slug of C.slugs) {
@@ -196,20 +217,11 @@ async function giro() {
       const impronta = createHash("sha256").update(JSON.stringify(menu)).digest("hex");
       if (ultimo.get(slug) === impronta) continue;
       const ora = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Rome" }).format(new Date());
-      let logoFile = null;
-      const logo = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(menu.aspetto?.logo_dati ?? "");
-      if (logo) {
-        const est = logo[1] === "jpeg" ? "jpg" : logo[1];
-        const impLogo = createHash("sha256").update(logo[2]).digest("hex").slice(0, 10);
-        if (ultimoLogo.get(slug) !== impLogo) {
-          await pubblicaBinario(`${slug}/logo.${est}`, logo[2], `Logo ${slug} aggiornato`);
-          ultimoLogo.set(slug, impLogo);
-        }
-        logoFile = `logo.${est}?v=${impLogo}`;   // il parametro forza il browser a ricaricare il logo nuovo
-      }
+      const logoFile = await immagine(slug, "logo", menu.aspetto?.logo_dati);
+      const sfondoFile = await immagine(slug, "sfondo", menu.aspetto?.sfondo_dati);
       const { aspetto, ...resto } = menu;
-      const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null } : aspetto };
-      await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile), `Menu ${slug} aggiornato`);
+      const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null } : aspetto };
+      await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile), `Menu ${slug} aggiornato`);
       ultimo.set(slug, impronta);
       log(`Pubblicato il menu «${slug}»`);
     } catch (e) {

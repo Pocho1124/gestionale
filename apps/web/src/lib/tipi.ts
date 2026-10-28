@@ -18,6 +18,7 @@ export interface Aspetto {
   font_titoli: string; font_testo: string; logo_url: string | null; logo_dati: string | null; mostra_nome: boolean;
   layout: "lista" | "griglia" | "compatto" | "elegante";
   mostra_allergeni: boolean; mostra_descrizioni: boolean; testo_piede: string;
+  sfondo_dati: string | null; sfondo_opacita: number; sfondo_sfocatura: number; sfondo_bn: boolean;
 }
 
 export interface MenuPubblico {

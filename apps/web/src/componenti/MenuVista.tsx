@@ -20,8 +20,17 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
     "--m-font-testo": pilaFont(aspetto.font_testo, SERIF.has(aspetto.font_testo)),
   } as CSSProperties;
 
+  const foto = aspetto.sfondo_dati ? (
+    <div className="menu-foto" aria-hidden="true" style={{
+      backgroundImage: `url("${aspetto.sfondo_dati}")`,
+      opacity: Math.min(100, Math.max(0, aspetto.sfondo_opacita)) / 100,
+      filter: `blur(${aspetto.sfondo_sfocatura}px)${aspetto.sfondo_bn ? " grayscale(1)" : ""}`,
+    }} />
+  ) : null;
+
   return (
-    <div className={`menu menu-${aspetto.layout}`} style={stile}>
+    <div className={`menu menu-${aspetto.layout}${foto ? " con-foto" : ""}`} style={stile}>
+      {foto}
       <header className="menu-testata">
         {logo && <img className="menu-logo" src={logo} alt={aspetto.mostra_nome ? "" : menu.locale.nome} />}
         {(!logo || aspetto.mostra_nome) && <h1>{menu.locale.nome}</h1>}

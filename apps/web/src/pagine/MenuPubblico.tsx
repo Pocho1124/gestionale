@@ -8,6 +8,7 @@ export const ASPETTO_PREDEFINITO: Aspetto = {
   colore_primario: "#1F4FA8", colore_accento: "#F2C230", colore_sfondo: "#F2F5F8", colore_testo: "#13233A",
   font_titoli: "Young Serif", font_testo: "Figtree", logo_url: null, logo_dati: null, mostra_nome: true, layout: "lista",
   mostra_allergeni: true, mostra_descrizioni: true, testo_piede: "",
+  sfondo_dati: null, sfondo_opacita: 22, sfondo_sfocatura: 3, sfondo_bn: false,
 };
 
 /** Pagina aperta dal QR: legge solo i dati pubblici e si aggiorna da sola ogni minuto. */

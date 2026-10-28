@@ -97,7 +97,8 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .scelte { display: flex; gap: 6px; flex-wrap: wrap; }
 .fissa { position: sticky; bottom: 0; background: var(--sfondo); padding: 10px 0; }
 .anteprima { position: sticky; top: 70px; }
-.anteprima-telefono { border: 10px solid #1b1b1f; border-radius: 28px; overflow: auto; height: min(760px, 80vh); }
+.anteprima-telefono { border: 10px solid #1b1b1f; border-radius: 28px; overflow: hidden; height: min(760px, 80vh); transform: translateZ(0); }
+.anteprima-scorri { height: 100%; overflow: auto; }
 
 .avviso-area { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; }
 .avviso { padding: 10px 16px; border-radius: 10px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
@@ -163,3 +164,8 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu-elegante .menu-etichette li { background: transparent; color: var(--m-primario); border: 1px solid currentColor; font-weight: 600; }
 .menu-elegante .menu-badge { background: var(--m-accento); }
 .menu-elegante .menu-piede { border-top: 1px solid color-mix(in srgb, var(--m-primario) 35%, transparent); padding-top: 18px; letter-spacing: .05em; }
+
+/* Foto di sfondo «vedo non vedo»: livello fisso dietro al contenuto (nell'anteprima resta dentro il telefono) */
+.menu.con-foto { position: relative; isolation: isolate; }
+.menu-foto { position: fixed; inset: -20px; z-index: -1; background-size: cover; background-position: center; pointer-events: none; }
+.con-foto .menu-nav { background: color-mix(in srgb, var(--m-sfondo) 88%, transparent); backdrop-filter: blur(6px); }
