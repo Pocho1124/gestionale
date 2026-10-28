@@ -17,4 +17,5 @@ COPY supabase/migrations /migrations
 COPY supabase/tests/database /tests
 COPY deploy/pi /deploy
 COPY --from=web /src/apps/web/dist /web
+COPY apps/bot /bot
 ENTRYPOINT ["sh", "/app/applica.sh", "/migrations"]

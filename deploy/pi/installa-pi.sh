@@ -34,12 +34,24 @@ export PGPASSWORD
 docker run --rm --network supabase_default \
   -e PGHOST=db -e PGUSER=postgres -e PGDATABASE=postgres -e PGPASSWORD "$IMG"
 
-echo "Aggiorno il backoffice"
+echo "Aggiorno backoffice e bot"
 CID=$(docker create "$IMG")
-rm -rf "$SITO/www.nuovo"
-mkdir -p "$SITO/www.nuovo"
+rm -rf "$SITO/www.nuovo" /opt/gestionale/bot.nuovo
+mkdir -p "$SITO/www.nuovo" /opt/gestionale/bot.nuovo
 docker cp "$CID:/web/." "$SITO/www.nuovo/" >/dev/null
+docker cp "$CID:/bot/." /opt/gestionale/bot.nuovo/ >/dev/null 2>&1 || true
 docker rm "$CID" >/dev/null
+# Bot: sostituisce il codice e lo riavvia se è installato
+if [ -f /opt/gestionale/bot.nuovo/bot.mjs ]; then
+  rm -rf /opt/gestionale/bot.vecchio
+  if [ -d /opt/gestionale/bot ]; then mv /opt/gestionale/bot /opt/gestionale/bot.vecchio; fi
+  mv /opt/gestionale/bot.nuovo /opt/gestionale/bot
+  rm -rf /opt/gestionale/bot.vecchio
+  chmod -R a+rX /opt/gestionale/bot
+  if docker ps -a --format '{{.Names}}' | grep -qx gestionale-bot; then docker restart gestionale-bot >/dev/null; fi
+else
+  rm -rf /opt/gestionale/bot.nuovo
+fi
 # Sostituzione rapida: la cartella montata è $SITO, quindi il gateway vede subito la nuova versione
 rm -rf "$SITO/www.vecchio"
 if [ -d "$SITO/www" ]; then mv "$SITO/www" "$SITO/www.vecchio"; fi
