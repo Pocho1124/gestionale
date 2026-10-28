@@ -2,6 +2,8 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
+-- Le identità di test impostano sia request.jwt.claims (versioni recenti di auth.uid())
+-- sia request.jwt.claim.sub (versione legacy presente nell'immagine Postgres senza GoTrue).
 
 select plan(17);
 
@@ -17,6 +19,7 @@ select is((select nome from public.profili where id = '11111111-1111-1111-1111-1
 -- ---------- Owner ----------
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
 
 select lives_ok($$ select public.crea_organizzazione('Org Test', 'Trattoria Test', 'trattoria-test') $$,
                 'L''owner crea organizzazione e primo locale');
@@ -33,6 +36,7 @@ grant select on ctx to authenticated, anon;
 -- ---------- Estraneo ----------
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', true);
 
 select is((select count(*) from public.locali), 0::bigint, 'Un estraneo non vede locali altrui');
 select is_empty($$ update public.locali set nome = 'Hack' where id = (select loc from ctx) returning id $$,
@@ -43,6 +47,7 @@ select throws_ok($$ insert into public.membri (organizzazione_id, user_id, ruolo
 
 -- ---------- Owner aggiunge un cameriere ----------
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
 select lives_ok($$ insert into public.membri (organizzazione_id, user_id, ruolo)
                    select org, '33333333-3333-3333-3333-333333333333', 'cameriere' from ctx $$,
                 'L''owner aggiunge un cameriere');
@@ -52,6 +57,7 @@ select throws_ok($$ delete from public.membri where user_id = auth.uid() $$, 'P0
 
 -- ---------- Cameriere ----------
 select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', true);
 select is((select count(*) from public.locali), 1::bigint, 'Il cameriere vede il suo locale');
 select is_empty($$ update public.locali set nome = 'Hack' where id = (select loc from ctx) returning id $$,
                 'Il cameriere non modifica il locale');
@@ -62,6 +68,7 @@ select is((select nome from public.profili where id = '11111111-1111-1111-1111-1
 -- ---------- Anonimo ----------
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select set_config('request.jwt.claim.sub', '', true);
 select throws_ok($$ select count(*) from public.locali $$, '42501', null, 'Anon non accede alle tabelle interne');
 select throws_ok($$ select public.crea_organizzazione('X', 'Y', 'slug-anon') $$, '42501', null,
                  'Anon non può creare organizzazioni');
