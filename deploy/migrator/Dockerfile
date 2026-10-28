@@ -1,7 +1,7 @@
 # Pacchetto di rilascio: migrazioni + test + backoffice compilato + installer del server.
 
 # 1. Compilazione del backoffice (gira sull'architettura del runner, i file prodotti valgono per tutte)
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+FROM --platform=$BUILDPLATFORM node:22-slim AS web
 WORKDIR /src
 COPY tsconfig.base.json /src/
 COPY packages/core /src/packages/core
