@@ -73,8 +73,8 @@ async function db(percorso, { metodo = "GET", corpo } = {}) {
 
 async function catalogo() {
   const [categorie, prodotti] = await Promise.all([
-    db(`categorie?select=id,nome&locale_id=eq.${C.locale}&order=posizione,nome`),
-    db(`prodotti?select=id,nome,prezzo_cent,disponibile,visibile,categoria_id&locale_id=eq.${C.locale}&order=posizione,nome`),
+    db(`categorie?select=id,nome,posizione&locale_id=eq.${C.locale}&order=posizione,nome`),
+    db(`prodotti?select=id,nome,prezzo_cent,disponibile,visibile,categoria_id,posizione&locale_id=eq.${C.locale}&order=posizione,nome`),
   ]);
   return { categorie, prodotti };
 }
@@ -105,9 +105,63 @@ function trova(testo, elementi) {
 const numero = (s) => Number(s.replace(",", "."));
 const TUTTO = /\b(tutto|tutti|tutte|intero menu|tutto il menu)\b/;
 
+const maiuscola = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const pulisci = (s) => s.replace(/\s*(€|euro|eur)\s*$/i, "").replace(/\s+/g, " ").replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, "").trim();
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const RIGA_PREZZO = /^(.*?)[\s\-–—:.]*?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?\s*$/i;
+
+/** Elenco incollato: righe «Nome - 6,50» (opzionale «| descrizione»), righe senza prezzo = categoria. */
+export function interpretaElenco(testo, cat) {
+  const righe = testo.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+  if (righe.length < 2) return null;
+  const voci = [];
+  let categoria = null;
+  for (const r of righe.slice(0, 100)) {
+    const [corpo, descrizione = ""] = r.split("|").map((x) => x.trim());
+    const m = corpo.match(RIGA_PREZZO);
+    if (m && m[1] && /[a-zà-ü]/i.test(m[1])) {
+      voci.push({ nome: maiuscola(pulisci(m[1])).slice(0, 120), euro: numero(m[2]), descrizione: descrizione.slice(0, 500), categoria });
+    } else if (!/\d/.test(corpo)) {
+      const nome = maiuscola(pulisci(corpo.replace(/^categoria\s*:?\s*/i, ""))).slice(0, 80);
+      categoria = cat.categorie.find((c) => norm(c.nome) === norm(nome)) ?? { nuova: true, nome };
+    }
+  }
+  if (voci.length < 2) return null;
+  return voci.some((v) => !v.categoria)
+    ? { azione: "chiedi_categoria", per: "importa", voci }
+    : { azione: "importa", voci };
+}
+
+/** «aggiungi alle pizze rosse la diavola a 8 euro con salame piccante» */
+function interpretaNuovoPiatto(testo, cat) {
+  if (!/^\s*(aggiungi|inserisci|crea|nuovo piatto|metti nel menu)\b/i.test(testo)) return null;
+  let resto = testo;
+  let descrizione = "";
+  const con = resto.match(/\s(?:con|:)\s+(.+)$/i);
+  if (con) { descrizione = pulisci(con[1]); resto = resto.slice(0, con.index); }
+  const prezzo = resto.match(/\s(?:a|da|al prezzo di|prezzo)\s+(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?(?![a-z0-9])/i)
+    || resto.match(/\s(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)(?![a-z0-9])/i);
+  if (!prezzo) return null;
+  resto = resto.slice(0, prezzo.index) + " " + resto.slice(prezzo.index + prezzo[0].length);
+  const categoria = trova(resto, cat.categorie);
+  if (categoria) resto = resto.replace(new RegExp(escapeRe(categoria.nome), "i"), " ");
+  resto = resto.replace(/^\s*(aggiungi|inserisci|crea|nuovo piatto|metti nel menu)\b/i, " ")
+    .replace(/\b(alle|alla|allo|ai|agli|al|nelle|nella|nello|nei|negli|nel|in|tra|fra|categoria)\b/gi, " ")
+    .replace(/^\s*(il|la|lo|l'|i|le|gli|un|una|uno)\s+/i, " ");
+  const nome = maiuscola(pulisci(resto.replace(/^\s*(il|la|lo|l'|i|le|gli|un|una|uno)\s+/i, ""))).slice(0, 120);
+  if (!nome || nome.length < 2) return null;
+  const piatto = { nome, euro: numero(prezzo[1]), descrizione: descrizione.slice(0, 500) };
+  return categoria ? { azione: "aggiungi_piatto", ...piatto, categoria } : { azione: "chiedi_categoria", per: "aggiungi_piatto", ...piatto };
+}
+
 export function interpretaConRegole(testo, cat) {
+  const elenco = interpretaElenco(testo, cat);
+  if (elenco) return elenco;
   const t = norm(testo);
   const prodotto = () => trova(testo, cat.prodotti);
+
+  const nuovaCat = testo.match(/^\s*(?:crea|aggiungi|nuova)\s+(?:la\s+|una\s+)?(?:nuova\s+)?categoria\s+(.+)$/i);
+  if (nuovaCat) return { azione: "aggiungi_categoria", nome: maiuscola(pulisci(nuovaCat[1])).slice(0, 80) };
 
   const pct = t.match(/(\d+(?:[.,]\d+)?)\s*(%|percento|per cento)/);
   if (pct) {
@@ -122,7 +176,10 @@ export function interpretaConRegole(testo, cat) {
     }
   }
 
-  const prezzo = t.match(/(\d+(?:[.,]\d{1,2})?)\s*(€|euro|eur)\b/)
+  const nuovo = interpretaNuovoPiatto(testo, cat);
+  if (nuovo) return nuovo;
+
+  const prezzo = t.match(/(\d+(?:[.,]\d{1,2})?)\s*(€|euro|eur)(?![a-z0-9])/)
     || (/(prezzo|costa|metti|porta)/.test(t) && !t.includes("%") ? t.match(/\ba\s+(\d+(?:[.,]\d{1,2})?)\b/) : null);
   if (prezzo) {
     const p = prodotto();
@@ -156,7 +213,9 @@ async function interpretaConModello(testo, cat) {
   const schema = {
     type: "object",
     properties: {
-      azione: { type: "string", enum: ["varia_prezzi", "imposta_prezzo", "disponibilita", "visibilita", "nessuna"] },
+      azione: { type: "string", enum: ["varia_prezzi", "imposta_prezzo", "disponibilita", "visibilita", "aggiungi_piatto", "aggiungi_categoria", "nessuna"] },
+      nome: { type: "string" },
+      descrizione: { type: "string" },
       percentuale: { type: "number" },
       euro: { type: "number" },
       categoria: { type: "string", enum: [...nomiCat, "tutte"] },
@@ -174,7 +233,9 @@ async function interpretaConModello(testo, cat) {
           "Converti la richiesta del ristoratore in UNA azione JSON. " +
           "varia_prezzi: percentuale (negativa per ridurre) e categoria ('tutte' per tutto il menu). " +
           "imposta_prezzo: prodotto ed euro. disponibilita: prodotto e valore (false = esaurito). " +
-          "visibilita: prodotto e valore (false = nascosto dal menu). Se non è una modifica, azione 'nessuna'." },
+          "visibilita: prodotto e valore (false = nascosto dal menu). " +
+          "aggiungi_piatto: nome del nuovo piatto, euro, categoria, descrizione facoltativa. aggiungi_categoria: nome. " +
+          "Se non è una modifica, azione 'nessuna'." },
         { role: "user", content: `Categorie: ${nomiCat.join(", ") || "nessuna"}\nPiatti: ${nomiPiatti.join(", ") || "nessuno"}\nRichiesta: ${testo}` },
       ],
     }),
@@ -193,6 +254,12 @@ async function interpretaConModello(testo, cat) {
     case "imposta_prezzo": return p && out.euro > 0 ? { azione: "imposta_prezzo", prodotto: p, euro: out.euro } : null;
     case "disponibilita": return p && typeof out.valore === "boolean" ? { azione: "disponibilita", prodotto: p, valore: out.valore } : null;
     case "visibilita": return p && typeof out.valore === "boolean" ? { azione: "visibilita", prodotto: p, valore: out.valore } : null;
+    case "aggiungi_categoria": return out.nome?.trim() ? { azione: "aggiungi_categoria", nome: maiuscola(pulisci(out.nome)).slice(0, 80) } : null;
+    case "aggiungi_piatto": {
+      if (!out.nome?.trim() || !(out.euro > 0)) return null;
+      const piatto = { nome: maiuscola(pulisci(out.nome)).slice(0, 120), euro: out.euro, descrizione: (out.descrizione ?? "").slice(0, 500) };
+      return c ? { azione: "aggiungi_piatto", ...piatto, categoria: c } : { azione: "chiedi_categoria", per: "aggiungi_piatto", ...piatto };
+    }
     default: return null;
   }
 }
@@ -218,6 +285,28 @@ export function anteprima(a, cat) {
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "DI NUOVO DISPONIBILE" : "ESAURITO"}` };
     case "visibilita":
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "VISIBILE nel menu" : "NASCOSTO dal menu"}` };
+    case "aggiungi_categoria": {
+      if (!a.nome) return { errore: "Nome della categoria mancante." };
+      if (cat.categorie.some((c) => norm(c.nome) === norm(a.nome))) return { errore: `La categoria «${a.nome}» esiste già.` };
+      return { testo: `Nuova categoria: «${a.nome}»` };
+    }
+    case "aggiungi_piatto": {
+      const c = Math.round(a.euro * 100);
+      if (!(c > 0 && c <= 10_000_000)) return { errore: "Prezzo non valido." };
+      if (cat.prodotti.some((p) => p.categoria_id === a.categoria.id && norm(p.nome) === norm(a.nome)))
+        return { errore: `«${a.nome}» esiste già in «${a.categoria.nome}».` };
+      return { testo: `Nuovo piatto in «${a.categoria.nome}»:\n• ${a.nome} — ${euro(c)}${a.descrizione ? `\n  ${a.descrizione}` : ""}\n\nAllergeni ed etichette si completano dal backoffice.` };
+    }
+    case "importa": {
+      const valide = a.voci.filter((v) => v.euro > 0 && v.euro <= 100000);
+      if (!valide.length) return { errore: "Nessun piatto con prezzo valido nell'elenco." };
+      const nuoveCat = [...new Set(valide.filter((v) => v.categoria.nuova).map((v) => v.categoria.nome))];
+      const righe = valide.slice(0, 25).map((v) => `• [${v.categoria.nome}] ${v.nome} — ${euro(Math.round(v.euro * 100))}`);
+      if (valide.length > 25) righe.push(`… e altri ${valide.length - 25}`);
+      const scartate = a.voci.length - valide.length;
+      return { testo: `Importo ${valide.length} piatti${nuoveCat.length ? ` e creo ${nuoveCat.length} categorie (${nuoveCat.join(", ")})` : ""}:\n${righe.join("\n")}` +
+        (scartate ? `\n\n⚠️ ${scartate} righe ignorate per prezzo non valido.` : "") + "\n\nAllergeni ed etichette si completano dal backoffice." };
+    }
     default:
       return { errore: "Azione non riconosciuta." };
   }
@@ -231,21 +320,55 @@ async function esegui(a, cat) {
         .map((p) => ({ id: p.id, prezzo_cent: p.prezzo_cent }));
       const n = await db("rpc/varia_prezzi", { metodo: "POST", corpo: {
         p_locale: C.locale, p_percento: a.percentuale, p_categoria: a.categoria?.id ?? null, p_arrotonda_cent: 10 } });
-      return { esito: `${n} prezzi aggiornati.`, annulla: prima.map((x) => ({ id: x.id, patch: { prezzo_cent: x.prezzo_cent } })) };
+      return { esito: `${n} prezzi aggiornati.`, annulla: prima.map((x) => ({ tabella: "prodotti", id: x.id, patch: { prezzo_cent: x.prezzo_cent } })) };
     }
     case "imposta_prezzo":
       await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { prezzo_cent: Math.round(a.euro * 100) } });
-      return { esito: "Prezzo aggiornato.", annulla: [{ id: a.prodotto.id, patch: { prezzo_cent: a.prodotto.prezzo_cent } }] };
+      return { esito: "Prezzo aggiornato.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { prezzo_cent: a.prodotto.prezzo_cent } }] };
     case "disponibilita":
       await db("rpc/imposta_disponibilita", { metodo: "POST", corpo: { p_prodotto: a.prodotto.id, p_disponibile: a.valore } });
-      return { esito: "Disponibilità aggiornata.", annulla: [{ id: a.prodotto.id, patch: { disponibile: a.prodotto.disponibile } }] };
+      return { esito: "Disponibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { disponibile: a.prodotto.disponibile } }] };
     case "visibilita":
       await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
-      return { esito: "Visibilità aggiornata.", annulla: [{ id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+      return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+    case "aggiungi_categoria": {
+      const [c] = await db("categorie", { metodo: "POST", corpo: { locale_id: C.locale, nome: a.nome, posizione: prossima(cat.categorie) } });
+      return { esito: `Categoria «${a.nome}» creata.`, annulla: [{ tabella: "categorie", id: c.id, elimina: true }] };
+    }
+    case "aggiungi_piatto": {
+      const [p] = await db("prodotti", { metodo: "POST", corpo: {
+        locale_id: C.locale, categoria_id: a.categoria.id, nome: a.nome, descrizione: a.descrizione || "",
+        prezzo_cent: Math.round(a.euro * 100), posizione: prossima(cat.prodotti.filter((x) => x.categoria_id === a.categoria.id)) } });
+      return { esito: `«${a.nome}» aggiunto al menu.`, annulla: [{ tabella: "prodotti", id: p.id, elimina: true }] };
+    }
+    case "importa": {
+      const valide = a.voci.filter((v) => v.euro > 0 && v.euro <= 100000);
+      const annulla = [];
+      const idCat = new Map();
+      let pos = prossima(cat.categorie);
+      for (const v of valide) {
+        if (!v.categoria.nuova || idCat.has(v.categoria.nome)) continue;
+        const [c] = await db("categorie", { metodo: "POST", corpo: { locale_id: C.locale, nome: v.categoria.nome, posizione: pos++ } });
+        idCat.set(v.categoria.nome, c.id);
+        annulla.push({ tabella: "categorie", id: c.id, elimina: true });
+      }
+      const contatori = new Map();
+      const righe = valide.map((v) => {
+        const categoria_id = v.categoria.nuova ? idCat.get(v.categoria.nome) : v.categoria.id;
+        const base = contatori.get(categoria_id) ?? prossima(cat.prodotti.filter((x) => x.categoria_id === categoria_id));
+        contatori.set(categoria_id, base + 1);
+        return { locale_id: C.locale, categoria_id, nome: v.nome, descrizione: v.descrizione, prezzo_cent: Math.round(v.euro * 100), posizione: base };
+      });
+      const creati = await db("prodotti", { metodo: "POST", corpo: righe });
+      // Prima i piatti, poi le categorie create: l'annullamento li rimuove in quest'ordine
+      return { esito: `${creati.length} piatti importati.`, annulla: [...creati.map((p) => ({ tabella: "prodotti", id: p.id, elimina: true })), ...annulla] };
+    }
     default:
       throw new Error("Azione non riconosciuta");
   }
 }
+
+const prossima = (lista) => lista.reduce((m, x) => Math.max(m, x.posizione ?? 0), -1) + 1;
 
 // ---------------------------------------------------------------- Conversazione
 const inAttesa = new Map();   // id -> { azione, catalogo, chat, scade }
@@ -253,7 +376,9 @@ let ultimaModifica = null;    // operazioni per /annulla
 
 const AIUTO =
   "Scrivimi cosa vuoi cambiare nel menu, ad esempio:\n" +
-  "• aumenta del 5% le pizze\n• la genovese è esaurita\n• la margherita costa 7 euro\n• nascondi la marinara\n\n" +
+  "• aumenta del 5% le pizze\n• la genovese è esaurita\n• la margherita costa 7 euro\n• nascondi la marinara\n" +
+  "• crea la categoria Dolci\n• aggiungi alle pizze rosse la diavola a 8 euro con salame piccante\n" +
+  "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
 
@@ -278,7 +403,9 @@ async function gestisciMessaggio(m) {
 
   if (testo === "/annulla") {
     if (!ultimaModifica) return invia(chat, "Non c'è nessuna modifica da annullare.");
-    for (const op of ultimaModifica) await db(`prodotti?id=eq.${op.id}`, { metodo: "PATCH", corpo: op.patch });
+    for (const op of ultimaModifica) {
+      await db(`${op.tabella}?id=eq.${op.id}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
+    }
     ultimaModifica = null;
     return invia(chat, "↩️ Ultima modifica annullata.");
   }
@@ -293,11 +420,16 @@ async function gestisciMessaggio(m) {
   if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze».");
 
   if (azione.azione === "chiedi_categoria") {
+    const prezzi = (azione.per ?? "varia_prezzi") === "varia_prezzi";
+    if (!prezzi && !cat.categorie.length) return invia(chat, "Non ci sono ancora categorie: creane una, ad esempio «crea la categoria Pizze».");
     const id = Math.random().toString(36).slice(2, 10);
     inAttesa.set(id, { azione, catalogo: cat, chat, scade: Date.now() + 10 * 60_000 });
-    const pulsanti = cat.categorie.map((c, i) => [{ text: c.nome, callback_data: `cat:${id}:${i}` }]);
-    pulsanti.push([{ text: "Tutto il menu", callback_data: `cat:${id}:tutte` }]);
-    return invia(chat, `Variazione ${azione.percentuale > 0 ? "+" : ""}${azione.percentuale}%: su quale categoria?`, { reply_markup: { inline_keyboard: pulsanti } });
+    const pulsanti = cat.categorie.slice(0, 30).map((c, i) => [{ text: c.nome, callback_data: `cat:${id}:${i}` }]);
+    if (prezzi) pulsanti.push([{ text: "Tutto il menu", callback_data: `cat:${id}:tutte` }]);
+    const domanda = prezzi ? `Variazione ${azione.percentuale > 0 ? "+" : ""}${azione.percentuale}%: su quale categoria?`
+      : azione.per === "aggiungi_piatto" ? `In quale categoria aggiungo «${azione.nome}»?`
+      : "In quale categoria metto i piatti che non hanno una categoria nell'elenco?";
+    return invia(chat, domanda, { reply_markup: { inline_keyboard: pulsanti } });
   }
   return chiediConferma(chat, azione, cat);
 }
@@ -321,7 +453,13 @@ async function gestisciPulsante(q) {
     await tg("answerCallbackQuery", { callback_query_id: q.id });
     await tg("editMessageText", { chat_id: q.message.chat.id, message_id: q.message.message_id,
       text: `${q.message.text}\n→ ${categoria ? categoria.nome : "Tutto il menu"}` });
-    return chiediConferma(pend.chat, { azione: "varia_prezzi", percentuale: pend.azione.percentuale, categoria }, pend.catalogo);
+    const a = pend.azione;
+    const per = a.per ?? "varia_prezzi";
+    if (per !== "varia_prezzi" && !categoria) return invia(pend.chat, "Serve una categoria: richiesta annullata.");
+    const azione = per === "varia_prezzi" ? { azione: "varia_prezzi", percentuale: a.percentuale, categoria }
+      : per === "aggiungi_piatto" ? { azione: "aggiungi_piatto", nome: a.nome, euro: a.euro, descrizione: a.descrizione, categoria }
+      : { azione: "importa", voci: a.voci.map((v) => ({ ...v, categoria: v.categoria ?? categoria })) };
+    return chiediConferma(pend.chat, azione, pend.catalogo);
   }
   const chiudi = (testo) => tg("editMessageText", { chat_id: q.message.chat.id, message_id: q.message.message_id, text: testo });
   if (!pend || pend.scade < Date.now()) {
