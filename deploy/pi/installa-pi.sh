@@ -48,7 +48,9 @@ if [ -f /opt/gestionale/bot.nuovo/bot.mjs ]; then
   mv /opt/gestionale/bot.nuovo /opt/gestionale/bot
   rm -rf /opt/gestionale/bot.vecchio
   chmod -R a+rX /opt/gestionale/bot
-  if docker ps -a --format '{{.Names}}' | grep -qx gestionale-bot; then docker restart gestionale-bot >/dev/null; fi
+  for SERVIZIO in gestionale-bot gestionale-pubblicatore; do
+    if docker ps -a --format '{{.Names}}' | grep -qx "$SERVIZIO"; then docker restart "$SERVIZIO" >/dev/null; fi
+  done
 else
   rm -rf /opt/gestionale/bot.nuovo
 fi
