@@ -1,0 +1,75 @@
+name: Test e rilascio
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Test logica di dominio
+        working-directory: packages/core
+        run: |
+          npm install --no-package-lock --no-audit --no-fund
+          npx tsc --noEmit
+          npx vitest run
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: supabase/postgres:17.6.1.136
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -h localhost"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Applica le migrazioni
+        run: sh deploy/migrator/applica.sh supabase/migrations
+      - name: Test RLS
+        run: sh deploy/migrator/test.sh supabase/tests/database
+
+  rilascio:
+    needs: [core, database]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nome immagine (minuscolo)
+        run: echo "IMMAGINE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/gestionale-migrator" >> "$GITHUB_ENV"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/migrator/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMMAGINE }}:latest
+            ${{ env.IMMAGINE }}:${{ github.sha }}
