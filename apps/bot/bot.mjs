@@ -160,6 +160,19 @@ export function interpretaConRegole(testo, cat) {
   const t = norm(testo);
   const prodotto = () => trova(testo, cat.prodotti);
 
+  const via = testo.match(/^\s*(?:elimina|cancella|rimuovi|togli)\s+(?:la\s+|il\s+)?(categoria|piatto)?\s*(.+)$/i);
+  if (via && !/\bdal menu\b/i.test(testo)) {
+    if ((via[1] ?? "").toLowerCase() === "categoria") {
+      const c = trova(via[2], cat.categorie);
+      return c ? { azione: "elimina_categoria", categoria: c } : { azione: "non_trovato", cosa: via[2] };
+    }
+    const p = trova(via[2], cat.prodotti);
+    if (p) return { azione: "elimina_piatto", prodotto: p };
+    const c = trova(via[2], cat.categorie);
+    if (c && norm(c.nome) === norm(via[2].replace(/^(la|il|lo|l'|i|le|gli)\s+/i, ""))) return { azione: "elimina_categoria", categoria: c };
+    return { azione: "non_trovato", cosa: via[2] };
+  }
+
   const nuovaCat = testo.match(/^\s*(?:crea|aggiungi|nuova)\s+(?:la\s+|una\s+)?(?:nuova\s+)?categoria\s+(.+)$/i);
   if (nuovaCat) return { azione: "aggiungi_categoria", nome: maiuscola(pulisci(nuovaCat[1])).slice(0, 80) };
 
@@ -274,7 +287,7 @@ export function anteprima(a, cat) {
       const righe = coinvolti.slice(0, 10).map((p) => `• ${p.nome}: ${euro(p.prezzo_cent)} → ${euro(arrotonda10(p.prezzo_cent, a.percentuale))}`);
       if (coinvolti.length > 10) righe.push(`… e altri ${coinvolti.length - 10}`);
       const dove = a.categoria ? `«${a.categoria.nome}»` : "tutto il menu";
-      return { testo: `Variazione ${a.percentuale > 0 ? "+" : ""}${a.percentuale}% su ${dove} (${coinvolti.length} piatti, arrotondati a 0,10 €):\n${righe.join("\n")}` };
+      return { testo: `Variazione ${a.percentuale > 0 ? "+" : ""}${a.percentuale}% su ${dove} (${coinvolti.length === 1 ? "1 piatto" : `${coinvolti.length} piatti`}, arrotondati a 0,10 €):\n${righe.join("\n")}` };
     }
     case "imposta_prezzo": {
       const nuovo = Math.round(a.euro * 100);
@@ -285,6 +298,12 @@ export function anteprima(a, cat) {
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "DI NUOVO DISPONIBILE" : "ESAURITO"}` };
     case "visibilita":
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "VISIBILE nel menu" : "NASCOSTO dal menu"}` };
+    case "elimina_piatto":
+      return { testo: `🗑 Elimino il piatto «${a.prodotto.nome}» (${euro(a.prodotto.prezzo_cent)}).\nSe vuoi solo toglierlo dal menu per un po', scrivi invece «nascondi ${a.prodotto.nome}».` };
+    case "elimina_categoria": {
+      const n = cat.prodotti.filter((p) => p.categoria_id === a.categoria.id).length;
+      return { testo: `🗑 Elimino la categoria «${a.categoria.nome}»${n === 1 ? " e il suo piatto" : n ? ` e i suoi ${n} piatti` : " (vuota)"}.` };
+    }
     case "aggiungi_categoria": {
       if (!a.nome) return { errore: "Nome della categoria mancante." };
       if (cat.categorie.some((c) => norm(c.nome) === norm(a.nome))) return { errore: `La categoria «${a.nome}» esiste già.` };
@@ -331,6 +350,21 @@ async function esegui(a, cat) {
     case "visibilita":
       await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
       return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+    case "elimina_piatto": {
+      const [riga] = await db(`prodotti?id=eq.${a.prodotto.id}&select=*`);
+      if (!riga) throw new Error("Il piatto non esiste più");
+      await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "DELETE" });
+      return { esito: `«${a.prodotto.nome}» eliminato.`, annulla: [{ tabella: "prodotti", inserisci: [riga] }] };
+    }
+    case "elimina_categoria": {
+      const [riga] = await db(`categorie?id=eq.${a.categoria.id}&select=*`);
+      if (!riga) throw new Error("La categoria non esiste più");
+      const piatti = await db(`prodotti?categoria_id=eq.${a.categoria.id}&select=*`);
+      await db(`categorie?id=eq.${a.categoria.id}`, { metodo: "DELETE" });
+      const annulla = [{ tabella: "categorie", inserisci: [riga] }];
+      if (piatti.length) annulla.push({ tabella: "prodotti", inserisci: piatti });
+      return { esito: `Categoria «${a.categoria.nome}» eliminata${piatti.length ? ` con ${piatti.length} piatti` : ""}.`, annulla };
+    }
     case "aggiungi_categoria": {
       const [c] = await db("categorie", { metodo: "POST", corpo: { locale_id: C.locale, nome: a.nome, posizione: prossima(cat.categorie) } });
       return { esito: `Categoria «${a.nome}» creata.`, annulla: [{ tabella: "categorie", id: c.id, elimina: true }] };
@@ -378,6 +412,7 @@ const AIUTO =
   "Scrivimi cosa vuoi cambiare nel menu, ad esempio:\n" +
   "• aumenta del 5% le pizze\n• la genovese è esaurita\n• la margherita costa 7 euro\n• nascondi la marinara\n" +
   "• crea la categoria Dolci\n• aggiungi alle pizze rosse la diavola a 8 euro con salame piccante\n" +
+  "• elimina la diavola\n• elimina la categoria Dolci\n" +
   "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
@@ -404,7 +439,8 @@ async function gestisciMessaggio(m) {
   if (testo === "/annulla") {
     if (!ultimaModifica) return invia(chat, "Non c'è nessuna modifica da annullare.");
     for (const op of ultimaModifica) {
-      await db(`${op.tabella}?id=eq.${op.id}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
+      if (op.inserisci) await db(op.tabella, { metodo: "POST", corpo: op.inserisci });
+      else await db(`${op.tabella}?id=eq.${op.id}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
     }
     ultimaModifica = null;
     return invia(chat, "↩️ Ultima modifica annullata.");
@@ -419,6 +455,9 @@ async function gestisciMessaggio(m) {
   }
   if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze».");
 
+  if (azione.azione === "non_trovato") {
+    return invia(chat, `Non trovo «${azione.cosa.trim()}» nel menu, quindi non elimino nulla. Controlla il nome con /menu.`);
+  }
   if (azione.azione === "chiedi_categoria") {
     const prezzi = (azione.per ?? "varia_prezzi") === "varia_prezzi";
     if (!prezzi && !cat.categorie.length) return invia(chat, "Non ci sono ancora categorie: creane una, ad esempio «crea la categoria Pizze».");
