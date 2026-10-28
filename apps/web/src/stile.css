@@ -1,0 +1,135 @@
+/* ---------- Backoffice ---------- */
+:root {
+  --sfondo: #F2F5F8; --superficie: #FFFFFF; --testo: #13233A; --muto: #5A6B82; --linea: #D5DDE7;
+  --primario: #1F4FA8; --su-primario: #FFFFFF; --accento: #F2C230; --pericolo: #B3261E; --ok: #1E7A46;
+  --titoli: "Young Serif", Georgia, serif;
+  --corpo: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sfondo: #0E1726; --superficie: #16233A; --testo: #E8EEF6; --muto: #9AAAC0; --linea: #2A3A55;
+    --primario: #7FA6EE; --su-primario: #0E1726; --pericolo: #FF8A80; --ok: #6FD49A; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--sfondo); color: var(--testo); font: 15px/1.5 var(--corpo); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+input, select, textarea { background: var(--superficie); border: 1px solid var(--linea); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid var(--accento); outline-offset: 1px; }
+h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
+.muto { color: var(--muto); } .piccolo { font-size: .85rem; } .errore { color: var(--pericolo); font-weight: 600; }
+.centrato { min-height: 100vh; display: grid; place-items: center; padding: 20px; margin: 0; text-align: center; }
+
+.btn { border: 1.5px solid var(--primario); background: transparent; color: var(--primario); border-radius: 999px;
+       padding: 6px 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn-pieno { background: var(--primario); color: var(--su-primario); }
+.btn-piccolo { padding: 3px 10px; font-size: .85rem; }
+.btn-icona { padding: 2px 9px; }
+.btn-testo { border: 0; padding: 6px 0; }
+.btn-pericolo { border-color: var(--pericolo); color: var(--pericolo); padding: 3px 10px; font-size: .85rem; }
+
+.scheda { background: var(--superficie); border: 1px solid var(--linea); border-radius: 16px; padding: 28px; display: grid; gap: 12px; text-align: left; }
+.scheda-stretta { width: min(420px, 100%); }
+.titolo { font-size: 2rem; color: var(--primario); }
+.campo { display: grid; gap: 4px; font-weight: 600; font-size: .9rem; }
+.campo input, .campo select, .campo textarea { font-weight: 400; }
+.schede-modo { display: flex; gap: 6px; }
+.schede-modo button { flex: 1; border: 1px solid var(--linea); background: transparent; border-radius: 8px; padding: 7px; cursor: pointer; }
+.schede-modo button[aria-selected="true"] { background: var(--primario); color: var(--su-primario); border-color: var(--primario); }
+
+.guscio { min-height: 100vh; }
+.barra { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center;
+         justify-content: space-between; padding: 10px 20px; background: var(--superficie); border-bottom: 1px solid var(--linea); }
+.barra-locale, .barra-utente { display: flex; align-items: center; gap: 10px; }
+.barra-nav { display: flex; gap: 4px; }
+.barra-nav a { padding: 6px 12px; border-radius: 999px; color: var(--testo); text-decoration: none; font-weight: 600; }
+.barra-nav a.active { background: var(--primario); color: var(--su-primario); }
+.pill { font-size: .75rem; border: 1px solid var(--linea); border-radius: 999px; padding: 1px 8px; color: var(--muto); }
+.contenuto { padding: 24px 20px 80px; max-width: 1100px; margin: 0 auto; }
+
+.pagina { display: grid; gap: 16px; }
+.pagina-testa { display: grid; gap: 4px; }
+.strumenti { display: grid; gap: 10px; background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; padding: 14px; }
+.riga-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.riga-form input:not([type]) { flex: 1 1 220px; }
+.input-pct { width: 70px; text-align: right; }
+.vuoto { text-align: center; padding: 40px; border: 2px dashed var(--linea); border-radius: 12px; }
+
+.blocco { background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; padding: 12px 14px; display: grid; gap: 4px; }
+.blocco.nascosto { opacity: .6; }
+.blocco-testa { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding-bottom: 6px; border-bottom: 1px solid var(--linea); }
+.input-titolo { font-family: var(--titoli); font-size: 1.3rem; color: var(--primario); border-color: transparent; flex: 1 1 200px; }
+.input-titolo:hover { border-color: var(--linea); }
+.azioni { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.piatto { border-bottom: 1px dashed var(--linea); padding: 6px 0; }
+.piatto:last-of-type { border-bottom: 0; }
+.piatto.esaurito .input-nome, .piatto.esaurito .nome { text-decoration: line-through; color: var(--muto); }
+.piatto.nascosto { opacity: .55; }
+.piatto-riga { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.input-nome { flex: 1 1 200px; border-color: transparent; font-weight: 600; }
+.input-nome:hover { border-color: var(--linea); }
+.nome { flex: 1 1 200px; font-weight: 600; }
+.prezzo { display: flex; align-items: center; gap: 4px; }
+.prezzo input { width: 76px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.prezzo-testo { font-weight: 700; font-variant-numeric: tabular-nums; }
+.interruttore { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: .9rem; }
+.interruttore.spento { color: var(--pericolo); font-weight: 700; }
+.interruttore input { width: 18px; height: 18px; accent-color: var(--primario); }
+.piatto-dettagli { display: grid; gap: 10px; padding: 10px 0 6px; }
+.chip-gruppo { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-gruppo legend { font-weight: 600; font-size: .9rem; margin-bottom: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--linea); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: .85rem; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip.attivo { background: var(--primario); color: var(--su-primario); border-color: var(--primario); }
+.chip:focus-within { outline: 3px solid var(--accento); }
+
+.pagina-divisa { grid-template-columns: minmax(0, 1fr) minmax(0, 420px); align-items: start; }
+@media (max-width: 900px) { .pagina-divisa { grid-template-columns: 1fr; } }
+.pannello { display: grid; gap: 14px; }
+.gruppo { border: 1px solid var(--linea); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; background: var(--superficie); }
+.gruppo legend { font-weight: 700; padding: 0 4px; }
+.campo-colore { display: flex; align-items: center; gap: 10px; }
+.campo-colore input { width: 44px; height: 32px; padding: 2px; }
+.campo-colore code { margin-left: auto; color: var(--muto); }
+.scelte { display: flex; gap: 6px; flex-wrap: wrap; }
+.fissa { position: sticky; bottom: 0; background: var(--sfondo); padding: 10px 0; }
+.anteprima { position: sticky; top: 70px; }
+.anteprima-telefono { border: 10px solid #1b1b1f; border-radius: 28px; overflow: auto; height: min(760px, 80vh); }
+
+.avviso-area { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; }
+.avviso { padding: 10px 16px; border-radius: 10px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.avviso-ok { background: var(--ok); color: #fff; }
+.avviso-errore { background: var(--pericolo); color: #fff; }
+
+/* ---------- Menu clienti (colori e font dal pannello Aspetto) ---------- */
+.menu { min-height: 100%; background: var(--m-sfondo); color: var(--m-testo); font-family: var(--m-font-testo); padding: 0 18px 30px; }
+.menu-testata { text-align: center; padding: 28px 0 16px; border-bottom: 6px double var(--m-primario); }
+.menu-testata h1 { font-family: var(--m-font-titoli); font-size: clamp(1.9rem, 7vw, 2.8rem); line-height: 1.1; }
+.menu-testata p { margin: 6px 0 0; opacity: .75; }
+.menu-logo { max-height: 72px; max-width: 70%; margin-bottom: 10px; }
+.menu-nav { position: sticky; top: 0; display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; background: var(--m-sfondo); z-index: 2; scrollbar-width: none; }
+.menu-nav a { flex: none; border: 1px solid color-mix(in srgb, var(--m-testo) 25%, transparent); border-radius: 999px; padding: 5px 12px; color: inherit; text-decoration: none; font-weight: 600; font-size: .9rem; }
+.menu-categoria { padding-top: 18px; scroll-margin-top: 54px; }
+.menu-categoria h2 { font-family: var(--m-font-titoli); color: var(--m-primario); font-size: 1.5rem; }
+.menu-cat-desc { margin: 2px 0 6px; opacity: .75; }
+.menu-piatto { padding: 10px 0; border-bottom: 1px dashed color-mix(in srgb, var(--m-testo) 22%, transparent); }
+.menu-riga { display: flex; align-items: baseline; gap: 8px; }
+.menu-riga h3 { margin: 0; font-size: 1.02rem; }
+.menu-puntini { flex: 1; border-bottom: 2px dotted color-mix(in srgb, var(--m-testo) 25%, transparent); transform: translateY(-4px); min-width: 12px; }
+.menu-prezzo { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.menu-desc { margin: 3px 0 0; opacity: .78; font-size: .93rem; }
+.menu-etichette { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; padding: 0; margin: 5px 0 0; }
+.menu-etichette li { font-size: .72rem; font-weight: 700; background: var(--m-accento); color: #13233A; border-radius: 6px; padding: 1px 7px; }
+.menu-allergeni { margin: 4px 0 0; font-size: .78rem; opacity: .7; }
+.menu-piatto.esaurito h3, .menu-piatto.esaurito .menu-prezzo { text-decoration: line-through; opacity: .55; }
+.menu-badge { font-size: .7rem; font-weight: 700; background: #B3261E; color: #fff; border-radius: 6px; padding: 1px 6px; }
+.menu-vuoto { text-align: center; opacity: .7; padding: 40px 0; }
+.menu-piede { margin-top: 26px; font-size: .82rem; opacity: .7; text-align: center; }
+.menu-griglia .menu-prodotti { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.menu-griglia .menu-piatto { border: 1px solid color-mix(in srgb, var(--m-testo) 15%, transparent); border-radius: 12px; padding: 10px; }
+.menu-griglia .menu-riga { flex-wrap: wrap; } .menu-griglia .menu-puntini { display: none; } .menu-griglia .menu-prezzo { width: 100%; color: var(--m-primario); }
+.menu-foto { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; margin-bottom: 6px; }
+.menu-compatto .menu-piatto { padding: 5px 0; } .menu-compatto .menu-desc { display: none; } .menu-compatto .menu-categoria h2 { font-size: 1.2rem; }
