@@ -13,6 +13,7 @@ const C = {
   locale: obbligatoria("LOCALE_ID"),
   ollama: (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, ""),
   modello: process.env.OLLAMA_MODELLO || "qwen2.5:3b",
+  trascrizione: (process.env.TRASCRIZIONE_URL || "http://trascrizione:9000").replace(/\/$/, ""),
 };
 
 function obbligatoria(nome) {
@@ -457,6 +458,7 @@ const AIUTO =
   "• descrizione margherita: pomodoro, fior di latte e basilico\n" +
   "• 📷 invia una foto con didascalia «Margherita» (o «Margherita: descrizione») per metterla sul piatto\n" +
   "• togli la foto alla margherita\n" +
+  "• 🎙️ oppure invia un vocale: lo trascrivo qui sul server e lo tratto come un messaggio scritto\n" +
   "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
@@ -489,8 +491,37 @@ async function riceviFoto(m, cat) {
   return invia(chat, didascalia ? `Non trovo «${nome.trim()}» nel menu. Scrivimi il nome del piatto per questa foto.` : "A quale piatto associo questa foto? Scrivimi il nome.");
 }
 
+/** Vocale: trascritto sul server (nessun audio esce dal locale), poi trattato come un messaggio scritto. */
+async function riceviVocale(m) {
+  const chat = m.chat.id;
+  const audio = m.voice ?? m.audio;
+  if ((audio.duration ?? 0) > 90) return invia(chat, "Il vocale è troppo lungo: massimo 90 secondi, una richiesta alla volta.");
+  await tg("sendChatAction", { chat_id: chat, action: "typing" });
+  const file = await tg("getFile", { file_id: audio.file_id });
+  const scaricato = await fetch(`https://api.telegram.org/file/bot${C.token}/${file.file_path}`, { signal: AbortSignal.timeout(60_000) });
+  if (!scaricato.ok) throw new Error("Download del vocale non riuscito");
+  const cat = await catalogo();
+  // I nomi dei piatti aiutano a riconoscere le parole meno comuni (vitigni, piatti tipici)
+  const suggerimento = encodeURIComponent([...cat.prodotti.map((p) => p.nome), ...cat.categorie.map((c) => c.nome)].join(", ").slice(0, 900));
+  let r;
+  try {
+    r = await fetch(`${C.trascrizione}/trascrivi`, {
+      method: "POST", headers: { "Content-Type": "application/octet-stream", "X-Suggerimento": suggerimento },
+      body: Buffer.from(await scaricato.arrayBuffer()), signal: AbortSignal.timeout(120_000),
+    });
+  } catch {
+    return invia(chat, "La trascrizione dei vocali non è attiva sul server: scrivimi la richiesta a testo.");
+  }
+  const esito = await r.json().catch(() => ({}));
+  if (!r.ok || !esito.testo) return invia(chat, "Non sono riuscito a capire il vocale: riprova parlando vicino al telefono, oppure scrivimi.");
+  log(`Vocale di ${esito.durata}s trascritto in ${esito.secondi}s`);
+  await invia(chat, `🎙️ Ho capito: «${esito.testo}»`);
+  return gestisciMessaggio({ ...m, voice: undefined, audio: undefined, text: esito.testo });
+}
+
 async function gestisciMessaggio(m) {
   const chat = m.chat.id;
+  if (m.voice || m.audio) return riceviVocale(m);
   if (m.photo?.length) return riceviFoto(m, await catalogo());
   if (m.document && /^image\//.test(m.document.mime_type ?? "")) {
     return invia(chat, "Invia l'immagine come foto (non come file), così Telegram la comprime: la uso per il menu.");
