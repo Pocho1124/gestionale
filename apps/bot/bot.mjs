@@ -513,7 +513,10 @@ async function riceviVocale(m) {
     return invia(chat, "La trascrizione dei vocali non è attiva sul server: scrivimi la richiesta a testo.");
   }
   const esito = await r.json().catch(() => ({}));
-  if (!r.ok || !esito.testo) return invia(chat, "Non sono riuscito a capire il vocale: riprova parlando vicino al telefono, oppure scrivimi.");
+  if (!r.ok || !esito.testo) {
+    log(`Trascrizione non riuscita: stato ${r.status}, ${esito.errore ?? "testo vuoto"}`);
+    return invia(chat, "Non sono riuscito a capire il vocale: riprova parlando vicino al telefono, oppure scrivimi.");
+  }
   log(`Vocale di ${esito.durata}s trascritto in ${esito.secondi}s`);
   await invia(chat, `🎙️ Ho capito: «${esito.testo}»`);
   return gestisciMessaggio({ ...m, voice: undefined, audio: undefined, text: esito.testo });

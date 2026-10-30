@@ -35,6 +35,12 @@ uno_alla_volta = threading.Lock()   # la CPU è condivisa con il database: una t
 print(f"Trascrizione pronta (modello {MODELLO})", flush=True)
 
 
+def trascrivi(percorso, prompt, filtro_voce):
+    segmenti, info = modello.transcribe(percorso, language="it", beam_size=3, vad_filter=filtro_voce,
+                                        initial_prompt=prompt, condition_on_previous_text=False)
+    return " ".join(s.text.strip() for s in segmenti).strip(), info
+
+
 class Gestore(BaseHTTPRequestHandler):
     def _rispondi(self, codice, dati):
         corpo = json.dumps(dati, ensure_ascii=False).encode("utf-8")
@@ -64,12 +70,15 @@ class Gestore(BaseHTTPRequestHandler):
                 f.flush()
                 inizio = time.time()
                 with uno_alla_volta:
-                    segmenti, info = modello.transcribe(f.name, language="it", beam_size=1,
-                                                        vad_filter=True, initial_prompt=prompt)
-                    testo = " ".join(s.text.strip() for s in segmenti).strip()
-            return self._rispondi(200, {"testo": testo, "secondi": round(time.time() - inizio, 1),
-                                        "durata": round(info.duration, 1)})
+                    testo, info = trascrivi(f.name, prompt, filtro_voce=True)
+                    if not testo:
+                        # Vocali brevi o a bassa voce: il filtro dei silenzi può scartare tutto, si riprova senza
+                        testo, info = trascrivi(f.name, prompt, filtro_voce=False)
+            secondi = round(time.time() - inizio, 1)
+            print(f"Vocale {round(info.duration, 1)}s -> {len(testo)} caratteri in {secondi}s", flush=True)
+            return self._rispondi(200, {"testo": testo, "secondi": secondi, "durata": round(info.duration, 1)})
         except Exception as e:  # audio corrotto o formato non gestito
+            print(f"Errore di trascrizione: {e!r}", flush=True)
             return self._rispondi(422, {"errore": f"audio non leggibile: {e.__class__.__name__}"})
 
     def log_message(self, *args):  # niente audio né testi nei log
