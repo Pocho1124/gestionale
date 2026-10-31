@@ -110,6 +110,17 @@ function trova(testo, elementi) {
 }
 
 const numero = (s) => Number(s.replace(",", "."));
+
+/** Prodotti il cui nome intero compare nel testo, dal più lungo, senza sovrapposizioni; «resto» è il testo rimanente. */
+function nomiNelTesto(testo, elementi) {
+  let t = ` ${norm(testo)} `;
+  const trovati = [];
+  for (const e of [...elementi].sort((a, b) => b.nome.length - a.nome.length)) {
+    const n = ` ${norm(e.nome)} `;
+    if (n.trim().length >= 3 && t.includes(n)) { trovati.push(e); t = t.replace(n, " | "); }
+  }
+  return { trovati, resto: t };
+}
 const TUTTO = /\b(tutto|tutti|tutte|intero menu|tutto il menu)\b/;
 
 const maiuscola = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -226,7 +237,12 @@ export function interpretaConRegole(testo, cat) {
   const abb = testo.match(/^\s*abbina\s+(?:il\s+|la\s+|l'|lo\s+)?(.+?)\s+(?:a|al|alla|allo|ai|alle|agli|con|col|coi)\s+(.+?)(?:\s+perch[eé]\s+(.+))?$/i);
   if (abb) {
     const sinistra = trova(abb[1], cat.prodotti);
-    const destre = abb[2].split(/\s*,\s*|\s+e\s+/).map((x) => trova(x, cat.prodotti));
+    // Prima i nomi interi presenti nel testo (anche con «e» dentro, es. «Pinsa speck brie fichi e noci»), poi la divisione su virgole ed «e»
+    const { trovati, resto } = nomiNelTesto(abb[2], cat.prodotti.filter((p) => p.id !== sinistra?.id));
+    // Ciò che resta dopo i nomi interi si divide su virgole ed «e» (es. «al tagliere e alla genovese»)
+    const frammenti = resto.split(/\s*\|\s*|\s*,\s*|\s+e\s+/)
+      .map((x) => x.replace(/\b(a|al|alla|allo|ai|alle|agli|con|col|coi|il|la|lo|l|i|le|gli|e)\b/g, " ").trim()).filter((x) => x.length >= 3);
+    const destre = [...trovati, ...frammenti.map((x) => trova(x, cat.prodotti))];
     if (!sinistra || destre.some((x) => !x)) return { azione: "non_trovato", cosa: !sinistra ? abb[1] : abb[2] };
     const eVino = (p) => cat.vini?.has(p.id);
     if (!eVino(sinistra) && !destre.every(eVino)) {
@@ -713,7 +729,7 @@ async function gestisciMessaggio(m) {
   }
   if (azione.azione === "chiarisci") return invia(chat, azione.testo);
   if (azione.azione === "non_trovato") {
-    return invia(chat, `Non trovo «${azione.cosa.trim()}» nel menu, quindi non elimino nulla. Controlla il nome con /menu.`);
+    return invia(chat, `Non trovo «${azione.cosa.trim()}» nel menu, quindi non ho modificato nulla. Controlla il nome con /menu.`);
   }
   if (azione.azione === "chiedi_categoria") {
     const prezzi = (azione.per ?? "varia_prezzi") === "varia_prezzi";
