@@ -4,7 +4,10 @@ import { sb } from "../lib/supabase";
 import { useSessione } from "../lib/sessione";
 import { useAvviso } from "../componenti/Avviso";
 import { messaggioErrore } from "../lib/errori";
-import { ALLERGENI, ETICHETTE, type Categoria, type Prodotto } from "../lib/tipi";
+import { ALLERGENI, CORPI_VINO, ETICHETTE, TIPI_VINO, type Categoria, type Prodotto, type SchedaVino } from "../lib/tipi";
+
+type RigaVino = SchedaVino & { prodotto_id: string; locale_id: string };
+interface Abbinamento { piatto_id: string; vino_id: string; locale_id: string; motivo: string }
 import { comprimiFoto } from "../lib/immagini";
 
 const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
@@ -14,6 +17,8 @@ export function Catalogo() {
   const avvisa = useAvviso();
   const [categorie, setCategorie] = useState<Categoria[]>([]);
   const [prodotti, setProdotti] = useState<Prodotto[]>([]);
+  const [vini, setVini] = useState<Map<string, RigaVino>>(new Map());
+  const [abbinamenti, setAbbinamenti] = useState<Abbinamento[]>([]);
   const [caricato, setCaricato] = useState(false);
   const [nuovaCat, setNuovaCat] = useState("");
   const [pct, setPct] = useState("");
@@ -21,13 +26,18 @@ export function Catalogo() {
 
   const carica = useCallback(async () => {
     if (!locale) return;
-    const [c, p] = await Promise.all([
+    const [c, p, v, a] = await Promise.all([
       sb().from("categorie").select("*").eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("prodotti").select("*").eq("locale_id", locale.id).order("posizione").order("nome"),
+      sb().from("vini").select("*").eq("locale_id", locale.id),
+      sb().from("abbinamenti").select("piatto_id, vino_id, locale_id, motivo").eq("locale_id", locale.id),
     ]);
-    if (c.error || p.error) { avvisa(messaggioErrore(c.error ?? p.error), "errore"); return; }
+    const errore = c.error ?? p.error ?? v.error ?? a.error;
+    if (errore) { avvisa(messaggioErrore(errore), "errore"); return; }
     setCategorie(c.data as Categoria[]);
     setProdotti(p.data as Prodotto[]);
+    setVini(new Map((v.data as RigaVino[]).map((x) => [x.prodotto_id, x])));
+    setAbbinamenti(a.data as Abbinamento[]);
     setCaricato(true);
   }, [locale, avvisa]);
 
@@ -44,6 +54,29 @@ export function Catalogo() {
     setCategorie((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
     const { error } = await sb().from("categorie").update(patch).eq("id", id);
     if (error) { avvisa(messaggioErrore(error), "errore"); await carica(); } else avvisa("Salvato");
+  }
+
+  async function impostaVino(p: Prodotto, patch: Partial<SchedaVino> | null) {
+    const esistente = vini.get(p.id);
+    const r = patch === null
+      ? await sb().from("vini").delete().eq("prodotto_id", p.id)
+      : esistente
+        ? await sb().from("vini").update(patch).eq("prodotto_id", p.id)
+        : await sb().from("vini").insert({ prodotto_id: p.id, locale_id: p.locale_id, tipo: "rosso", corpo: "medio", ...patch });
+    if (r.error) { avvisa(messaggioErrore(r.error), "errore"); return; }
+    avvisa("Salvato"); await carica();
+  }
+
+  async function alternaAbbinamento(piatto: string, vino: string) {
+    if (!locale) return;
+    const esiste = abbinamenti.some((a) => a.piatto_id === piatto && a.vino_id === vino);
+    const r = esiste
+      ? await sb().from("abbinamenti").delete().eq("piatto_id", piatto).eq("vino_id", vino)
+      : await sb().from("abbinamenti").insert({ piatto_id: piatto, vino_id: vino, locale_id: locale.id });
+    if (r.error) { avvisa(messaggioErrore(r.error), "errore"); return; }
+    setAbbinamenti((as) => esiste ? as.filter((a) => !(a.piatto_id === piatto && a.vino_id === vino))
+                                  : [...as, { piatto_id: piatto, vino_id: vino, locale_id: locale.id, motivo: "" }]);
+    avvisa(esiste ? "Abbinamento rimosso" : "Abbinamento aggiunto");
   }
 
   async function impostaDisponibile(p: Prodotto, valore: boolean) {
@@ -168,6 +201,11 @@ export function Catalogo() {
 
             {piatti.map((p, pi) => (
               <RigaProdotto key={p.id} p={p} modificabile={puoModificare}
+                vino={vini.get(p.id) ?? null}
+                candidati={vini.has(p.id) ? prodotti.filter((x) => !vini.has(x.id)) : prodotti.filter((x) => vini.has(x.id))}
+                abbinati={new Set(abbinamenti.filter((a) => a.piatto_id === p.id || a.vino_id === p.id).map((a) => (a.piatto_id === p.id ? a.vino_id : a.piatto_id)))}
+                onVino={(patch) => void impostaVino(p, patch)}
+                onAbbina={(altro) => void (vini.has(p.id) ? alternaAbbinamento(altro, p.id) : alternaAbbinamento(p.id, altro))}
                 primo={pi === 0} ultimo={pi === piatti.length - 1}
                 onAggiorna={(patch) => void aggiornaProdotto(p.id, patch)}
                 onDisponibile={(v) => void impostaDisponibile(p, v)}
@@ -185,6 +223,8 @@ export function Catalogo() {
 
 function RigaProdotto(props: {
   p: Prodotto; modificabile: boolean; primo: boolean; ultimo: boolean;
+  vino: RigaVino | null; candidati: Prodotto[]; abbinati: Set<string>;
+  onVino: (patch: Partial<SchedaVino> | null) => void; onAbbina: (altro: string) => void;
   onAggiorna: (patch: Partial<Prodotto>) => void; onDisponibile: (v: boolean) => void;
   onSposta: (dir: -1 | 1) => void; onElimina: () => void;
 }) {
@@ -293,6 +333,37 @@ function RigaProdotto(props: {
               </label>
             ))}
           </fieldset>
+          <fieldset className="chip-gruppo vino-gruppo"><legend>Vino</legend>
+            <label className="interruttore"><input type="checkbox" checked={!!props.vino}
+              onChange={(e) => props.onVino(e.target.checked ? {} : null)} />Questo prodotto è un vino (il prezzo è al calice)</label>
+            {props.vino && (
+              <div className="vino-campi">
+                <label>Tipo <select value={props.vino.tipo} onChange={(e) => props.onVino({ tipo: e.target.value as SchedaVino["tipo"] })}>
+                  {Object.entries(TIPI_VINO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                <label>Corpo <select value={props.vino.corpo} onChange={(e) => props.onVino({ corpo: e.target.value as SchedaVino["corpo"] })}>
+                  {Object.entries(CORPI_VINO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                {(["regione", "vitigno", "cantina"] as const).map((campo) => (
+                  <label key={campo}>{campo[0]!.toUpperCase() + campo.slice(1)}
+                    <input defaultValue={props.vino![campo]} maxLength={80} onBlur={(e) => { if (e.target.value !== props.vino![campo]) props.onVino({ [campo]: e.target.value.trim() }); }} /></label>
+                ))}
+                <label>Annata <input inputMode="numeric" defaultValue={props.vino.annata ?? ""} maxLength={4}
+                  onBlur={(e) => { const n = e.target.value ? Number(e.target.value) : null; if (n === null || (n >= 1900 && n <= 2100)) props.onVino({ annata: n }); }} /></label>
+                <label>Bottiglia €  <input inputMode="decimal" defaultValue={props.vino.prezzo_bottiglia_cent ? euroTesto(props.vino.prezzo_bottiglia_cent) : ""}
+                  onBlur={(e) => { try { props.onVino({ prezzo_bottiglia_cent: e.target.value.trim() ? daEuro(e.target.value) : null }); } catch { e.target.value = ""; } }} /></label>
+                <label className="vino-note">Note di degustazione
+                  <input defaultValue={props.vino.note} maxLength={300} onBlur={(e) => { if (e.target.value !== props.vino!.note) props.onVino({ note: e.target.value.trim() }); }} /></label>
+              </div>
+            )}
+          </fieldset>
+          {props.candidati.length > 0 && (
+            <fieldset className="chip-gruppo"><legend>{props.vino ? "Piatti abbinati" : "Vini abbinati"}</legend>
+              {props.candidati.map((c) => (
+                <label key={c.id} className={`chip${props.abbinati.has(c.id) ? " attivo" : ""}`}>
+                  <input type="checkbox" checked={props.abbinati.has(c.id)} onChange={() => props.onAbbina(c.id)} />{c.nome}
+                </label>
+              ))}
+            </fieldset>
+          )}
           <div className="riga-form">
             <label className="interruttore"><input type="checkbox" checked={p.visibile}
               onChange={(e) => onAggiorna({ visibile: e.target.checked })} />Visibile nel menu</label>

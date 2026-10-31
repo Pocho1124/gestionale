@@ -29,10 +29,23 @@ export interface MenuPubblico {
     prodotti: {
       id: string; nome: string; descrizione: string; prezzo_cent: number; disponibile: boolean;
       allergeni: string[]; etichette: string[]; immagine_url: string | null; foto?: number | null;
+      vino?: SchedaVino | null; abbinamenti?: { id: string; motivo: string }[];
       opzioni: { nome: string; min: number; max: number; scelte: { nome: string; sovrapprezzo_cent: number }[] }[];
     }[];
   }[];
 }
+
+export interface SchedaVino {
+  tipo: "rosso" | "bianco" | "rosato" | "bollicine" | "dolce";
+  corpo: "leggero" | "medio" | "strutturato";
+  regione: string; vitigno: string; cantina: string; annata: number | null; note: string;
+  prezzo_bottiglia_cent: number | null;
+}
+
+export type PiattoMenu = MenuPubblico["categorie"][number]["prodotti"][number];
+
+export const TIPI_VINO = { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" } as const;
+export const CORPI_VINO = { leggero: "Leggero", medio: "Equilibrato", strutturato: "Strutturato" } as const;
 
 export const ALLERGENI = ["Glutine", "Crostacei", "Uova", "Pesce", "Arachidi", "Soia", "Latte",
   "Frutta a guscio", "Sedano", "Senape", "Sesamo", "Solfiti", "Lupini", "Molluschi"] as const;

@@ -11,7 +11,7 @@ export const ASPETTO_PREDEFINITO: Aspetto = {
   sfondo_dati: null, sfondo_opacita: 22, sfondo_sfocatura: 3, sfondo_bn: false,
 };
 
-/** Pagina aperta dal QR: legge solo i dati pubblici e si aggiorna da sola ogni minuto. */
+/** Pagina aperta dal QR: legge solo i dati pubblici e si aggiorna da sola ogni 15 secondi. */
 export function MenuPubblico() {
   const { slug = "" } = useParams();
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -28,7 +28,7 @@ export function MenuPubblico() {
       document.title = `Menu · ${(data as Menu).locale.nome}`;
     }
     void carica();
-    const t = setInterval(() => void carica(), 60_000);
+    const t = setInterval(() => void carica(), 15_000);
     const vis = () => { if (document.visibilityState === "visible") void carica(); };
     document.addEventListener("visibilitychange", vis);
     return () => { attivo = false; clearInterval(t); document.removeEventListener("visibilitychange", vis); };

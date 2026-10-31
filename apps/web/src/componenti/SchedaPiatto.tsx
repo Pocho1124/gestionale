@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
-import type { MenuPubblico } from "../lib/tipi";
+import { CORPI_VINO, TIPI_VINO, type PiattoMenu } from "../lib/tipi";
 
-type Piatto = MenuPubblico["categorie"][number]["prodotti"][number];
+type Piatto = PiattoMenu;
 
 /** Scheda aperta toccando un piatto: foto (scaricata solo ora), descrizione, allergeni. */
-export function SchedaPiatto({ piatto, onChiudi }: { piatto: Piatto; onChiudi: () => void }) {
+export function SchedaPiatto({ piatto, onChiudi, perId, onApri }: {
+  piatto: Piatto; onChiudi: () => void; perId: Map<string, Piatto>; onApri: (p: Piatto) => void;
+}) {
+  const v = piatto.vino;
+  const abbinati = (piatto.abbinamenti ?? []).map((a) => ({ p: perId.get(a.id), motivo: a.motivo })).filter((x) => x.p);
   const [foto, setFoto] = useState<string | null>(null);
   const chiudi = useRef<HTMLButtonElement>(null);
 
@@ -29,7 +33,22 @@ export function SchedaPiatto({ piatto, onChiudi }: { piatto: Piatto; onChiudi: (
         <div className="scheda-corpo">
           <div className="menu-riga"><h3>{piatto.nome}</h3><span className="menu-prezzo">{formatta(centesimi(piatto.prezzo_cent))}</span></div>
           {!piatto.disponibile && <p><span className="menu-badge">Esaurito</span></p>}
+          {v && <p className="scheda-vino">{[TIPI_VINO[v.tipo], CORPI_VINO[v.corpo], v.regione, v.vitigno].filter(Boolean).join(" · ")}</p>}
+          {v && (v.cantina || v.annata) && <p className="menu-desc">{[v.cantina, v.annata].filter(Boolean).join(", ")}</p>}
+          {v?.prezzo_bottiglia_cent ? <p className="scheda-bottiglia">Calice {formatta(centesimi(piatto.prezzo_cent))} · Bottiglia {formatta(centesimi(v.prezzo_bottiglia_cent))}</p> : null}
           {piatto.descrizione && <p className="menu-desc">{piatto.descrizione}</p>}
+          {v?.note && <p className="menu-desc">{v.note}</p>}
+          {abbinati.length > 0 && (
+            <div className="scheda-abbinamenti">
+              <p className="quiz-passo">{v ? "Ideale con" : "Il sommelier consiglia"}</p>
+              {abbinati.map(({ p, motivo }) => (
+                <button key={p!.id} className="quiz-vino" onClick={() => onApri(p!)}>
+                  <span className="quiz-dati"><strong>{p!.nome}</strong>{motivo && <span className="quiz-perche">{motivo}</span>}</span>
+                  <span className="menu-prezzo">{formatta(centesimi(p!.prezzo_cent))}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {piatto.etichette.length > 0 && <ul className="menu-etichette">{piatto.etichette.map((e) => <li key={e}>{e}</li>)}</ul>}
           {piatto.allergeni.length > 0 && <p className="menu-allergeni">Allergeni: {piatto.allergeni.join(", ")}</p>}
         </div>

@@ -14,7 +14,11 @@ const C = {
   ollama: (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, ""),
   modello: process.env.OLLAMA_MODELLO || "qwen2.5:3b",
   trascrizione: (process.env.TRASCRIZIONE_URL || "http://trascrizione:9000").replace(/\/$/, ""),
+  pubblicatore: (process.env.PUBBLICATORE_URL || "http://pubblicatore:8090").replace(/\/$/, ""),
 };
+
+/** Chiede al pubblicatore di aggiornare subito il menu pubblico (se non è installato, nessun problema). */
+const aggiornaMenuPubblico = () => fetch(`${C.pubblicatore}/ora`, { method: "POST", signal: AbortSignal.timeout(3000) }).catch(() => {});
 
 function obbligatoria(nome) {
   const v = process.env[nome];
@@ -73,11 +77,13 @@ async function db(percorso, { metodo = "GET", corpo, unisci = false } = {}) {
 }
 
 async function catalogo() {
-  const [categorie, prodotti] = await Promise.all([
+  const [categorie, prodotti, vini, abbinamenti] = await Promise.all([
     db(`categorie?select=id,nome,posizione&locale_id=eq.${C.locale}&order=posizione,nome`),
-    db(`prodotti?select=id,nome,prezzo_cent,disponibile,visibile,categoria_id,posizione&locale_id=eq.${C.locale}&order=posizione,nome`),
+    db(`prodotti?select=id,nome,descrizione,prezzo_cent,disponibile,visibile,categoria_id,posizione&locale_id=eq.${C.locale}&order=posizione,nome`),
+    db(`vini?select=*&locale_id=eq.${C.locale}`),
+    db(`abbinamenti?select=piatto_id,vino_id,motivo&locale_id=eq.${C.locale}`),
   ]);
-  return { categorie, prodotti };
+  return { categorie, prodotti, vini: new Map(vini.map((v) => [v.prodotto_id, v])), abbinamenti };
 }
 
 // ---------------------------------------------------------------- Interprete a regole
@@ -155,6 +161,34 @@ function interpretaNuovoPiatto(testo, cat) {
   return categoria ? { azione: "aggiungi_piatto", ...piatto, categoria } : { azione: "chiedi_categoria", per: "aggiungi_piatto", ...piatto };
 }
 
+const REGIONI = ["Valle d'Aosta", "Piemonte", "Lombardia", "Trentino", "Alto Adige", "Veneto", "Friuli", "Liguria", "Emilia",
+  "Romagna", "Toscana", "Umbria", "Marche", "Lazio", "Abruzzo", "Molise", "Campania", "Puglia", "Basilicata", "Calabria",
+  "Sicilia", "Sardegna", "Francia", "Spagna", "Germania", "Portogallo"];
+
+/** «rosso, strutturato, Campania, vitigno Aglianico, cantina X, annata 2020, bottiglia 28 euro, note ciliegia e spezie» */
+export function leggiSchedaVino(testo) {
+  const t = norm(testo);
+  const campi = {};
+  const tipo = t.match(/\b(rosso|bianco|rosato|bollicine|spumante|prosecco|champagne|franciacorta|dolce|passito)\b/);
+  if (tipo) campi.tipo = { spumante: "bollicine", prosecco: "bollicine", champagne: "bollicine", franciacorta: "bollicine", passito: "dolce" }[tipo[1]] ?? tipo[1];
+  const corpo = t.match(/\b(leggero|fresco|medio|equilibrato|strutturato|corposo|intenso|robusto)\b/);
+  if (corpo) campi.corpo = { fresco: "leggero", equilibrato: "medio", corposo: "strutturato", intenso: "strutturato", robusto: "strutturato" }[corpo[1]] ?? corpo[1];
+  const bottiglia = testo.match(/bottiglia\s*(?:a|da)?\s*(\d{1,5}(?:[.,]\d{1,2})?)/i);
+  if (bottiglia) campi.prezzo_bottiglia_cent = Math.round(numero(bottiglia[1]) * 100);
+  const annata = testo.match(/\b(19[5-9]\d|20\d{2})\b/);
+  if (annata) campi.annata = Number(annata[1]);
+  const testoSenzaNote = testo.replace(/\bnote?\b\s*:?.*$/is, "");
+  for (const [chiave, re] of [["cantina", /cantina\s+([^,;]+)/i], ["vitigno", /vitign[oi]\s+([^,;]+)/i]]) {
+    const m = testoSenzaNote.match(re);
+    if (m) campi[chiave] = pulisci(m[1]).slice(0, 80);
+  }
+  const regione = REGIONI.find((r) => t.includes(norm(r))) ?? testoSenzaNote.match(/regione\s+([^,;]+)/i)?.[1];
+  if (regione) campi.regione = pulisci(regione).slice(0, 60);
+  const note = testo.match(/\bnote?\b\s*:?\s*(.+)$/is);
+  if (note) campi.note = pulisci(note[1]).slice(0, 300);
+  return campi;
+}
+
 export function interpretaConRegole(testo, cat) {
   const elenco = interpretaElenco(testo, cat);
   if (elenco) return elenco;
@@ -172,8 +206,41 @@ export function interpretaConRegole(testo, cat) {
     return p ? { azione: "rimuovi_foto", prodotto: p } : { azione: "non_trovato", cosa: viaFoto[1] };
   }
 
+  // --- Sommelier: scheda vino, abbinamenti, suggerimenti dell'IA
+  if (/^\s*(suggerisci|proponi|consigliami|trova)\s+(gli\s+|degli\s+)?abbinament/i.test(testo)) return { azione: "suggerisci_abbinamenti" };
+  const vino = testo.match(/^\s*vino\s+(.+?)\s*:\s*(.+)$/is);
+  if (vino) {
+    const p = trova(vino[1], cat.prodotti);
+    if (!p) return { azione: "non_trovato", cosa: vino[1] };
+    const campi = leggiSchedaVino(vino[2]);
+    if (!campi.tipo && !cat.vini?.has(p.id)) return { azione: "chiarisci", testo: "Indica il tipo del vino: rosso, bianco, rosato, bollicine o dolce. Esempio: «vino Aglianico: rosso, strutturato, Campania, bottiglia 28 euro»." };
+    return { azione: "imposta_vino", prodotto: p, campi };
+  }
+  const viaAbb = testo.match(/^\s*(?:togli|rimuovi|elimina|cancella)\s+(?:l'|l |gli )?abbinament[oi]\s+(?:tra\s+)?(.+?)\s+(?:e|con|a|al|alla|allo|ai|alle|dal|dalla)\s+(.+)$/i);
+  if (viaAbb) {
+    const a = trova(viaAbb[1], cat.prodotti), b = trova(viaAbb[2], cat.prodotti);
+    if (!a || !b) return { azione: "non_trovato", cosa: !a ? viaAbb[1] : viaAbb[2] };
+    const [piatto, v] = cat.vini?.has(a.id) ? [b, a] : [a, b];
+    return { azione: "togli_abbinamento", piatto, vino: v };
+  }
+  const abb = testo.match(/^\s*abbina\s+(?:il\s+|la\s+|l'|lo\s+)?(.+?)\s+(?:a|al|alla|allo|ai|alle|agli|con|col|coi)\s+(.+?)(?:\s+perch[eé]\s+(.+))?$/i);
+  if (abb) {
+    const sinistra = trova(abb[1], cat.prodotti);
+    const destre = abb[2].split(/\s*,\s*|\s+e\s+/).map((x) => trova(x, cat.prodotti));
+    if (!sinistra || destre.some((x) => !x)) return { azione: "non_trovato", cosa: !sinistra ? abb[1] : abb[2] };
+    const eVino = (p) => cat.vini?.has(p.id);
+    if (!eVino(sinistra) && !destre.every(eVino)) {
+      // Probabile vino: quello che sta in una categoria di vini (altrimenti il secondo nominato)
+      const inVini = (p) => /vin|calic|bottigl|cantin/i.test(cat.categorie.find((c) => c.id === p.categoria_id)?.nome ?? "");
+      const candidato = [sinistra, ...destre].find(inVini) ?? destre[0];
+      return { azione: "chiarisci", testo: `Per abbinare serve la scheda del vino. Prima scrivi ad esempio: «vino ${candidato.nome}: rosso, strutturato».` };
+    }
+    const coppie = eVino(sinistra) ? destre.map((d) => ({ piatto: d, vino: sinistra })) : destre.map((v) => ({ piatto: sinistra, vino: v }));
+    return { azione: "abbina", coppie: coppie.map((c) => ({ ...c, motivo: (abb[3] ?? "").trim().slice(0, 200) })) };
+  }
+
   const via = testo.match(/^\s*(?:elimina|cancella|rimuovi|togli)\s+(?:la\s+|il\s+)?(categoria|piatto)?\s*(.+)$/i);
-  if (via && !/\bdal menu\b|\bfoto\b/i.test(testo)) {
+  if (via && !/\bdal menu\b|\bfoto\b|abbinament/i.test(testo)) {
     if ((via[1] ?? "").toLowerCase() === "categoria") {
       const c = trova(via[2], cat.categorie);
       return c ? { azione: "elimina_categoria", categoria: c } : { azione: "non_trovato", cosa: via[2] };
@@ -289,6 +356,34 @@ async function interpretaConModello(testo, cat) {
   }
 }
 
+/** Il modello propone un vino per ogni piatto ancora senza abbinamento (con un breve perché). */
+async function suggerisciAbbinamenti(cat) {
+  const vini = cat.prodotti.filter((p) => cat.vini.has(p.id) && p.visibile).slice(0, 15);
+  const piatti = cat.prodotti.filter((p) => !cat.vini.has(p.id) && p.visibile && !cat.abbinamenti.some((a) => a.piatto_id === p.id)).slice(0, 15);
+  if (!vini.length) return { azione: "chiarisci", testo: "Non ci sono ancora vini con la scheda. Esempio: «vino Aglianico: rosso, strutturato, Campania»." };
+  if (!piatti.length) return { azione: "chiarisci", testo: "Tutti i piatti hanno già almeno un abbinamento. 🍷" };
+  const descriviVino = (p) => { const v = cat.vini.get(p.id); return `${p.nome} (${[v.tipo, v.corpo, v.regione, v.vitigno].filter(Boolean).join(", ")})`; };
+  const schema = {
+    type: "object", required: ["coppie"],
+    properties: { coppie: { type: "array", items: { type: "object", required: ["piatto", "vino", "motivo"], properties: {
+      piatto: { type: "string", enum: piatti.map((p) => p.nome) }, vino: { type: "string", enum: vini.map((v) => v.nome) }, motivo: { type: "string" } } } } },
+  };
+  const r = await fetch(`${C.ollama}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(240_000),
+    body: JSON.stringify({ model: C.modello, stream: false, format: schema, options: { temperature: 0.2 },
+      messages: [
+        { role: "system", content: "Sei il sommelier di un'enoteca italiana. Per ogni piatto scegli il vino più adatto tra quelli disponibili e spiega il perché in massimo 8 parole, in italiano." },
+        { role: "user", content: `Vini disponibili: ${vini.map(descriviVino).join("; ")}\nPiatti: ${piatti.map((p) => `${p.nome}${p.descrizione ? ` (${p.descrizione.slice(0, 80)})` : ""}`).join("; ")}` },
+      ] }),
+  });
+  if (!r.ok) throw new Error(`Modello non disponibile (${r.status})`);
+  const proposte = JSON.parse((await r.json()).message.content).coppie ?? [];
+  const usati = new Set();
+  const coppie = proposte.map((c) => ({ piatto: piatti.find((p) => p.nome === c.piatto), vino: vini.find((v) => v.nome === c.vino), motivo: String(c.motivo ?? "").slice(0, 200) }))
+    .filter((c) => c.piatto && c.vino && !usati.has(c.piatto.id) && usati.add(c.piatto.id));
+  return coppie.length ? { azione: "abbina", coppie, daIA: true } : { azione: "chiarisci", testo: "Non sono riuscito a proporre abbinamenti sensati: impostali a mano con «abbina Aglianico al tagliere»." };
+}
+
 // ---------------------------------------------------------------- Anteprima ed esecuzione
 export function anteprima(a, cat) {
   switch (a.azione) {
@@ -310,6 +405,19 @@ export function anteprima(a, cat) {
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "DI NUOVO DISPONIBILE" : "ESAURITO"}` };
     case "visibilita":
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "VISIBILE nel menu" : "NASCOSTO dal menu"}` };
+    case "imposta_vino": {
+      const c = a.campi, prima = cat.vini?.get(a.prodotto.id);
+      const tipo = c.tipo ?? prima?.tipo;
+      const righe = [tipo, c.corpo, c.regione, c.vitigno && `vitigno ${c.vitigno}`, c.cantina && `cantina ${c.cantina}`, c.annata,
+        c.prezzo_bottiglia_cent && `bottiglia ${euro(c.prezzo_bottiglia_cent)}`, c.note && `note: ${c.note}`].filter(Boolean);
+      return { testo: `🍷 Scheda vino di «${a.prodotto.nome}»${prima ? " (aggiornamento)" : ""}:\n${righe.join(" · ")}\nIl prezzo del prodotto (${euro(a.prodotto.prezzo_cent)}) resta quello al calice.` };
+    }
+    case "abbina": {
+      const righe = a.coppie.slice(0, 15).map((c) => `• ${c.piatto.nome} → ${c.vino.nome}${c.motivo ? ` (${c.motivo})` : ""}`);
+      return { testo: `${a.daIA ? "🧠 Il sommelier propone:" : "🍷 Abbinamenti:"}\n${righe.join("\n")}` };
+    }
+    case "togli_abbinamento":
+      return { testo: `Tolgo l'abbinamento ${a.piatto.nome} → ${a.vino.nome}.` };
     case "imposta_foto":
       return { testo: `📷 Foto per «${a.prodotto.nome}» (${Math.round(a.dati.length * 0.75 / 1024)} KB)` +
         (a.descrizione ? `\nNuova descrizione: «${a.descrizione}»` : "") + "\nI clienti la vedranno toccando il piatto nel menu." };
@@ -369,6 +477,24 @@ async function esegui(a, cat) {
     case "visibilita":
       await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
       return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+    case "imposta_vino": {
+      const [prima] = await db(`vini?prodotto_id=eq.${a.prodotto.id}&select=*`);
+      await db("vini", { metodo: "POST", unisci: true, corpo: { ...(prima ?? { corpo: "medio" }), ...a.campi, prodotto_id: a.prodotto.id, locale_id: C.locale } });
+      return { esito: "Scheda del vino salvata.", annulla: [prima ? { tabella: "vini", inserisci: [prima], unisci: true }
+                                                          : { tabella: "vini", filtro: `prodotto_id=eq.${a.prodotto.id}`, elimina: true }] };
+    }
+    case "abbina": {
+      const nuove = a.coppie.filter((c) => !cat.abbinamenti.some((x) => x.piatto_id === c.piatto.id && x.vino_id === c.vino.id));
+      await db("abbinamenti", { metodo: "POST", unisci: true, corpo: a.coppie.map((c) => ({ locale_id: C.locale, piatto_id: c.piatto.id, vino_id: c.vino.id, motivo: c.motivo || "" })) });
+      return { esito: `${a.coppie.length === 1 ? "Abbinamento salvato" : `${a.coppie.length} abbinamenti salvati`}.`,
+               annulla: nuove.map((c) => ({ tabella: "abbinamenti", filtro: `piatto_id=eq.${c.piatto.id}&vino_id=eq.${c.vino.id}`, elimina: true })) };
+    }
+    case "togli_abbinamento": {
+      const riga = cat.abbinamenti.find((x) => x.piatto_id === a.piatto.id && x.vino_id === a.vino.id);
+      if (!riga) throw new Error("questo abbinamento non esiste");
+      await db(`abbinamenti?piatto_id=eq.${a.piatto.id}&vino_id=eq.${a.vino.id}`, { metodo: "DELETE" });
+      return { esito: "Abbinamento tolto.", annulla: [{ tabella: "abbinamenti", inserisci: [{ ...riga, locale_id: C.locale }], unisci: true }] };
+    }
     case "imposta_foto": {
       const [prima] = await db(`foto_prodotti?prodotto_id=eq.${a.prodotto.id}&select=*`);
       await db("foto_prodotti", { metodo: "POST", unisci: true, corpo: { prodotto_id: a.prodotto.id, locale_id: C.locale, dati: a.dati } });
@@ -458,7 +584,10 @@ const AIUTO =
   "• descrizione margherita: pomodoro, fior di latte e basilico\n" +
   "• 📷 invia una foto con didascalia «Margherita» (o «Margherita: descrizione») per metterla sul piatto\n" +
   "• togli la foto alla margherita\n" +
-  "• 🎙️ oppure invia un vocale: lo trascrivo qui sul server e lo tratto come un messaggio scritto\n" +
+  "• 🎙️ oppure invia un vocale: lo trascrivo qui sul server e lo tratto come un messaggio scritto\n\n" +
+  "Sommelier:\n• vino Aglianico: rosso, strutturato, Campania, cantina X, annata 2020, bottiglia 28 euro, note ciliegia e spezie\n" +
+  "• abbina l'aglianico al tagliere e alla genovese perché il tannino pulisce il grasso\n" +
+  "• togli abbinamento aglianico e genovese\n• suggerisci abbinamenti (li propone l'IA, tu confermi)\n" +
   "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
@@ -564,6 +693,7 @@ async function gestisciMessaggio(m) {
       else await db(`${op.tabella}?${op.filtro ?? `id=eq.${op.id}`}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
     }
     ultimaModifica = null;
+    aggiornaMenuPubblico();
     return invia(chat, "↩️ Ultima modifica annullata.");
   }
 
@@ -576,6 +706,12 @@ async function gestisciMessaggio(m) {
   }
   if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze».");
 
+  if (azione.azione === "suggerisci_abbinamenti") {
+    await invia(chat, "🧠 Il sommelier ci pensa un momento (può volerci fino a un minuto)…");
+    await tg("sendChatAction", { chat_id: chat, action: "typing" });
+    azione = await suggerisciAbbinamenti(cat);
+  }
+  if (azione.azione === "chiarisci") return invia(chat, azione.testo);
   if (azione.azione === "non_trovato") {
     return invia(chat, `Non trovo «${azione.cosa.trim()}» nel menu, quindi non elimino nulla. Controlla il nome con /menu.`);
   }
@@ -633,6 +769,7 @@ async function gestisciPulsante(q) {
   try {
     const { esito, annulla } = await esegui(pend.azione, pend.catalogo);
     ultimaModifica = annulla;
+    aggiornaMenuPubblico();
     await tg("answerCallbackQuery", { callback_query_id: q.id, text: "Fatto" });
     return chiudi(`${q.message.text.replace(/\n\nConfermi\?$/, "")}\n\n✅ ${esito} Scrivi /annulla per tornare indietro.`);
   } catch (e) {

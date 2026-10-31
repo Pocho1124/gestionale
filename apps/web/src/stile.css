@@ -191,3 +191,33 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .foto-piatto { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: center; }
 .foto-piatto img, .foto-vuota { width: 120px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--linea); }
 .foto-vuota { display: grid; place-items: center; color: var(--muto); font-size: .8rem; }
+
+/* Sommelier digitale e quiz «Trova il tuo vino» */
+.menu-trova-vino { display: block; margin: 14px auto 0; border: 1px solid var(--m-primario); background: transparent; color: var(--m-primario);
+  border-radius: 999px; padding: 8px 18px; font: 600 .9rem var(--m-font-testo); letter-spacing: .04em; cursor: pointer; }
+.menu-trova-vino:hover { background: color-mix(in srgb, var(--m-primario) 12%, transparent); }
+.menu-vino-info { margin: 3px 0 0; font-size: .8rem; letter-spacing: .05em; color: var(--m-primario); }
+.menu-abbinamento { margin: 4px 0 0; font-size: .82rem; font-style: italic; opacity: .85; }
+.scheda-vino { color: var(--m-primario); font-weight: 600; letter-spacing: .04em; }
+.scheda-bottiglia { font-variant-numeric: tabular-nums; }
+.scheda-abbinamenti { display: grid; gap: 6px; margin-top: 6px; }
+.quiz .scheda-corpo { padding-top: 28px; }
+.quiz-passo { margin: 0; font-size: .75rem; text-transform: uppercase; letter-spacing: .18em; color: var(--m-primario); }
+.quiz-scelte { display: grid; gap: 8px; }
+.quiz-scelta { border: 1px solid color-mix(in srgb, var(--m-testo) 30%, transparent); background: transparent; color: var(--m-testo);
+  border-radius: 12px; padding: 12px 14px; font: 500 1rem var(--m-font-testo); text-align: left; cursor: pointer; }
+.quiz-scelta:hover, .quiz-scelta.attiva { border-color: var(--m-primario); background: color-mix(in srgb, var(--m-primario) 12%, transparent); }
+.quiz-risultati { display: grid; gap: 8px; }
+.quiz-vino { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 1px solid color-mix(in srgb, var(--m-primario) 40%, transparent);
+  background: transparent; color: var(--m-testo); border-radius: 12px; padding: 10px 12px; cursor: pointer; font-family: var(--m-font-testo); }
+.quiz-posizione { flex: none; width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; background: var(--m-primario); color: var(--m-sfondo); font-weight: 700; }
+.quiz-dati { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.quiz-dati strong { font-family: var(--m-font-titoli); font-weight: 400; font-size: 1.1rem; }
+.quiz-info { font-size: .8rem; color: var(--m-primario); }
+.quiz-perche { font-size: .8rem; font-style: italic; opacity: .8; }
+
+.vino-gruppo { display: grid; gap: 8px; }
+.vino-campi { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.vino-campi label { display: grid; gap: 3px; font-size: .85rem; font-weight: 600; }
+.vino-campi input, .vino-campi select { font-weight: 400; }
+.vino-note { grid-column: 1 / -1; }

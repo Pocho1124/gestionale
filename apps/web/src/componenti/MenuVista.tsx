@@ -3,6 +3,8 @@ import { centesimi, formatta } from "@gest/core";
 import type { Aspetto, MenuPubblico } from "../lib/tipi";
 import { caricaFont, pilaFont } from "../lib/font";
 import { SchedaPiatto } from "./SchedaPiatto";
+import { TrovaVino } from "./TrovaVino";
+import { TIPI_VINO } from "../lib/tipi";
 
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 
@@ -11,6 +13,9 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
   type Piatto = MenuPubblico["categorie"][number]["prodotti"][number];
   const [aperto, setAperto] = useState<Piatto | null>(null);
   const chiudi = useCallback(() => setAperto(null), []);
+  const [quiz, setQuiz] = useState(false);
+  const perId = new Map(menu.categorie.flatMap((c) => c.prodotti.map((p) => [p.id, p] as const)));
+  const numeroVini = menu.categorie.reduce((n, c) => n + c.prodotti.filter((p) => p.vino && p.disponibile).length, 0);
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); },
     [aspetto.font_titoli, aspetto.font_testo]);
 
@@ -41,6 +46,10 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
         {menu.locale.indirizzo && <p>{menu.locale.indirizzo}</p>}
       </header>
 
+      {numeroVini >= 2 && (
+        <button className="menu-trova-vino" onClick={() => setQuiz(true)}>🍷 Trova il tuo vino</button>
+      )}
+
       {menu.categorie.length > 0 && (
         <nav className="menu-nav" aria-label="Categorie">
           {menu.categorie.map((c) => <a key={c.id} href={`#cat-${c.id}`}>{c.nome}</a>)}
@@ -55,8 +64,8 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
           {aspetto.mostra_descrizioni && c.descrizione && <p className="menu-cat-desc">{c.descrizione}</p>}
           <div className="menu-prodotti">
             {c.prodotti.map((p) => (
-              <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}${p.foto || p.descrizione ? " apribile" : ""}`}
-                {...(p.foto || p.descrizione ? {
+              <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}${p.foto || p.descrizione || p.vino || p.abbinamenti?.length ? " apribile" : ""}`}
+                {...(p.foto || p.descrizione || p.vino || p.abbinamenti?.length ? {
                   role: "button", tabIndex: 0, "aria-label": `${p.nome}: apri la scheda`,
                   onClick: () => setAperto(p),
                   onKeyDown: (e: { key: string; preventDefault: () => void }) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAperto(p); } },
@@ -68,7 +77,11 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
                   {aspetto.layout !== "elegante" && <span className="menu-puntini" aria-hidden="true" />}
                   <span className="menu-prezzo">{formatta(centesimi(p.prezzo_cent))}</span>
                 </div>
+                {p.vino && <p className="menu-vino-info">{[TIPI_VINO[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · ")}</p>}
                 {aspetto.mostra_descrizioni && p.descrizione && <p className="menu-desc">{p.descrizione}</p>}
+                {!p.vino && (p.abbinamenti?.length ?? 0) > 0 && (
+                  <p className="menu-abbinamento">🍷 Si abbina con {p.abbinamenti!.slice(0, 2).map((a) => perId.get(a.id)?.nome).filter(Boolean).join(" o ")}</p>
+                )}
                 {p.etichette.length > 0 && (
                   <ul className="menu-etichette">{p.etichette.map((e) => <li key={e}>{e}</li>)}</ul>
                 )}
@@ -81,7 +94,8 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
         </section>
       ))}
 
-      {aperto && <SchedaPiatto piatto={aperto} onChiudi={chiudi} />}
+      {aperto && <SchedaPiatto key={aperto.id} piatto={aperto} onChiudi={chiudi} perId={perId} onApri={(p) => { setQuiz(false); setAperto(p); }} />}
+      {quiz && !aperto && <TrovaVino menu={menu} onApri={(p) => setAperto(p)} onChiudi={() => setQuiz(false)} />}
 
       <footer className="menu-piede">
         {aspetto.testo_piede && <p>{aspetto.testo_piede}</p>}

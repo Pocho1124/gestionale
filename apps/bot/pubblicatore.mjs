@@ -3,6 +3,7 @@
 // Nessuna dipendenza esterna: Node 22. Configurazione da variabili d'ambiente.
 
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 
 const C = {
   url: obbligatoria("SUPABASE_URL").replace(/\/$/, ""),
@@ -10,7 +11,8 @@ const C = {
   token: obbligatoria("GITHUB_TOKEN"),
   repo: obbligatoria("GITHUB_REPO"),                 // es. Pocho1124/menu
   slugs: obbligatoria("SLUGS").split(",").map((s) => s.trim()).filter(Boolean),
-  intervallo: Number(process.env.INTERVALLO_SECONDI || 60) * 1000,
+  // Al massimo 15 s tra un controllo e l'altro; il bot chiede comunque una pubblicazione immediata dopo ogni modifica
+  intervallo: Math.min(Number(process.env.INTERVALLO_SECONDI || 15), 15) * 1000,
 };
 
 function obbligatoria(nome) {
@@ -37,7 +39,13 @@ const PREDEFINITO = {
 
 // ---------------------------------------------------------------- Pagina statica
 /** logoFile / sfondoFile: file pubblicati accanto alla pagina (es. «logo.png?v=…»), se presenti. */
-export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fotoPiatti = {}) {
+export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fotoPiatti = {}, versione = "") {
+  const TIPI = { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" };
+  const perId = new Map(menu.categorie.flatMap((c) => c.prodotti.map((p) => [p.id, p])));
+  const apribile = (p) => !!(fotoPiatti[p.id] || p.descrizione || p.vino || p.abbinamenti?.length);
+  const numeroVini = menu.categorie.reduce((n, c) => n + c.prodotti.filter((p) => p.vino && p.disponibile).length, 0);
+  // Dati per scheda e quiz: senza immagini incorporate, «<» neutralizzato per non chiudere lo <script>
+  const dati = JSON.stringify({ versione, foto: fotoPiatti, categorie: menu.categorie }).replace(/</g, "\\u003c");
   const a = { ...PREDEFINITO, ...(menu.aspetto ?? {}) };
   const colore = (v, d) => (COLORE.test(v) ? v : d);
   const font = (v, d) => (FONT_AMMESSI.has(v) ? v : d);
@@ -58,10 +66,12 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
       <h2>${esc(c.nome)}</h2>
       ${a.mostra_descrizioni && c.descrizione ? `<p class="cat-desc">${esc(c.descrizione)}</p>` : ""}
       <div class="piatti">${c.prodotti.map((p) => `
-        <article class="piatto${p.disponibile ? "" : " esaurito"}${fotoPiatti[p.id] || p.descrizione ? " apribile" : ""}"${fotoPiatti[p.id] || p.descrizione ? ` tabindex="0" role="button" data-nome="${esc(p.nome)}" data-prezzo="${esc(euro(p.prezzo_cent))}" data-desc="${esc(p.descrizione)}" data-allergeni="${esc((p.allergeni ?? []).join(", "))}"${fotoPiatti[p.id] ? ` data-foto="${esc(fotoPiatti[p.id])}"` : ""}` : ""}>
+        <article class="piatto${p.disponibile ? "" : " esaurito"}${apribile(p) ? " apribile" : ""}"${apribile(p) ? ` tabindex="0" role="button" data-id="${esc(p.id)}"` : ""}>
           ${layout === "griglia" && /^https:\/\//.test(p.immagine_url ?? "") ? `<img class="foto" src="${esc(p.immagine_url)}" alt="" loading="lazy">` : ""}
           <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${esc(euro(p.prezzo_cent))}</span></div>
+          ${p.vino ? `<p class="vino-info">${esc([TIPI[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · "))}</p>` : ""}
           ${a.mostra_descrizioni && p.descrizione ? `<p class="desc">${esc(p.descrizione)}</p>` : ""}
+          ${!p.vino && p.abbinamenti?.length ? `<p class="abbinamento">🍷 Si abbina con ${esc(p.abbinamenti.slice(0, 2).map((x) => perId.get(x.id)?.nome).filter(Boolean).join(" o "))}</p>` : ""}
           ${p.etichette?.length ? `<ul class="etichette">${p.etichette.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
           ${a.mostra_allergeni && p.allergeni?.length ? `<p class="allergeni">Allergeni: ${esc(p.allergeni.join(", "))}</p>` : ""}
         </article>`).join("")}
@@ -145,6 +155,20 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .scheda-corpo .prezzo{color:var(--p);font-size:1.15rem}
 .scheda-corpo p{margin:0}
 .scheda-chiudi{position:absolute;top:10px;right:10px;z-index:1;width:36px;height:36px;border-radius:999px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:1.4rem;line-height:1;cursor:pointer}
+.trova-vino{display:block;margin:14px auto 0;border:1px solid var(--p);background:transparent;color:var(--p);border-radius:999px;padding:8px 18px;font:600 .9rem var(--fc);letter-spacing:.04em;cursor:pointer}
+.vino-info{margin:3px 0 0;font-size:.8rem;letter-spacing:.05em;color:var(--p)}
+.abbinamento{margin:4px 0 0;font-size:.82rem;font-style:italic;opacity:.85}
+.scheda-vino{color:var(--p);font-weight:600;letter-spacing:.04em}
+.quiz-passo{margin:0;font-size:.75rem;text-transform:uppercase;letter-spacing:.18em;color:var(--p)}
+.quiz-scelte{display:grid;gap:8px}
+.quiz-scelta{border:1px solid color-mix(in srgb,var(--t) 30%,transparent);background:transparent;color:var(--t);border-radius:12px;padding:12px 14px;font:500 1rem var(--fc);text-align:left;cursor:pointer}
+.quiz-scelta:hover{border-color:var(--p);background:color-mix(in srgb,var(--p) 12%,transparent)}
+.quiz-vino{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid color-mix(in srgb,var(--p) 40%,transparent);background:transparent;color:var(--t);border-radius:12px;padding:10px 12px;cursor:pointer;font-family:var(--fc)}
+.quiz-posizione{flex:none;width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:var(--p);color:var(--s);font-weight:700}
+.quiz-dati{display:grid;gap:2px;flex:1;min-width:0}
+.quiz-dati strong{font-family:var(--ft);font-weight:400;font-size:1.1rem}
+.quiz-info{font-size:.8rem;color:var(--p)}
+.quiz-perche{font-size:.8rem;font-style:italic;opacity:.8}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
 </head>
@@ -156,11 +180,12 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     ${mostraNome ? `<h1>${esc(menu.locale.nome)}</h1>` : ""}
     ${menu.locale.indirizzo ? `<p>${esc(menu.locale.indirizzo)}</p>` : ""}
   </header>
+  ${numeroVini >= 2 ? '<button class="trova-vino">🍷 Trova il tuo vino</button>' : ""}
   ${menu.categorie.length ? `<nav aria-label="Categorie">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
   ${categorie || '<p class="vuoto">Il menu sarà disponibile a breve.</p>'}
   <div class="scheda-sfondo" hidden><div class="scheda" role="dialog" aria-modal="true">
     <button class="scheda-chiudi" aria-label="Chiudi">×</button><img class="scheda-foto" alt="" hidden>
-    <div class="scheda-corpo"><div class="riga"><h3></h3><span class="prezzo"></span></div><p class="desc"></p><p class="allergeni"></p></div>
+    <div class="scheda-corpo"></div>
   </div></div>
   <footer>
     ${a.testo_piede ? `<p>${esc(a.testo_piede)}</p>` : ""}
@@ -168,24 +193,100 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     <p>Aggiornato il ${esc(aggiornato)}</p>
   </footer>
 </div>
+<script type="application/json" id="dati">${dati}</script>
 <script>
 (() => {
-  const sfondo = document.querySelector(".scheda-sfondo"), foto = sfondo.querySelector(".scheda-foto");
-  const imposta = (sel, v) => { const el = sfondo.querySelector(sel); el.textContent = v || ""; el.hidden = !v; };
-  const apri = (art) => {
-    imposta("h3", art.dataset.nome); imposta(".scheda .prezzo", art.dataset.prezzo); imposta(".scheda .desc", art.dataset.desc);
-    imposta(".scheda .allergeni", art.dataset.allergeni ? "Allergeni: " + art.dataset.allergeni : "");
-    if (art.dataset.foto) { foto.src = art.dataset.foto; foto.alt = art.dataset.nome; foto.hidden = false; } else { foto.hidden = true; foto.removeAttribute("src"); }
-    sfondo.hidden = false; sfondo.querySelector(".scheda-chiudi").focus();
+  const D = JSON.parse(document.getElementById("dati").textContent);
+  const per = new Map();
+  D.categorie.forEach((c) => c.prodotti.forEach((p) => per.set(p.id, Object.assign({ categoria: c.id }, p))));
+  const TIPI = { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" };
+  const CORPI = { leggero: "Leggero", medio: "Equilibrato", strutturato: "Strutturato" };
+  const euro = (c) => new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
+  const sfondo = document.querySelector(".scheda-sfondo"), corpo = sfondo.querySelector(".scheda-corpo"), foto = sfondo.querySelector(".scheda-foto");
+  // Tutto il testo entra con textContent: niente HTML costruito da dati
+  const el = (tag, classe, testo) => { const e = document.createElement(tag); if (classe) e.className = classe; if (testo != null) e.textContent = testo; return e; };
+  const mostra = (nodi, url, alt) => {
+    corpo.replaceChildren(...nodi);
+    if (url) { foto.src = url; foto.alt = alt; foto.hidden = false; } else { foto.hidden = true; foto.removeAttribute("src"); }
+    sfondo.hidden = false; sfondo.querySelector(".scheda").scrollTop = 0; sfondo.querySelector(".scheda-chiudi").focus();
   };
-  const chiudi = () => { sfondo.hidden = true; };
+  const riga = (p, motivo, posizione) => {
+    const b = el("button", "quiz-vino");
+    if (posizione) b.append(el("span", "quiz-posizione", String(posizione)));
+    const d = el("span", "quiz-dati");
+    d.append(el("strong", null, p.nome));
+    if (p.vino) d.append(el("span", "quiz-info", [TIPI[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · ")));
+    if (motivo) d.append(el("span", "quiz-perche", motivo));
+    b.append(d, el("span", "prezzo", euro(p.prezzo_cent)));
+    b.addEventListener("click", () => apri(p.id));
+    return b;
+  };
+  function apri(id) {
+    const p = per.get(id); if (!p) return;
+    const n = [], r = el("div", "riga"), v = p.vino;
+    r.append(el("h3", null, p.nome), el("span", "prezzo", euro(p.prezzo_cent))); n.push(r);
+    if (!p.disponibile) n.push(el("p", null, "Esaurito"));
+    if (v) {
+      n.push(el("p", "scheda-vino", [TIPI[v.tipo], CORPI[v.corpo], v.regione, v.vitigno].filter(Boolean).join(" · ")));
+      if (v.cantina || v.annata) n.push(el("p", "desc", [v.cantina, v.annata].filter(Boolean).join(", ")));
+      if (v.prezzo_bottiglia_cent) n.push(el("p", null, "Calice " + euro(p.prezzo_cent) + " · Bottiglia " + euro(v.prezzo_bottiglia_cent)));
+    }
+    if (p.descrizione) n.push(el("p", "desc", p.descrizione));
+    if (v && v.note) n.push(el("p", "desc", v.note));
+    if (p.allergeni && p.allergeni.length) n.push(el("p", "allergeni", "Allergeni: " + p.allergeni.join(", ")));
+    const ab = (p.abbinamenti || []).map((a) => ({ q: per.get(a.id), m: a.motivo })).filter((x) => x.q);
+    if (ab.length) { n.push(el("p", "quiz-passo", v ? "Ideale con" : "Il sommelier consiglia")); ab.forEach((x) => n.push(riga(x.q, x.m))); }
+    mostra(n, D.foto[p.id], p.nome);
+  }
+  function quiz() {
+    const vini = [...per.values()].filter((p) => p.vino && p.disponibile), stato = {};
+    const domanda = (passo, titolo, scelte, avanti) => {
+      const box = el("div", "quiz-scelte");
+      scelte.forEach(([etichetta, valore]) => { const b = el("button", "quiz-scelta", etichetta); b.addEventListener("click", () => avanti(valore)); box.append(b); });
+      mostra([el("p", "quiz-passo", "Domanda " + passo + " di 3"), el("h3", null, titolo), box], null, "");
+    };
+    const tipi = [...new Set(vini.map((v) => v.vino.tipo))];
+    domanda(1, "Che vino preferisci?", [...tipi.map((t) => [TIPI[t], t]), ["Sorprendimi", "sorpresa"]], (t) => { stato.tipo = t;
+      domanda(2, "Come lo vorresti?", [["Leggero e fresco", "leggero"], ["Equilibrato", "medio"], ["Strutturato e intenso", "strutturato"], ["Indifferente", "indifferente"]], (c) => { stato.corpo = c;
+        const cibo = D.categorie.filter((c) => c.prodotti.some((p) => !p.vino));
+        domanda(3, "Cosa mangerai?", [...cibo.map((c) => [c.nome, c.id]), ["Solo vino", null]], (x) => { stato.cibo = x; risultati(vini, stato); });
+      });
+    });
+  }
+  function risultati(vini, s) {
+    const O = ["leggero", "medio", "strutturato"];
+    const r = vini.map((v) => {
+      let pt = 0; const pq = [];
+      if (s.tipo !== "sorpresa" && v.vino.tipo === s.tipo) { pt += 3; pq.push(TIPI[v.vino.tipo] + ", come preferisci"); }
+      if (s.corpo !== "indifferente") { const d = Math.abs(O.indexOf(v.vino.corpo) - O.indexOf(s.corpo)); if (d === 0) { pt += 2; pq.push(CORPI[v.vino.corpo]); } else if (d === 1) pt += 1; }
+      const piatti = (v.abbinamenti || []).map((a) => per.get(a.id)).filter((p) => p && (!s.cibo || p.categoria === s.cibo));
+      if (piatti.length) { pt += Math.min(4, piatti.length * 2); pq.push("Si abbina a " + piatti.slice(0, 2).map((p) => p.nome).join(" e ")); }
+      return { v, pt, pq };
+    }).filter((x) => x.pt > 0 || s.tipo === "sorpresa").sort((a, b) => b.pt - a.pt).slice(0, 3);
+    const n = [el("p", "quiz-passo", "Il sommelier consiglia")];
+    if (!r.length) n.push(el("p", null, "Nessun vino corrisponde esattamente: chiedi al personale, saprà consigliarti."));
+    r.forEach((x, i) => n.push(riga(x.v, x.pq.join(" · "), i + 1)));
+    const b = el("button", "quiz-scelta", "Ricomincia"); b.addEventListener("click", quiz); n.push(b);
+    mostra(n, null, "");
+  }
   document.querySelectorAll(".apribile").forEach((art) => {
-    art.addEventListener("click", () => apri(art));
-    art.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(art); } });
+    art.addEventListener("click", () => apri(art.dataset.id));
+    art.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(art.dataset.id); } });
   });
+  const tv = document.querySelector(".trova-vino"); if (tv) tv.addEventListener("click", quiz);
+  const chiudi = () => { sfondo.hidden = true; };
   sfondo.addEventListener("click", (e) => { if (e.target === sfondo) chiudi(); });
   sfondo.querySelector(".scheda-chiudi").addEventListener("click", chiudi);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") chiudi(); });
+  // Aggiornamento rapido: se esiste una versione più recente del menu, ricarica scavalcando la cache (una sola volta per versione)
+  const controlla = () => fetch("versione.json?t=" + Date.now(), { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    if (!j || !j.versione || j.versione === D.versione) return;
+    try { if (sessionStorage.getItem("menu-ricaricato") === j.versione) return; sessionStorage.setItem("menu-ricaricato", j.versione); } catch (e) {}
+    location.replace(location.pathname + "?v=" + encodeURIComponent(j.versione));
+  }).catch(() => {});
+  controlla();
+  setInterval(() => { if (document.visibilityState === "visible" && sfondo.hidden) controlla(); }, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") controlla(); });
 })();
 </script>
 </body>
@@ -295,7 +396,10 @@ async function giro() {
       const fotoPiatti = await fotoDeiPiatti(slug, menu);
       const { aspetto, ...resto } = menu;
       const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null } : aspetto };
-      await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti), `Menu ${slug} aggiornato`);
+      const versione = impronta.slice(0, 12);
+      await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti, versione), `Menu ${slug} aggiornato`);
+      // Dopo la pagina: chi ha il menu aperto vede la nuova versione e ricarica scavalcando la cache
+      await pubblica(`${slug}/versione.json`, JSON.stringify({ versione, aggiornato: ora }), `Versione ${slug}`);
       ultimo.set(slug, impronta);
       log(`Pubblicato il menu «${slug}»`);
     } catch (e) {
@@ -305,10 +409,23 @@ async function giro() {
   }
 }
 
+// Un solo giro alla volta: le richieste arrivate durante un giro ne fanno partire subito un altro
+let inCorso = false, ancora = false;
+async function giroSicuro() {
+  if (inCorso) { ancora = true; return; }
+  inCorso = true;
+  try { do { ancora = false; await giro(); } while (ancora); } finally { inCorso = false; }
+}
+
 async function avvia() {
+  // Solo rete interna dei servizi: il bot chiama POST /ora dopo ogni modifica confermata
+  createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/ora") { res.writeHead(202).end(); void giroSicuro(); }
+    else res.writeHead(404).end();
+  }).listen(8090);
   log(`Pubblicatore avviato: ${C.slugs.join(", ")} → ${C.repo}, controllo ogni ${C.intervallo / 1000} s`);
   for (;;) {
-    await giro();
+    await giroSicuro();
     await new Promise((r) => setTimeout(r, C.intervallo));
   }
 }
