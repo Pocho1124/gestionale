@@ -267,3 +267,27 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
   .cartoncino { height: 130mm; border: 1px dashed #999; border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .cartoncino-qr img { max-width: 42mm; }
 }
+
+/* Piantina disegnabile: arredi */
+.barra-arredi { display: flex; flex-wrap: wrap; gap: 6px; }
+.arredo { cursor: grab; }
+.arredo.fisso { pointer-events: none; }
+.arredo rect, .arredo circle { fill: color-mix(in srgb, var(--muto) 35%, transparent); stroke: var(--muto); stroke-width: 1.5; }
+.arredo-muro rect { fill: var(--testo); stroke: none; }
+.arredo-bancone rect { fill: color-mix(in srgb, #8B5A2B 55%, transparent); stroke: #8B5A2B; }
+.arredo-finestra rect { fill: #9ED0F0; stroke: #4A90B8; }
+.arredo-colonna rect { fill: var(--muto); }
+.arredo-pianta circle { fill: #5E9E5A; stroke: #3F7A3C; }
+.arredo-pianta .pianta-centro { fill: #8BC283; stroke: none; }
+.arredo-zona rect { fill: color-mix(in srgb, var(--primario) 10%, transparent); stroke: var(--primario); stroke-dasharray: 8 6; }
+.arredo-testo { text-anchor: middle; font: 600 15px var(--corpo); fill: var(--testo); pointer-events: none; }
+.zona-testo { fill: var(--primario); font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
+.arredo-testo .testo-area, .testo-area { fill: transparent !important; stroke: transparent !important; }
+.arredo-testo.selezionato .testo-area, .arredo.selezionato .testo-area { stroke: var(--accento) !important; stroke-dasharray: 4 4; }
+.porta-vano { fill: var(--superficie) !important; stroke: var(--testo) !important; }
+.porta-arco { fill: none; stroke: var(--muto); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.porta-anta { stroke: var(--testo); stroke-width: 3; }
+.arredo-cassa rect { fill: color-mix(in srgb, var(--accento) 45%, transparent); stroke: var(--accento); }
+.arredo-bagni rect { fill: color-mix(in srgb, #4A90B8 25%, transparent); stroke: #4A90B8; }
+.arredo.selezionato > rect:first-child, .arredo.selezionato > circle:first-child { stroke: var(--accento); stroke-width: 4; }
+.maniglia { fill: var(--accento) !important; stroke: var(--superficie) !important; stroke-width: 2; cursor: nwse-resize; }

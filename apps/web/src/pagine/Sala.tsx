@@ -5,13 +5,29 @@ import { useSessione } from "../lib/sessione";
 import { useAvviso } from "../componenti/Avviso";
 import { messaggioErrore } from "../lib/errori";
 import type { Aspetto } from "../lib/tipi";
+import { comprimiFoto } from "../lib/immagini";
 
-interface Sala { id: string; locale_id: string; nome: string; posizione: number }
-interface Tavolo { id: string; locale_id: string; sala_id: string; nome: string; posti: number; forma: "tondo" | "quadrato" | "rettangolo"; x: number; y: number; qr_token: string; attivo: boolean }
+interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_opacita: number }
+interface Tavolo { id: string; locale_id: string; sala_id: string; nome: string; posti: number; forma: "tondo" | "quadrato" | "rettangolo"; x: number; y: number; rotazione: number; qr_token: string; attivo: boolean }
+type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pianta" | "zona" | "testo" | "cassa" | "bagni";
+interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoElemento; x: number; y: number; w: number; h: number; rotazione: number; etichetta: string }
+type Selezione = { tipo: "tavolo" | "elemento"; id: string } | null;
 interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string }
 interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "nopass"; password: string; nascosta: boolean; url_ordini: string }
 
-const W = 1000, H = 600;
+const W = 1000;
+/** Altezza della piantina in punti, proporzionale alle misure reali della sala. */
+const altezza = (s?: Sala) => Math.round(Math.min(2000, Math.max(300, W * ((s?.profondita_m ?? 8) / (s?.larghezza_m ?? 12)))));
+const scatto = (v: number) => Math.round(v / 10) * 10;
+
+/** Elementi d'arredo: etichetta nella barra, misure iniziali, testo predefinito. */
+const ARREDI: Record<TipoElemento, { nome: string; w: number; h: number; etichetta?: string }> = {
+  muro: { nome: "Muro", w: 300, h: 12 }, bancone: { nome: "Bancone", w: 260, h: 60, etichetta: "Bancone" },
+  porta: { nome: "Porta", w: 80, h: 12 }, finestra: { nome: "Finestra", w: 120, h: 10 },
+  colonna: { nome: "Colonna", w: 40, h: 40 }, pianta: { nome: "Pianta", w: 40, h: 40 },
+  zona: { nome: "Zona", w: 300, h: 200, etichetta: "Dehors" }, testo: { nome: "Scritta", w: 160, h: 40, etichetta: "Ingresso" },
+  cassa: { nome: "Cassa", w: 90, h: 50, etichetta: "Cassa" }, bagni: { nome: "Bagni", w: 90, h: 70, etichetta: "WC" },
+};
 const dimensioni = (t: Tavolo) => {
   const base = 34 + Math.min(t.posti, 12) * 3;
   return t.forma === "rettangolo" ? { w: base * 1.8, h: base } : { w: base, h: base };
@@ -25,21 +41,23 @@ export function Sala() {
   const [vista, setVista] = useState<"servizio" | "piantina" | "cartoncini">("servizio");
   const [sale, setSale] = useState<Sala[]>([]);
   const [tavoli, setTavoli] = useState<Tavolo[]>([]);
+  const [elementi, setElementi] = useState<Elemento[]>([]);
   const [sessioni, setSessioni] = useState<SessioneT[]>([]);
   const [salaId, setSalaId] = useState<string | null>(null);
-  const [selezionato, setSelezionato] = useState<string | null>(null);
+  const [selezione, setSelezione] = useState<Selezione>(null);
   const [, setOra] = useState(0);
 
   const carica = useCallback(async () => {
     if (!locale) return;
-    const [s, t, x] = await Promise.all([
+    const [s, t, x, e] = await Promise.all([
       sb().from("sale").select("*").eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("tavoli").select("*").eq("locale_id", locale.id).order("nome"),
       sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at").eq("locale_id", locale.id).is("chiusa_at", null),
+      sb().from("elementi_sala").select("*").eq("locale_id", locale.id),
     ]);
-    const errore = s.error ?? t.error ?? x.error;
+    const errore = s.error ?? t.error ?? x.error ?? e.error;
     if (errore) { avvisa(messaggioErrore(errore), "errore"); return; }
-    setSale(s.data as Sala[]); setTavoli(t.data as Tavolo[]); setSessioni(x.data as SessioneT[]);
+    setSale(s.data as Sala[]); setTavoli(t.data as Tavolo[]); setSessioni(x.data as SessioneT[]); setElementi(e.data as Elemento[]);
     setSalaId((cur) => cur && (s.data as Sala[]).some((z) => z.id === cur) ? cur : (s.data as Sala[])[0]?.id ?? null);
   }, [locale, avvisa]);
 
@@ -58,7 +76,9 @@ export function Sala() {
 
   const tavoliSala = tavoli.filter((t) => t.sala_id === salaId && (vista !== "servizio" || t.attivo));
   const sessionePer = (id: string) => sessioni.find((s) => s.tavolo_id === id);
-  const tavoloSel = tavoli.find((t) => t.id === selezionato) ?? null;
+  const tavoloSel = selezione?.tipo === "tavolo" ? tavoli.find((t) => t.id === selezione.id) ?? null : null;
+  const elementoSel = selezione?.tipo === "elemento" ? elementi.find((x) => x.id === selezione.id) ?? null : null;
+  const salaCorrente = sale.find((s) => s.id === salaId);
 
   if (!locale) return null;
   return (
@@ -82,22 +102,27 @@ export function Sala() {
         ) : (
           <>
             <div className="riga-form">
-              {sale.map((s) => <button key={s.id} className={`chip${s.id === salaId ? " attivo" : ""}`} onClick={() => setSalaId(s.id)}>{s.nome}</button>)}
+              {sale.map((s) => <button key={s.id} className={`chip${s.id === salaId ? " attivo" : ""}`} onClick={() => { setSalaId(s.id); setSelezione(null); }}>{s.nome}</button>)}
               {vista === "servizio" && <span className="muto piccolo">Aperti: {sessioni.length} · Coperti: {sessioni.reduce((n, s) => n + s.coperti, 0)}</span>}
             </div>
             <div className={`sala-layout${vista === "piantina" ? " modifica" : ""}`}>
-              <Piantina tavoli={tavoliSala} sessionePer={sessionePer} modificabile={vista === "piantina"} selezionato={selezionato}
-                onSeleziona={setSelezionato}
-                onSposta={async (t, x, y) => {
-                  setTavoli((ts) => ts.map((z) => (z.id === t.id ? { ...z, x, y } : z)));
-                  const { error } = await sb().from("tavoli").update({ x, y }).eq("id", t.id);
+              <Piantina sala={salaCorrente} tavoli={tavoliSala} elementi={elementi.filter((x) => x.sala_id === salaId)}
+                sessionePer={sessionePer} modificabile={vista === "piantina"} selezione={selezione} onSeleziona={setSelezione}
+                onTavolo={async (t, patch) => {
+                  setTavoli((ts) => ts.map((z) => (z.id === t.id ? { ...z, ...patch } : z)));
+                  const { error } = await sb().from("tavoli").update(patch).eq("id", t.id);
+                  if (error) { avvisa(messaggioErrore(error), "errore"); await carica(); }
+                }}
+                onElemento={async (x, patch) => {
+                  setElementi((es) => es.map((z) => (z.id === x.id ? { ...z, ...patch } : z)));
+                  const { error } = await sb().from("elementi_sala").update(patch).eq("id", x.id);
                   if (error) { avvisa(messaggioErrore(error), "errore"); await carica(); }
                 }} />
               <aside className="sala-pannello">
                 {vista === "servizio"
                   ? <PannelloServizio tavolo={tavoloSel} sessione={tavoloSel ? sessionePer(tavoloSel.id) : undefined} onFatto={carica} />
-                  : <PannelloPiantina locale={locale.id} sala={sale.find((s) => s.id === salaId)!} tavolo={tavoloSel} tavoli={tavoli}
-                      onFatto={carica} onSeleziona={setSelezionato} />}
+                  : <PannelloPiantina locale={locale.id} sala={salaCorrente!} tavolo={tavoloSel} elemento={elementoSel} tavoli={tavoli}
+                      onFatto={carica} onSeleziona={setSelezione} />}
               </aside>
             </div>
           </>
@@ -110,45 +135,89 @@ export function Sala() {
 }
 
 function Piantina(props: {
-  tavoli: Tavolo[]; sessionePer: (id: string) => SessioneT | undefined; modificabile: boolean; selezionato: string | null;
-  onSeleziona: (id: string) => void; onSposta: (t: Tavolo, x: number, y: number) => void;
+  sala?: Sala; tavoli: Tavolo[]; elementi: Elemento[]; sessionePer: (id: string) => SessioneT | undefined; modificabile: boolean;
+  selezione: Selezione; onSeleziona: (s: Selezione) => void;
+  onTavolo: (t: Tavolo, patch: Partial<Tavolo>) => void; onElemento: (e: Elemento, patch: Partial<Elemento>) => void;
 }) {
   const svg = useRef<SVGSVGElement>(null);
-  const [trascina, setTrascina] = useState<{ id: string; x: number; y: number } | null>(null);
+  const H = altezza(props.sala);
+  // Trascinamento o ridimensionamento in corso: posizione/misure provvisorie, salvate al rilascio
+  const [azione, setAzione] = useState<{ modo: "sposta" | "ridimensiona"; tipo: "tavolo" | "elemento"; id: string; x: number; y: number; w?: number; h?: number } | null>(null);
   const punto = (e: PE) => {
-    const m = svg.current!.getScreenCTM()!.inverse();
-    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m);
-    return { x: Math.round(Math.min(W, Math.max(0, p.x)) / 10) * 10, y: Math.round(Math.min(H, Math.max(0, p.y)) / 10) * 10 };
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.current!.getScreenCTM()!.inverse());
+    return { x: Math.min(W, Math.max(0, p.x)), y: Math.min(H, Math.max(0, p.y)) };
   };
+  const selez = (tipo: "tavolo" | "elemento", id: string) => props.selezione?.tipo === tipo && props.selezione.id === id;
+
+  function muovi(e: PE) {
+    if (!azione) return;
+    const p = punto(e);
+    if (azione.modo === "sposta") { setAzione({ ...azione, x: scatto(p.x), y: scatto(p.y) }); return; }
+    const el = props.elementi.find((z) => z.id === azione.id); if (!el) return;
+    // Ridimensiona nel sistema dell'elemento (tiene conto della rotazione)
+    const r = (-el.rotazione * Math.PI) / 180, dx = p.x - el.x, dy = p.y - el.y;
+    const lx = dx * Math.cos(r) - dy * Math.sin(r), ly = dx * Math.sin(r) + dy * Math.cos(r);
+    setAzione({ ...azione, w: Math.max(10, scatto(Math.abs(lx) * 2)), h: Math.max(4, scatto(Math.abs(ly) * 2)) });
+  }
+  function rilascia() {
+    if (!azione) return;
+    if (azione.tipo === "tavolo") {
+      const t = props.tavoli.find((z) => z.id === azione.id);
+      if (t && (t.x !== azione.x || t.y !== azione.y)) props.onTavolo(t, { x: azione.x, y: azione.y });
+    } else {
+      const el = props.elementi.find((z) => z.id === azione.id);
+      if (el && azione.modo === "sposta" && (el.x !== azione.x || el.y !== azione.y)) props.onElemento(el, { x: azione.x, y: azione.y });
+      if (el && azione.modo === "ridimensiona" && azione.w && azione.h) props.onElemento(el, { w: Math.min(1000, azione.w), h: Math.min(2000, azione.h) });
+    }
+    setAzione(null);
+  }
+  const inizia = (e: PE, modo: "sposta" | "ridimensiona", tipo: "tavolo" | "elemento", z: { id: string; x: number; y: number }) => {
+    if (!props.modificabile) return;
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    props.onSeleziona({ tipo, id: z.id });
+    setAzione({ modo, tipo, id: z.id, x: z.x, y: z.y });
+  };
+
   return (
     <svg ref={svg} className="piantina" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Piantina della sala"
-      onPointerMove={(e) => { if (trascina) setTrascina({ id: trascina.id, ...punto(e) }); }}
-      onPointerUp={() => {
-        if (!trascina) return;
-        const t = props.tavoli.find((z) => z.id === trascina.id);
-        if (t && (t.x !== trascina.x || t.y !== trascina.y)) props.onSposta(t, trascina.x, trascina.y);
-        setTrascina(null);
-      }}>
-      {props.modificabile && <pattern id="griglia" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" className="griglia" /></pattern>}
-      <rect width={W} height={H} className="piantina-fondo" fill={props.modificabile ? "url(#griglia)" : undefined} />
+      onPointerMove={muovi} onPointerUp={rilascia} onPointerCancel={() => setAzione(null)}
+      onPointerDown={() => { if (props.modificabile) props.onSeleziona(null); }}>
+      <pattern id="griglia" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" className="griglia" /></pattern>
+      <rect width={W} height={H} className="piantina-fondo" />
+      {props.sala?.sfondo_dati && <image href={props.sala.sfondo_dati} width={W} height={H} preserveAspectRatio="xMidYMid meet" opacity={props.sala.sfondo_opacita / 100} />}
+      {props.modificabile && <rect width={W} height={H} fill="url(#griglia)" pointerEvents="none" />}
+
+      {[...props.elementi].sort((a, b) => Number(b.tipo === "zona") - Number(a.tipo === "zona")).map((el) => {
+        const pos = azione?.tipo === "elemento" && azione.id === el.id ? { ...el, x: azione.x, y: azione.y, w: azione.w ?? el.w, h: azione.h ?? el.h } : el;
+        return (
+          <g key={el.id} transform={`translate(${pos.x} ${pos.y}) rotate(${el.rotazione})`}
+            className={`arredo arredo-${el.tipo}${selez("elemento", el.id) ? " selezionato" : ""}${props.modificabile ? "" : " fisso"}`}
+            onPointerDown={(e) => inizia(e, "sposta", "elemento", el)}>
+            <Arredo tipo={el.tipo} w={pos.w} h={pos.h} etichetta={el.etichetta} />
+            {props.modificabile && selez("elemento", el.id) && (
+              <rect className="maniglia" x={pos.w / 2 - 8} y={pos.h / 2 - 8} width={16} height={16}
+                onPointerDown={(e) => inizia(e, "ridimensiona", "elemento", el)} />
+            )}
+          </g>
+        );
+      })}
+
       {props.tavoli.map((t) => {
         const s = props.sessionePer(t.id);
         const { w, h } = dimensioni(t);
-        const pos = trascina?.id === t.id ? trascina : t;
+        const pos = azione?.tipo === "tavolo" && azione.id === t.id ? azione : t;
         return (
-          <g key={t.id} transform={`translate(${pos.x} ${pos.y})`} className={`tavolo${s ? " aperto" : ""}${props.selezionato === t.id ? " selezionato" : ""}${t.attivo ? "" : " spento"}`}
+          <g key={t.id} transform={`translate(${pos.x} ${pos.y})`} className={`tavolo${s ? " aperto" : ""}${selez("tavolo", t.id) ? " selezionato" : ""}${t.attivo ? "" : " spento"}`}
             tabIndex={0} role="button" aria-label={`Tavolo ${t.nome}${s ? ", aperto" : ", libero"}`}
-            onClick={() => props.onSeleziona(t.id)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") props.onSeleziona(t.id); }}
-            onPointerDown={(e) => {
-              if (!props.modificabile) return;
-              (e.target as Element).setPointerCapture?.(e.pointerId);
-              props.onSeleziona(t.id);
-              setTrascina({ id: t.id, x: t.x, y: t.y });
-            }}>
-            {t.forma === "tondo"
-              ? <circle r={w / 2} className="tavolo-forma" />
-              : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={8} className="tavolo-forma" />}
+            onClick={(e) => { e.stopPropagation(); props.onSeleziona({ tipo: "tavolo", id: t.id }); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") props.onSeleziona({ tipo: "tavolo", id: t.id }); }}
+            onPointerDown={(e) => { if (props.modificabile) inizia(e, "sposta", "tavolo", t); else e.stopPropagation(); }}>
+            <g transform={`rotate(${t.rotazione})`}>
+              {t.forma === "tondo"
+                ? <circle r={w / 2} className="tavolo-forma" />
+                : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={8} className="tavolo-forma" />}
+            </g>
             <text className="tavolo-nome" dy={s ? -4 : 6}>{t.nome}</text>
             {s && <text className="tavolo-info" dy={16}>{s.coperti}p · {durata(minuti(s.aperta_at))}</text>}
           </g>
@@ -156,6 +225,20 @@ function Piantina(props: {
       })}
     </svg>
   );
+}
+
+/** Disegno di un elemento d'arredo, centrato sull'origine. */
+function Arredo({ tipo, w, h, etichetta }: { tipo: TipoElemento; w: number; h: number; etichetta: string }) {
+  const r = { x: -w / 2, y: -h / 2, width: w, height: h };
+  const scritta = etichetta ? <text className="arredo-testo" dy={5}>{etichetta}</text> : null;
+  switch (tipo) {
+    case "porta": return <><rect {...r} className="porta-vano" /><path d={`M${-w / 2} ${-h / 2 - w} A ${w} ${w} 0 0 1 ${w / 2} ${-h / 2}`} className="porta-arco" /><line x1={-w / 2} y1={-h / 2} x2={-w / 2} y2={-h / 2 - w} className="porta-anta" /></>;
+    case "colonna": return <rect {...r} rx={3} />;
+    case "pianta": return <><circle r={Math.min(w, h) / 2} /><circle r={Math.min(w, h) / 4} className="pianta-centro" /></>;
+    case "zona": return <><rect {...r} rx={12} /><text className="arredo-testo zona-testo" y={-h / 2 + 22}>{etichetta}</text></>;
+    case "testo": return <><rect {...r} className="testo-area" />{scritta}</>;
+    default: return <><rect {...r} rx={tipo === "bancone" || tipo === "cassa" || tipo === "bagni" ? 6 : 1} />{tipo !== "muro" && tipo !== "finestra" && scritta}</>;
+  }
 }
 
 function PannelloServizio({ tavolo, sessione, onFatto }: { tavolo: Tavolo | null; sessione?: SessioneT; onFatto: () => Promise<void> }) {
@@ -222,65 +305,151 @@ function NuovaSala({ locale, onFatto }: { locale: string; onFatto: () => Promise
   );
 }
 
-function PannelloPiantina(props: { locale: string; sala: Sala; tavolo: Tavolo | null; tavoli: Tavolo[]; onFatto: () => Promise<void>; onSeleziona: (id: string | null) => void }) {
+function PannelloPiantina(props: {
+  locale: string; sala: Sala; tavolo: Tavolo | null; elemento: Elemento | null; tavoli: Tavolo[];
+  onFatto: () => Promise<void>; onSeleziona: (s: Selezione) => void;
+}) {
   const avvisa = useAvviso();
-  const { tavolo } = props;
+  const { tavolo, elemento, sala } = props;
+  const H = altezza(sala);
 
-  async function aggiungi() {
-    // Prossimo numero libero, a partire da 1
+  const esito = async (r: PromiseLike<{ error: unknown }>, ok: string) => {
+    const { error } = await r;
+    if (error) { avvisa(messaggioErrore(error), "errore"); return false; }
+    avvisa(ok); await props.onFatto(); return true;
+  };
+
+  async function aggiungiTavolo() {
     const usati = new Set(props.tavoli.map((t) => t.nome));
     let n = 1; while (usati.has(String(n))) n++;
-    const quanti = props.tavoli.filter((t) => t.sala_id === props.sala.id).length;
+    const quanti = props.tavoli.filter((t) => t.sala_id === sala.id).length;
     const { data, error } = await sb().from("tavoli").insert({
-      locale_id: props.locale, sala_id: props.sala.id, nome: String(n), posti: 4, forma: "quadrato",
-      x: 100 + (quanti % 8) * 110, y: 100 + Math.floor(quanti / 8) * 120,
+      locale_id: props.locale, sala_id: sala.id, nome: String(n), posti: 4, forma: "quadrato",
+      x: Math.min(W - 60, 100 + (quanti % 8) * 110), y: Math.min(H - 60, 100 + Math.floor(quanti / 8) * 120),
     }).select().single();
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
-    avvisa(`Tavolo ${n} aggiunto: trascinalo nella posizione giusta`); await props.onFatto(); props.onSeleziona((data as Tavolo).id);
+    avvisa(`Tavolo ${n} aggiunto: trascinalo nella posizione giusta`); await props.onFatto(); props.onSeleziona({ tipo: "tavolo", id: (data as Tavolo).id });
   }
-  async function aggiorna(patch: Partial<Tavolo>) {
-    if (!tavolo) return;
-    const { error } = await sb().from("tavoli").update(patch).eq("id", tavolo.id);
+  async function aggiungiElemento(tipo: TipoElemento, base?: Elemento) {
+    const d = ARREDI[tipo];
+    const { data, error } = await sb().from("elementi_sala").insert(base
+      ? { locale_id: base.locale_id, sala_id: base.sala_id, tipo: base.tipo, x: Math.min(W, base.x + 30), y: Math.min(H, base.y + 30), w: base.w, h: base.h, rotazione: base.rotazione, etichetta: base.etichetta }
+      : { locale_id: props.locale, sala_id: sala.id, tipo, x: W / 2, y: Math.round(H / 2), w: d.w, h: d.h, etichetta: d.etichetta ?? "" }).select().single();
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
-    avvisa("Salvato"); await props.onFatto();
+    await props.onFatto(); props.onSeleziona({ tipo: "elemento", id: (data as Elemento).id });
   }
-  async function elimina() {
-    if (!tavolo || !confirm(`Eliminare il tavolo ${tavolo.nome}? Il suo cartoncino QR smetterà di funzionare.`)) return;
-    const { error } = await sb().from("tavoli").delete().eq("id", tavolo.id);
-    if (error) { avvisa(messaggioErrore(error), "errore"); return; }
-    props.onSeleziona(null); avvisa("Tavolo eliminato"); await props.onFatto();
-  }
-  async function rigeneraQr() {
-    if (!tavolo || !confirm(`Rigenerare il QR del tavolo ${tavolo.nome}? Il cartoncino attuale smetterà di funzionare e andrà ristampato.`)) return;
-    const { error } = await sb().rpc("rigenera_qr_tavolo", { p_tavolo: tavolo.id });
-    if (error) { avvisa(messaggioErrore(error), "errore"); return; }
-    avvisa("Nuovo QR generato: ristampa il cartoncino"); await props.onFatto();
+  const aggiornaTavolo = (patch: Partial<Tavolo>) => tavolo && void esito(sb().from("tavoli").update(patch).eq("id", tavolo.id), "Salvato");
+  const aggiornaElemento = (patch: Partial<Elemento>) => elemento && void esito(sb().from("elementi_sala").update(patch).eq("id", elemento.id), "Salvato");
+  const aggiornaSala = (patch: Partial<Sala>) => void esito(sb().from("sale").update(patch).eq("id", sala.id), "Sala aggiornata");
+  const ruota = (attuale: number, delta: number) => ((attuale + delta) % 360 + 360) % 360;
+
+  async function caricaPlanimetria(file: File | undefined) {
+    if (!file) return;
+    try {
+      const dati = await comprimiFoto(file, 1_350_000, [[1600, 0.8], [1280, 0.7], [1024, 0.6]]);
+      aggiornaSala({ sfondo_dati: dati });
+    } catch (e) { avvisa(e instanceof Error ? e.message : "Immagine non valida", "errore"); }
   }
 
   return (
     <div className="pannello-tavolo">
-      <button className="btn btn-pieno" onClick={() => void aggiungi()}>+ Aggiungi tavolo</button>
-      {tavolo ? (
+      <div className="barra-arredi">
+        <button className="btn btn-pieno btn-piccolo" onClick={() => void aggiungiTavolo()}>+ Tavolo</button>
+        {(Object.keys(ARREDI) as TipoElemento[]).map((t) => (
+          <button key={t} className="btn btn-piccolo" onClick={() => void aggiungiElemento(t)}>+ {ARREDI[t].nome}</button>
+        ))}
+      </div>
+
+      {tavolo && (
         <div className="campi-tavolo" key={tavolo.id}>
           <h2>Tavolo {tavolo.nome}</h2>
           <label className="campo">Nome / numero
-            <input defaultValue={tavolo.nome} maxLength={20} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== tavolo.nome) void aggiorna({ nome: v }); }} />
+            <input defaultValue={tavolo.nome} maxLength={20} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== tavolo.nome) aggiornaTavolo({ nome: v }); }} />
           </label>
           <label className="campo">Posti
-            <input type="number" min={1} max={30} defaultValue={tavolo.posti} onBlur={(e) => { const v = Number(e.target.value); if (v >= 1 && v <= 30 && v !== tavolo.posti) void aggiorna({ posti: v }); }} />
+            <input type="number" min={1} max={30} defaultValue={tavolo.posti} onBlur={(e) => { const v = Number(e.target.value); if (v >= 1 && v <= 30 && v !== tavolo.posti) aggiornaTavolo({ posti: v }); }} />
           </label>
           <div className="scelte">
             {(["quadrato", "tondo", "rettangolo"] as const).map((f) => (
-              <button key={f} className={`chip${tavolo.forma === f ? " attivo" : ""}`} onClick={() => void aggiorna({ forma: f })}>{f[0]!.toUpperCase() + f.slice(1)}</button>
+              <button key={f} className={`chip${tavolo.forma === f ? " attivo" : ""}`} onClick={() => aggiornaTavolo({ forma: f })}>{f[0]!.toUpperCase() + f.slice(1)}</button>
             ))}
           </div>
-          <label className="interruttore"><input type="checkbox" checked={tavolo.attivo} onChange={(e) => void aggiorna({ attivo: e.target.checked })} />In uso</label>
+          {tavolo.forma === "rettangolo" && (
+            <div className="riga-form"><span>Rotazione {tavolo.rotazione}°</span>
+              <button className="btn btn-icona" onClick={() => aggiornaTavolo({ rotazione: ruota(tavolo.rotazione, 90) })} aria-label="Ruota di 90 gradi">↻ 90°</button></div>
+          )}
+          <label className="interruttore"><input type="checkbox" checked={tavolo.attivo} onChange={(e) => aggiornaTavolo({ attivo: e.target.checked })} />In uso</label>
           <div className="riga-form">
-            <button className="btn btn-piccolo" onClick={() => void rigeneraQr()}>Rigenera QR</button>
-            <button className="btn btn-pericolo" onClick={() => void elimina()}>Elimina</button>
+            <button className="btn btn-piccolo" onClick={async () => {
+              if (!confirm(`Rigenerare il QR del tavolo ${tavolo.nome}? Il cartoncino attuale smetterà di funzionare e andrà ristampato.`)) return;
+              await esito(sb().rpc("rigenera_qr_tavolo", { p_tavolo: tavolo.id }), "Nuovo QR generato: ristampa il cartoncino");
+            }}>Rigenera QR</button>
+            <button className="btn btn-pericolo" onClick={async () => {
+              if (!confirm(`Eliminare il tavolo ${tavolo.nome}? Il suo cartoncino QR smetterà di funzionare.`)) return;
+              if (await esito(sb().from("tavoli").delete().eq("id", tavolo.id), "Tavolo eliminato")) props.onSeleziona(null);
+            }}>Elimina</button>
           </div>
         </div>
-      ) : <p className="muto">Trascina i tavoli nella posizione reale. Tocca un tavolo per modificarlo.</p>}
+      )}
+
+      {elemento && (
+        <div className="campi-tavolo" key={elemento.id}>
+          <h2>{ARREDI[elemento.tipo].nome}</h2>
+          {["bancone", "zona", "testo", "cassa", "bagni"].includes(elemento.tipo) && (
+            <label className="campo">Scritta
+              <input defaultValue={elemento.etichetta} maxLength={40} onBlur={(e) => { if (e.target.value !== elemento.etichetta) aggiornaElemento({ etichetta: e.target.value.trim() }); }} />
+            </label>
+          )}
+          <div className="riga-form"><span>Rotazione {elemento.rotazione}°</span>
+            <button className="btn btn-icona" onClick={() => aggiornaElemento({ rotazione: ruota(elemento.rotazione, -15) })} aria-label="Ruota a sinistra">↺</button>
+            <button className="btn btn-icona" onClick={() => aggiornaElemento({ rotazione: ruota(elemento.rotazione, 15) })} aria-label="Ruota a destra">↻</button>
+            <button className="btn btn-icona" onClick={() => aggiornaElemento({ rotazione: ruota(elemento.rotazione, 90) })}>90°</button>
+          </div>
+          <p className="muto piccolo">Trascina per spostare, usa il quadratino nell'angolo per allungare o allargare.</p>
+          <div className="riga-form">
+            <button className="btn btn-piccolo" onClick={() => void aggiungiElemento(elemento.tipo, elemento)}>Duplica</button>
+            <button className="btn btn-pericolo" onClick={async () => {
+              if (await esito(sb().from("elementi_sala").delete().eq("id", elemento.id), "Elemento eliminato")) props.onSeleziona(null);
+            }}>Elimina</button>
+          </div>
+        </div>
+      )}
+
+      {!tavolo && !elemento && (
+        <div className="campi-tavolo" key={sala.id}>
+          <h2>Sala «{sala.nome}»</h2>
+          <label className="campo">Nome
+            <input defaultValue={sala.nome} maxLength={60} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== sala.nome) aggiornaSala({ nome: v }); }} />
+          </label>
+          <div className="riga-form">
+            <label className="campo" style={{ flex: 1 }}>Larghezza (m)
+              <input type="number" min={2} max={200} step={0.5} defaultValue={sala.larghezza_m} onBlur={(e) => { const v = Number(e.target.value); if (v >= 2 && v <= 200 && v !== Number(sala.larghezza_m)) aggiornaSala({ larghezza_m: v }); }} />
+            </label>
+            <label className="campo" style={{ flex: 1 }}>Profondità (m)
+              <input type="number" min={2} max={200} step={0.5} defaultValue={sala.profondita_m} onBlur={(e) => { const v = Number(e.target.value); if (v >= 2 && v <= 200 && v !== Number(sala.profondita_m)) aggiornaSala({ profondita_m: v }); }} />
+            </label>
+          </div>
+          <fieldset className="gruppo"><legend>Planimetria di sfondo</legend>
+            <p className="muto piccolo">Carica una foto o una piantina del locale e ricalca sopra muri e tavoli.</p>
+            <div className="riga-form">
+              <label className="btn btn-piccolo">{sala.sfondo_dati ? "Sostituisci" : "Carica immagine"}
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void caricaPlanimetria(e.target.files?.[0])} />
+              </label>
+              {sala.sfondo_dati && <button className="btn btn-pericolo" onClick={() => aggiornaSala({ sfondo_dati: null })}>Rimuovi</button>}
+            </div>
+            {sala.sfondo_dati && (
+              <label className="campo">Visibilità: {sala.sfondo_opacita}%
+                <input type="range" min={5} max={100} defaultValue={sala.sfondo_opacita} onPointerUp={(e) => aggiornaSala({ sfondo_opacita: Number((e.target as HTMLInputElement).value) })} />
+              </label>
+            )}
+          </fieldset>
+          <button className="btn btn-pericolo" onClick={async () => {
+            if (!confirm(`Eliminare la sala «${sala.nome}» con tutti i suoi tavoli e arredi?`)) return;
+            await esito(sb().from("sale").delete().eq("id", sala.id), "Sala eliminata");
+          }}>Elimina sala</button>
+          <p className="muto piccolo">Tocca un tavolo o un elemento per modificarlo.</p>
+        </div>
+      )}
       <hr />
       <NuovaSala locale={props.locale} onFatto={props.onFatto} />
     </div>
