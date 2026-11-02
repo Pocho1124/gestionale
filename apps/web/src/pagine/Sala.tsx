@@ -544,8 +544,8 @@ function Cartoncini({ locale, tavoli, sale }: { locale: { id: string; nome: stri
     })();
   }, [locale.id]);
 
-  const base = (salvato?.url_ordini || `${window.location.origin}/m/${locale.slug}`).replace(/\/?$/, "/");
-  const urlTavolo = useCallback((t: Tavolo) => `${base}?t=${encodeURIComponent(t.qr_token)}`, [base]);
+  const base = (salvato?.url_ordini || window.location.origin).replace(/\/?$/, "/");
+  const urlTavolo = useCallback((t: Tavolo) => `${base}t/${encodeURIComponent(t.qr_token)}`, [base]);
 
   // QR generati sul dispositivo: nessun servizio esterno
   useEffect(() => {
@@ -598,7 +598,7 @@ function Cartoncini({ locale, tavoli, sale }: { locale: { id: string; nome: stri
           <input value={wifi.url_ordini} placeholder="Es. https://ordini.tuodominio.it — vuoto: menu interno" onChange={(e) => setWifi({ ...wifi, url_ordini: e.target.value })} />
         </label>
         <p className="muto piccolo">
-          {salvato?.url_ordini ? "I QR dei tavoli puntano all'indirizzo impostato." : "⚠️ Senza indirizzo, il QR del tavolo apre il menu interno: funziona solo nella rete del locale. Stampa i cartoncini definitivi quando avrete il dominio."}
+          {salvato?.url_ordini ? "I QR dei tavoli puntano all'indirizzo impostato." : "⚠️ Senza indirizzo, il QR del tavolo apre la pagina per ordinare sul server del locale: funziona solo nella stessa rete. Va bene per le prove; stampa i cartoncini definitivi quando avrete il dominio."}
         </p>
         <div className="riga-form">
           <button className="btn btn-pieno" disabled={JSON.stringify(wifi) === JSON.stringify(salvato)}>Salva</button>
@@ -625,6 +625,7 @@ function Cartoncini({ locale, tavoli, sale }: { locale: { id: string; nome: stri
                   <figcaption><b>2</b> Apri il menu e ordina</figcaption>
                 </figure>
               </div>
+              <a className="nascondi-stampa piccolo" href={urlTavolo(t)} target="_blank" rel="noreferrer">Apri la pagina del tavolo ↗</a>
               {salvato?.ssid && (
                 <footer>Rete «{salvato.ssid}»{salvato.sicurezza !== "nopass" && salvato.password ? ` · password ${salvato.password}` : ""}</footer>
               )}

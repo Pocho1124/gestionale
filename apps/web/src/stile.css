@@ -312,3 +312,45 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .pav-marmo { background: linear-gradient(135deg, #F1EEE9, #DDD7CE); color: #3A2E22; }
 .pav-cemento { background: #CDCBC6; color: #3A2E22; }
 .pavimento-chip.attivo { outline: 3px solid var(--primario); outline-offset: 1px; }
+
+/* Contatore nella barra */
+.contatore { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px;
+  background: #C2493D; color: #fff; font-size: .75rem; font-weight: 700; }
+
+/* Backoffice: ordini */
+.ordini-griglia { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.ordine-scheda { background: var(--superficie); border: 1px solid var(--linea); border-left: 6px solid var(--muto); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
+.stato-ordine-da_confermare { border-left-color: #D79A32; box-shadow: 0 0 0 2px color-mix(in srgb, #D79A32 35%, transparent); }
+.stato-ordine-confermato { border-left-color: #4A90B8; } .stato-ordine-in_preparazione { border-left-color: #8B5A2B; }
+.stato-ordine-pronto { border-left-color: #4C8C5B; } .stato-ordine-rifiutato { border-left-color: #C2493D; opacity: .7; }
+.ordine-scheda header { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.ordine-scheda header strong { font-size: 1.15rem; }
+.ordine-scheda header .pill { margin-left: auto; }
+.ordine-scheda ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.ordine-scheda li { display: flex; gap: 6px; } .ordine-scheda li span { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ordine-scheda li em { color: var(--muto); }
+.ordine-nota { margin: 0; font-size: .9rem; background: color-mix(in srgb, var(--accento) 20%, transparent); border-radius: 6px; padding: 4px 8px; }
+.ordine-scheda footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; }
+
+/* Pagina cliente: ordinare dal tavolo */
+.ordina { padding-bottom: 90px; min-height: 100vh; }
+.ordina-tavolo { font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--m-primario); }
+.ordina-avviso { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--m-accento) 25%, transparent); font-weight: 600; }
+.ordina-avviso.errore { background: #C2493D; color: #fff; } .ordina-avviso.ok { background: #4C8C5B; color: #fff; }
+.ordina-schede { position: sticky; top: 0; z-index: 3; display: flex; gap: 6px; padding: 10px 0; background: var(--m-sfondo); }
+.ordina-schede button { flex: 1; border: 1px solid color-mix(in srgb, var(--m-testo) 25%, transparent); background: transparent; color: var(--m-testo);
+  border-radius: 999px; padding: 8px 6px; font: 600 .85rem var(--m-font-testo); cursor: pointer; }
+.ordina-schede button.attiva { background: var(--m-primario); border-color: var(--m-primario); color: var(--m-sfondo); }
+.ordina-piatto .menu-riga { justify-content: space-between; }
+.ordina-quantita { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.ordina-quantita button { min-width: 40px; height: 36px; border-radius: 999px; border: 1px solid var(--m-primario); background: transparent;
+  color: var(--m-primario); font: 700 1rem var(--m-font-testo); cursor: pointer; padding: 0 14px; }
+.ordina-quantita strong { min-width: 20px; text-align: center; }
+.ordina-nota, .ordina-campo input { flex: 1; min-width: 0; border: 1px solid color-mix(in srgb, var(--m-testo) 30%, transparent); background: transparent;
+  color: var(--m-testo); border-radius: 8px; padding: 8px 10px; font: 400 .9rem var(--m-font-testo); }
+.ordina-campo { display: grid; gap: 4px; margin-top: 14px; font-weight: 600; }
+.ordina-invia, .ordina-barra { width: 100%; margin-top: 16px; border: 0; border-radius: 999px; padding: 14px; background: var(--m-primario);
+  color: var(--m-sfondo); font: 700 1rem var(--m-font-testo); cursor: pointer; }
+.ordina-invia:disabled { opacity: .5; }
+.ordina-barra { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(680px, calc(100% - 28px));
+  margin: 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); z-index: 5; }

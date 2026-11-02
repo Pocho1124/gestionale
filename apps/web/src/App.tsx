@@ -8,6 +8,8 @@ import { Catalogo } from "./pagine/Catalogo";
 import { Aspetto } from "./pagine/Aspetto";
 import { MenuPubblico } from "./pagine/MenuPubblico";
 import { Sala } from "./pagine/Sala";
+import { Ordini } from "./pagine/Ordini";
+import { OrdinaTavolo } from "./pagine/OrdinaTavolo";
 
 function AreaRiservata() {
   const { pronta, sessione, locale, puoModificare } = useSessione();
@@ -19,6 +21,7 @@ function AreaRiservata() {
       <Route element={<Guscio />}>
         <Route path="/catalogo" element={<Catalogo />} />
         <Route path="/sala" element={<Sala />} />
+        <Route path="/ordini" element={<Ordini />} />
         {puoModificare && <Route path="/aspetto" element={<Aspetto />} />}
         <Route path="*" element={<Navigate to="/catalogo" replace />} />
       </Route>
@@ -33,6 +36,8 @@ export function App() {
         <Routes>
           {/* Menu clienti: pubblico, senza login */}
           <Route path="/m/:slug" element={<MenuPubblico />} />
+          {/* Ordini dal tavolo: pubblico, protetto da QR + codice + conferma dello staff */}
+          <Route path="/t/:token" element={<OrdinaTavolo />} />
           <Route path="*" element={<ProviderSessione><AreaRiservata /></ProviderSessione>} />
         </Routes>
       </ProviderAvvisi>
