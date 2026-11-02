@@ -221,3 +221,49 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .vino-campi label { display: grid; gap: 3px; font-size: .85rem; font-weight: 600; }
 .vino-campi input, .vino-campi select { font-weight: 400; }
 .vino-note { grid-column: 1 / -1; }
+
+/* Sala: piantina e servizio */
+.sala-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
+@media (max-width: 860px) { .sala-layout { grid-template-columns: 1fr; } }
+.piantina { width: 100%; height: auto; background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; touch-action: none; user-select: none; }
+.piantina-fondo { fill: transparent; }
+.griglia { stroke: var(--linea); stroke-width: 1; }
+.tavolo { cursor: pointer; outline: none; }
+.modifica .tavolo { cursor: grab; }
+.tavolo-forma { fill: var(--superficie); stroke: var(--muto); stroke-width: 2.5; }
+.tavolo.aperto .tavolo-forma { fill: var(--primario); stroke: var(--primario); }
+.tavolo.selezionato .tavolo-forma, .tavolo:focus-visible .tavolo-forma { stroke: var(--accento); stroke-width: 5; }
+.tavolo.spento { opacity: .35; }
+.tavolo-nome { text-anchor: middle; font: 700 20px var(--corpo); fill: var(--testo); pointer-events: none; }
+.tavolo-info { text-anchor: middle; font: 600 11px var(--corpo); fill: var(--su-primario); pointer-events: none; }
+.tavolo.aperto .tavolo-nome { fill: var(--su-primario); }
+.sala-pannello { background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; padding: 14px; }
+.pannello-tavolo { display: grid; gap: 10px; }
+.pannello-tavolo p { margin: 0; }
+.pannello-tavolo hr { border: 0; border-top: 1px solid var(--linea); width: 100%; }
+.campi-tavolo { display: grid; gap: 10px; }
+.codice-tavolo { display: grid; gap: 2px; text-align: center; border: 2px dashed var(--primario); border-radius: 10px; padding: 8px; }
+.codice-tavolo strong { font-size: 2rem; letter-spacing: .3em; font-variant-numeric: tabular-nums; }
+
+/* Cartoncini da tavolo: 4 per foglio A4 */
+.cartoncini { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.cartoncino { background: var(--c-sfondo, #fff); color: var(--c-testo, #111); border: 1px solid var(--linea); border-radius: 12px;
+  padding: 16px; display: grid; gap: 10px; text-align: center; break-inside: avoid; }
+.cartoncino header img { max-height: 56px; max-width: 70%; }
+.cartoncino-nome { font-family: var(--titoli); font-size: 1.4rem; }
+.cartoncino-tavolo { margin: 4px 0 0; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--c-primario, #1F4FA8); }
+.cartoncino-qr { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cartoncino-qr figure { margin: 0; display: grid; gap: 6px; justify-items: center; }
+.cartoncino-qr img, .qr-vuoto { width: 100%; max-width: 140px; aspect-ratio: 1; background: #fff; border-radius: 6px; padding: 4px; }
+.cartoncino-qr figcaption { font-size: .8rem; font-weight: 600; }
+.cartoncino-qr figcaption b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: var(--c-primario, #1F4FA8); color: var(--c-sfondo, #fff); margin-right: 4px; }
+.cartoncino footer { font-size: .72rem; opacity: .8; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body { background: #fff; }
+  .nascondi-stampa, .pagina-testa, .avviso-area { display: none !important; }
+  .contenuto { padding: 0; max-width: none; }
+  .cartoncini { grid-template-columns: 1fr 1fr; gap: 8mm; }
+  .cartoncino { height: 130mm; border: 1px dashed #999; border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cartoncino-qr img { max-width: 42mm; }
+}

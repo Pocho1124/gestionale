@@ -8,7 +8,7 @@ export function Guscio() {
   if (!locale) return null;
   return (
     <div className="guscio">
-      <header className="barra">
+      <header className="barra nascondi-stampa">
         <div className="barra-locale">
           {locali.length > 1 ? (
             <select value={locale.id} onChange={(e) => scegliLocale(e.target.value)} aria-label="Locale">
@@ -18,6 +18,7 @@ export function Guscio() {
           {ruolo && <span className="pill">{NOMI_RUOLO[ruolo]}</span>}
         </div>
         <nav className="barra-nav">
+          <NavLink to="/sala">Sala</NavLink>
           <NavLink to="/catalogo">Catalogo</NavLink>
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
           <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>
