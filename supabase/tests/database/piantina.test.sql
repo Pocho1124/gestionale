@@ -9,7 +9,7 @@ begin
   perform set_config('request.jwt.claim.sub', p_uid, true);
 end $$;
 
-select plan(7);
+select plan(9);
 insert into auth.users (id, email, raw_user_meta_data) values
   ('ae111111-1111-1111-1111-111111111111', 'owner@piantina.local', '{}'),
   ('ae333333-3333-3333-3333-333333333333', 'cameriere@piantina.local', '{}');
@@ -23,6 +23,8 @@ insert into public.membri (organizzazione_id, user_id, ruolo)
 
 select lives_ok($$ update public.sale set larghezza_m = 15, profondita_m = 10, sfondo_opacita = 30 $$, 'L''owner imposta le misure della sala');
 select throws_ok($$ update public.sale set larghezza_m = 1 $$, '23514', null, 'Misure non realistiche rifiutate');
+select lives_ok($$ update public.sale set pavimento = 'cotto' $$, 'L''owner sceglie il pavimento');
+select throws_ok($$ update public.sale set pavimento = 'moquette rosa' $$, '23514', null, 'Pavimento sconosciuto rifiutato');
 select lives_ok($$ insert into public.elementi_sala (locale_id, sala_id, tipo, x, y, w, h, rotazione, etichetta)
                    select locale_id, id, 'bancone', 500, 100, 260, 60, 90, 'Bancone' from public.sale $$, 'L''owner disegna il bancone');
 select throws_ok($$ insert into public.elementi_sala (locale_id, sala_id, tipo, x, y, w, h)

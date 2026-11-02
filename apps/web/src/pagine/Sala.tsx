@@ -7,7 +7,8 @@ import { messaggioErrore } from "../lib/errori";
 import type { Aspetto } from "../lib/tipi";
 import { comprimiFoto } from "../lib/immagini";
 
-interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_opacita: number }
+interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_opacita: number; pavimento: Pavimento }
+type Pavimento = "parquet" | "cotto" | "marmo" | "cemento" | "nessuno";
 interface Tavolo { id: string; locale_id: string; sala_id: string; nome: string; posti: number; forma: "tondo" | "quadrato" | "rettangolo"; x: number; y: number; rotazione: number; qr_token: string; attivo: boolean }
 type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pianta" | "zona" | "testo" | "cassa" | "bagni";
 interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoElemento; x: number; y: number; w: number; h: number; rotazione: number; etichetta: string }
@@ -32,8 +33,28 @@ const dimensioni = (t: Tavolo) => {
   const base = 34 + Math.min(t.posti, 12) * 3;
   return t.forma === "rettangolo" ? { w: base * 1.8, h: base } : { w: base, h: base };
 };
+/** Posizioni delle sedie attorno al tavolo (coordinate rispetto al centro, già ruotate con il tavolo). */
+function sedie(t: Tavolo, w: number, h: number): { x: number; y: number; a: number }[] {
+  const n = Math.min(t.posti, 16), dist = 13, out: { x: number; y: number; a: number }[] = [];
+  if (t.forma === "tondo") {
+    for (let i = 0; i < n; i++) { const a = (i / n) * 2 * Math.PI - Math.PI / 2; out.push({ x: Math.cos(a) * (w / 2 + dist), y: Math.sin(a) * (w / 2 + dist), a: (a * 180) / Math.PI + 90 }); }
+    return out;
+  }
+  // Prima i lati lunghi, poi le testate se i posti avanzano
+  const testate = t.forma === "rettangolo" ? (n > 6 ? 2 : 0) : (n > 4 ? 2 : 0);
+  const lati = n - testate, sopra = Math.ceil(lati / 2), sotto = lati - sopra;
+  const fila = (k: number, y: number, a: number) => { for (let i = 0; i < k; i++) out.push({ x: -w / 2 + (w * (i + 0.5)) / k, y, a }); };
+  fila(sopra, -h / 2 - dist, 0); fila(sotto, h / 2 + dist, 180);
+  if (testate) { out.push({ x: -w / 2 - dist, y: 0, a: 270 }, { x: w / 2 + dist, y: 0, a: 90 }); }
+  return out;
+}
+/** Colore dello stato: libero, aperto da poco, da più di un'ora, da più di due. */
+const stato = (s?: SessioneT) => !s ? "libero" : minuti(s.aperta_at) >= 120 ? "lungo" : minuti(s.aperta_at) >= 60 ? "medio" : "aperto";
+
 const minuti = (da: string) => Math.max(0, Math.round((Date.now() - new Date(da).getTime()) / 60000));
 const durata = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`);
+/** Versione corta per i tavoli piccoli: «25'», «1h15». */
+const durataBreve = (m: number) => (m < 60 ? `${m}'` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`);
 
 export function Sala() {
   const { locale, puoModificare } = useSessione();
@@ -104,6 +125,12 @@ export function Sala() {
             <div className="riga-form">
               {sale.map((s) => <button key={s.id} className={`chip${s.id === salaId ? " attivo" : ""}`} onClick={() => { setSalaId(s.id); setSelezione(null); }}>{s.nome}</button>)}
               {vista === "servizio" && <span className="muto piccolo">Aperti: {sessioni.length} · Coperti: {sessioni.reduce((n, s) => n + s.coperti, 0)}</span>}
+              {vista === "servizio" && (
+                <span className="legenda">
+                  <span><i className="pallino stato-libero" />Libero</span><span><i className="pallino stato-aperto" />Aperto</span>
+                  <span><i className="pallino stato-medio" />Oltre 1 h</span><span><i className="pallino stato-lungo" />Oltre 2 h</span>
+                </span>
+              )}
             </div>
             <div className={`sala-layout${vista === "piantina" ? " modifica" : ""}`}>
               <Piantina sala={salaCorrente} tavoli={tavoliSala} elementi={elementi.filter((x) => x.sala_id === salaId)}
@@ -134,7 +161,7 @@ export function Sala() {
   );
 }
 
-function Piantina(props: {
+export function Piantina(props: {
   sala?: Sala; tavoli: Tavolo[]; elementi: Elemento[]; sessionePer: (id: string) => SessioneT | undefined; modificabile: boolean;
   selezione: Selezione; onSeleziona: (s: Selezione) => void;
   onTavolo: (t: Tavolo, patch: Partial<Tavolo>) => void; onElemento: (e: Elemento, patch: Partial<Elemento>) => void;
@@ -183,8 +210,27 @@ function Piantina(props: {
     <svg ref={svg} className="piantina" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Piantina della sala"
       onPointerMove={muovi} onPointerUp={rilascia} onPointerCancel={() => setAzione(null)}
       onPointerDown={() => { if (props.modificabile) props.onSeleziona(null); }}>
-      <pattern id="griglia" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" className="griglia" /></pattern>
-      <rect width={W} height={H} className="piantina-fondo" />
+      <defs>
+        <pattern id="griglia" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" className="griglia" /></pattern>
+        <pattern id="pav-parquet" width="120" height="24" patternUnits="userSpaceOnUse">
+          <rect width="120" height="12" fill="#D8B88A" /><rect y="12" width="120" height="12" fill="#CFAE7E" />
+          <path d="M0 12H120M0 24H120M40 0V12M100 0V12M70 12V24M10 12V24" stroke="#B8955F" strokeWidth="1" opacity=".55" />
+        </pattern>
+        <pattern id="pav-cotto" width="44" height="44" patternUnits="userSpaceOnUse">
+          <rect width="44" height="44" fill="#E9DCCB" /><rect x="2" y="2" width="40" height="40" rx="2" fill="#C97B55" /><rect x="2" y="2" width="20" height="20" fill="#C27350" opacity=".6" />
+        </pattern>
+        <pattern id="pav-marmo" width="200" height="200" patternUnits="userSpaceOnUse">
+          <rect width="200" height="200" fill="#F1EEE9" /><path d="M0 60 C50 40 80 90 140 70 S200 90 200 90 M30 200 C60 150 120 170 170 120" stroke="#D5CFC6" strokeWidth="2" fill="none" />
+          <path d="M100 0V200M0 100H200" stroke="#E2DDD5" strokeWidth="1.5" />
+        </pattern>
+        <pattern id="pav-cemento" width="60" height="60" patternUnits="userSpaceOnUse">
+          <rect width="60" height="60" fill="#CDCBC6" /><circle cx="12" cy="18" r="1.2" fill="#B9B6B0" /><circle cx="44" cy="40" r="1" fill="#B9B6B0" /><circle cx="30" cy="8" r=".8" fill="#DEDCD8" /><circle cx="50" cy="12" r="1.4" fill="#C2BFB9" />
+        </pattern>
+        <linearGradient id="legno" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#A8743F" /><stop offset="1" stopColor="#7E5229" /></linearGradient>
+        <radialGradient id="ripiano" cx=".35" cy=".3" r=".9"><stop offset="0" stopColor="#FFFDF8" /><stop offset="1" stopColor="#EADFCC" /></radialGradient>
+        <filter id="ombra" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000" floodOpacity=".28" /></filter>
+      </defs>
+      <rect width={W} height={H} fill={props.sala && props.sala.pavimento !== "nessuno" ? `url(#pav-${props.sala.pavimento})` : "transparent"} />
       {props.sala?.sfondo_dati && <image href={props.sala.sfondo_dati} width={W} height={H} preserveAspectRatio="xMidYMid meet" opacity={props.sala.sfondo_opacita / 100} />}
       {props.modificabile && <rect width={W} height={H} fill="url(#griglia)" pointerEvents="none" />}
 
@@ -213,13 +259,17 @@ function Piantina(props: {
             onClick={(e) => { e.stopPropagation(); props.onSeleziona({ tipo: "tavolo", id: t.id }); }}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") props.onSeleziona({ tipo: "tavolo", id: t.id }); }}
             onPointerDown={(e) => { if (props.modificabile) inizia(e, "sposta", "tavolo", t); else e.stopPropagation(); }}>
-            <g transform={`rotate(${t.rotazione})`}>
+            <g transform={`rotate(${t.rotazione})`} className={`tavolo-corpo stato-${stato(s)}`} filter="url(#ombra)">
+              {sedie(t, w, h).map((c, i) => (
+                <rect key={i} className="sedia" x={-9} y={-7} width={18} height={14} rx={5} transform={`translate(${c.x} ${c.y}) rotate(${c.a})`} />
+              ))}
               {t.forma === "tondo"
                 ? <circle r={w / 2} className="tavolo-forma" />
-                : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={8} className="tavolo-forma" />}
+                : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={10} className="tavolo-forma" />}
             </g>
-            <text className="tavolo-nome" dy={s ? -4 : 6}>{t.nome}</text>
-            {s && <text className="tavolo-info" dy={16}>{s.coperti}p · {durata(minuti(s.aperta_at))}</text>}
+            <text className="tavolo-nome" dy={s ? -3 : 7}>{t.nome}</text>
+            {s && <text className="tavolo-info" dy={15}>{w < 70 ? durataBreve(minuti(s.aperta_at)) : durata(minuti(s.aperta_at))}</text>}
+            {s && <g transform={`translate(${w / 2 + 6} ${-h / 2 - 6})`} className="tavolo-badge"><circle r={11} /><text dy={4}>{s.coperti}</text></g>}
           </g>
         );
       })}
@@ -233,11 +283,17 @@ function Arredo({ tipo, w, h, etichetta }: { tipo: TipoElemento; w: number; h: n
   const scritta = etichetta ? <text className="arredo-testo" dy={5}>{etichetta}</text> : null;
   switch (tipo) {
     case "porta": return <><rect {...r} className="porta-vano" /><path d={`M${-w / 2} ${-h / 2 - w} A ${w} ${w} 0 0 1 ${w / 2} ${-h / 2}`} className="porta-arco" /><line x1={-w / 2} y1={-h / 2} x2={-w / 2} y2={-h / 2 - w} className="porta-anta" /></>;
-    case "colonna": return <rect {...r} rx={3} />;
-    case "pianta": return <><circle r={Math.min(w, h) / 2} /><circle r={Math.min(w, h) / 4} className="pianta-centro" /></>;
+    case "colonna": return <rect {...r} rx={4} filter="url(#ombra)" />;
+    case "pianta": {
+      const r0 = Math.min(w, h) / 2;
+      return <><circle r={r0 * 0.55} className="vaso" />{[0, 60, 120, 180, 240, 300].map((a) => (
+        <ellipse key={a} rx={r0 * 0.28} ry={r0 * 0.62} transform={`rotate(${a}) translate(0 ${-r0 * 0.45})`} className="foglia" />
+      ))}<circle r={r0 * 0.18} className="pianta-centro" /></>;
+    }
+    case "bancone": return <g filter="url(#ombra)"><rect {...r} rx={8} className="bancone-piano" />{scritta}</g>;
     case "zona": return <><rect {...r} rx={12} /><text className="arredo-testo zona-testo" y={-h / 2 + 22}>{etichetta}</text></>;
     case "testo": return <><rect {...r} className="testo-area" />{scritta}</>;
-    default: return <><rect {...r} rx={tipo === "bancone" || tipo === "cassa" || tipo === "bagni" ? 6 : 1} />{tipo !== "muro" && tipo !== "finestra" && scritta}</>;
+    default: return <><rect {...r} rx={tipo === "cassa" || tipo === "bagni" ? 6 : 1} />{tipo !== "muro" && tipo !== "finestra" && scritta}</>;
   }
 }
 
@@ -429,6 +485,13 @@ function PannelloPiantina(props: {
               <input type="number" min={2} max={200} step={0.5} defaultValue={sala.profondita_m} onBlur={(e) => { const v = Number(e.target.value); if (v >= 2 && v <= 200 && v !== Number(sala.profondita_m)) aggiornaSala({ profondita_m: v }); }} />
             </label>
           </div>
+          <fieldset className="gruppo"><legend>Pavimento</legend>
+            <div className="scelte">
+              {([["parquet", "Parquet"], ["cotto", "Cotto"], ["marmo", "Marmo"], ["cemento", "Cemento"], ["nessuno", "Nessuno"]] as const).map(([v, n]) => (
+                <button key={v} className={`chip pavimento-chip pav-${v}${sala.pavimento === v ? " attivo" : ""}`} onClick={() => aggiornaSala({ pavimento: v })}>{n}</button>
+              ))}
+            </div>
+          </fieldset>
           <fieldset className="gruppo"><legend>Planimetria di sfondo</legend>
             <p className="muto piccolo">Carica una foto o una piantina del locale e ricalca sopra muri e tavoli.</p>
             <div className="riga-form">

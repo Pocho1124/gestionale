@@ -225,18 +225,28 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 /* Sala: piantina e servizio */
 .sala-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
 @media (max-width: 860px) { .sala-layout { grid-template-columns: 1fr; } }
-.piantina { width: 100%; height: auto; background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; touch-action: none; user-select: none; }
-.piantina-fondo { fill: transparent; }
+.piantina { width: 100%; height: auto; background: #F6F3EE; border: 1px solid var(--linea); border-radius: 14px; touch-action: none; user-select: none;
+  box-shadow: inset 0 0 0 6px #3A3530, 0 8px 24px rgba(0,0,0,.12); }
 .griglia { stroke: var(--linea); stroke-width: 1; }
 .tavolo { cursor: pointer; outline: none; }
 .modifica .tavolo { cursor: grab; }
-.tavolo-forma { fill: var(--superficie); stroke: var(--muto); stroke-width: 2.5; }
-.tavolo.aperto .tavolo-forma { fill: var(--primario); stroke: var(--primario); }
+.tavolo-forma { fill: url(#ripiano); stroke: #B9A88D; stroke-width: 1.5; }
+.sedia { fill: #8A6A4A; stroke: #5E4630; stroke-width: 1; }
+.stato-aperto .tavolo-forma { fill: #4C8C5B; stroke: #2F6A3E; }
+.stato-medio .tavolo-forma { fill: #D79A32; stroke: #A87418; }
+.stato-lungo .tavolo-forma { fill: #C2493D; stroke: #8E2E25; }
 .tavolo.selezionato .tavolo-forma, .tavolo:focus-visible .tavolo-forma { stroke: var(--accento); stroke-width: 5; }
 .tavolo.spento { opacity: .35; }
-.tavolo-nome { text-anchor: middle; font: 700 20px var(--corpo); fill: var(--testo); pointer-events: none; }
-.tavolo-info { text-anchor: middle; font: 600 11px var(--corpo); fill: var(--su-primario); pointer-events: none; }
-.tavolo.aperto .tavolo-nome { fill: var(--su-primario); }
+.tavolo-nome { text-anchor: middle; font: 700 19px var(--corpo); fill: #3A2E22; pointer-events: none; }
+.tavolo.aperto .tavolo-nome, .tavolo.aperto .tavolo-info { fill: #fff; }
+.tavolo-info { text-anchor: middle; font: 600 10.5px var(--corpo); pointer-events: none; }
+.tavolo-badge circle { fill: #fff; stroke: #3A2E22; stroke-width: 1.5; }
+.tavolo-badge text { text-anchor: middle; font: 700 12px var(--corpo); fill: #3A2E22; pointer-events: none; }
+.legenda { display: inline-flex; flex-wrap: wrap; gap: 12px; font-size: .82rem; margin-left: auto; }
+.legenda span { display: inline-flex; align-items: center; gap: 5px; }
+.pallino { width: 12px; height: 12px; border-radius: 999px; display: inline-block; border: 1px solid rgba(0,0,0,.25); }
+.pallino.stato-libero { background: #F3EAD9; } .pallino.stato-aperto { background: #4C8C5B; }
+.pallino.stato-medio { background: #D79A32; } .pallino.stato-lungo { background: #C2493D; }
 .sala-pannello { background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; padding: 14px; }
 .pannello-tavolo { display: grid; gap: 10px; }
 .pannello-tavolo p { margin: 0; }
@@ -273,12 +283,14 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .arredo { cursor: grab; }
 .arredo.fisso { pointer-events: none; }
 .arredo rect, .arredo circle { fill: color-mix(in srgb, var(--muto) 35%, transparent); stroke: var(--muto); stroke-width: 1.5; }
-.arredo-muro rect { fill: var(--testo); stroke: none; }
-.arredo-bancone rect { fill: color-mix(in srgb, #8B5A2B 55%, transparent); stroke: #8B5A2B; }
+.arredo-muro rect { fill: #3A3530; stroke: none; }
+.arredo-bancone .bancone-piano { fill: url(#legno); stroke: #5E3B1B; stroke-width: 1.5; }
+.arredo-bancone .arredo-testo { fill: #FFF6E8; letter-spacing: .08em; }
 .arredo-finestra rect { fill: #9ED0F0; stroke: #4A90B8; }
-.arredo-colonna rect { fill: var(--muto); }
-.arredo-pianta circle { fill: #5E9E5A; stroke: #3F7A3C; }
-.arredo-pianta .pianta-centro { fill: #8BC283; stroke: none; }
+.arredo-colonna rect { fill: #B9B3AA; stroke: #8F887E; }
+.arredo-pianta .vaso { fill: #A0522D; stroke: #7A3E22; }
+.arredo-pianta .foglia { fill: #4E8F4A; stroke: #2F6A2C; stroke-width: .8; opacity: .95; }
+.arredo-pianta .pianta-centro { fill: #7DBB70; stroke: none; }
 .arredo-zona rect { fill: color-mix(in srgb, var(--primario) 10%, transparent); stroke: var(--primario); stroke-dasharray: 8 6; }
 .arredo-testo { text-anchor: middle; font: 600 15px var(--corpo); fill: var(--testo); pointer-events: none; }
 .zona-testo { fill: var(--primario); font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
@@ -291,3 +303,12 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .arredo-bagni rect { fill: color-mix(in srgb, #4A90B8 25%, transparent); stroke: #4A90B8; }
 .arredo.selezionato > rect:first-child, .arredo.selezionato > circle:first-child { stroke: var(--accento); stroke-width: 4; }
 .maniglia { fill: var(--accento) !important; stroke: var(--superficie) !important; stroke-width: 2; cursor: nwse-resize; }
+
+.arredo-testo { fill: #3A2E22; }
+.zona-testo { fill: var(--primario); }
+.pavimento-chip { background-size: 40px; }
+.pav-parquet { background: repeating-linear-gradient(0deg, #D8B88A 0 8px, #CFAE7E 8px 16px); color: #3A2E22; }
+.pav-cotto { background: #C97B55; color: #fff; }
+.pav-marmo { background: linear-gradient(135deg, #F1EEE9, #DDD7CE); color: #3A2E22; }
+.pav-cemento { background: #CDCBC6; color: #3A2E22; }
+.pavimento-chip.attivo { outline: 3px solid var(--primario); outline-offset: 1px; }
