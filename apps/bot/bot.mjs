@@ -756,8 +756,61 @@ async function chiediConferma(chat, azione, cat) {
   });
 }
 
+// ---------------------------------------------------------------- Notifiche di sala (richieste dal tavolo e ordini da confermare)
+const notificati = new Set();
+let erroreSalaSegnalato = false;
+
+export async function controllaSala() {
+  const quindici = encodeURIComponent(new Date(Date.now() - 15 * 60_000).toISOString());
+  const [richieste, ordini] = await Promise.all([
+    db(`richieste_tavolo?select=id,righe,nota,tavoli(nome)&locale_id=eq.${C.locale}&stato=eq.in_attesa&creato_at=gte.${quindici}&order=creato_at`),
+    db(`ordini?select=id,nota,tavoli(nome),righe_ordine(nome,quantita,prezzo_cent,nota)&locale_id=eq.${C.locale}&stato=eq.da_confermare&order=creato_at`),
+  ]);
+  const nuove = richieste.filter((r) => !notificati.has(r.id)), nuovi = ordini.filter((o) => !notificati.has(o.id));
+  if (!nuove.length && !nuovi.length) return;
+  const prodotti = nuove.length ? new Map((await db(`prodotti?select=id,nome,prezzo_cent&locale_id=eq.${C.locale}`)).map((p) => [p.id, p])) : new Map();
+  const righeTesto = (righe) => righe.map((r) => `• ${r.quantita}× ${r.nome}${r.nota ? ` (${r.nota})` : ""}`).join("\n");
+  const messaggi = [
+    ...nuove.map((r) => {
+      const righe = r.righe.map((x) => ({ ...x, nome: prodotti.get(x.prodotto_id)?.nome ?? "?", prezzo_cent: prodotti.get(x.prodotto_id)?.prezzo_cent ?? 0 }));
+      return { id: r.id, testo: `🔔 Tavolo ${r.tavoli?.nome ?? "?"} vuole ordinare\n${righeTesto(righe)}\nTotale ${euro(righe.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${r.nota ? `\n📝 ${r.nota}` : ""}`,
+               pulsanti: [{ text: "✅ Apri tavolo e conferma", callback_data: `sa:${r.id}` }, { text: "❌ Rifiuta", callback_data: `sr:${r.id}` }] };
+    }),
+    ...nuovi.map((o) => ({ id: o.id, testo: `⏳ Tavolo ${o.tavoli?.nome ?? "?"}: nuovo ordine\n${righeTesto(o.righe_ordine)}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}`,
+                          pulsanti: [{ text: "✅ Conferma", callback_data: `so:${o.id}` }, { text: "❌ Rifiuta", callback_data: `sx:${o.id}` }] })),
+  ];
+  for (const m of messaggi) {
+    notificati.add(m.id);
+    for (const utente of C.utenti) {
+      await tg("sendMessage", { chat_id: utente, text: m.testo, reply_markup: { inline_keyboard: [m.pulsanti] } }).catch((e) => log(`Notifica non inviata: ${e.message}`));
+    }
+  }
+  if (notificati.size > 2000) notificati.clear();
+}
+
+export async function gestisciSala(q, tipo, id) {
+  const chiudi = (esito) => tg("editMessageText", { chat_id: q.message.chat.id, message_id: q.message.message_id, text: `${q.message.text}\n\n${esito}` });
+  try {
+    if (tipo === "sa") {
+      const r = await db("rpc/accetta_richiesta", { metodo: "POST", corpo: { p_richiesta: id, p_coperti: 2 } });
+      await tg("answerCallbackQuery", { callback_query_id: q.id, text: `Codice ${r.codice}` });
+      return chiudi(`✅ Tavolo aperto · codice ${r.codice} · ordine confermato.\nIl codice arriva da solo sul telefono del cliente. Coperti impostati a 2: correggili dalla Sala se serve.`);
+    }
+    if (tipo === "sr") await db("rpc/rifiuta_richiesta", { metodo: "POST", corpo: { p_richiesta: id, p_motivo: "Chiedi al personale al tavolo" } });
+    if (tipo === "so" || tipo === "sx") {
+      await db("rpc/decidi_ordine", { metodo: "POST", corpo: { p_ordine: id, p_conferma: tipo === "so", p_motivo: tipo === "sx" ? "Chiedi al personale al tavolo" : "" } });
+    }
+    await tg("answerCallbackQuery", { callback_query_id: q.id, text: "Fatto" });
+    return chiudi(tipo === "so" ? "✅ Ordine confermato." : "❌ Rifiutato.");
+  } catch (e) {
+    await tg("answerCallbackQuery", { callback_query_id: q.id, text: "Non riuscito" });
+    return chiudi(`⚠️ ${e.message}`);
+  }
+}
+
 async function gestisciPulsante(q) {
   const [tipo, id, scelta] = String(q.data || "").split(":");
+  if (["sa", "sr", "so", "sx"].includes(tipo)) return gestisciSala(q, tipo, id);
   const pend = inAttesa.get(id);
   inAttesa.delete(id);
   if (tipo === "cat" && pend && pend.scade >= Date.now()) {
@@ -798,6 +851,15 @@ async function gestisciPulsante(q) {
 async function avvia() {
   const io = await tg("getMe");
   log(`Bot @${io.username} avviato. Utenti autorizzati: ${C.utenti.size}`);
+  // Controllo della sala ogni 5 secondi, in parallelo alla ricezione dei messaggi
+  let inCorso = false;
+  setInterval(async () => {
+    if (inCorso) return;
+    inCorso = true;
+    try { await controllaSala(); erroreSalaSegnalato = false; }
+    catch (e) { if (!erroreSalaSegnalato) { log(`Notifiche di sala non disponibili: ${e.message}`); erroreSalaSegnalato = true; } }
+    finally { inCorso = false; }
+  }, 5_000);
   await jwt();
   let offset = 0, attesa = 1000;
   for (;;) {

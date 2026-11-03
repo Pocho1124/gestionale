@@ -8,7 +8,6 @@ import { Catalogo } from "./pagine/Catalogo";
 import { Aspetto } from "./pagine/Aspetto";
 import { MenuPubblico } from "./pagine/MenuPubblico";
 import { Sala } from "./pagine/Sala";
-import { Ordini } from "./pagine/Ordini";
 import { OrdinaTavolo } from "./pagine/OrdinaTavolo";
 
 function AreaRiservata() {
@@ -21,7 +20,7 @@ function AreaRiservata() {
       <Route element={<Guscio />}>
         <Route path="/catalogo" element={<Catalogo />} />
         <Route path="/sala" element={<Sala />} />
-        <Route path="/ordini" element={<Ordini />} />
+        <Route path="/ordini" element={<Navigate to="/sala" replace />} />
         {puoModificare && <Route path="/aspetto" element={<Aspetto />} />}
         <Route path="*" element={<Navigate to="/catalogo" replace />} />
       </Route>

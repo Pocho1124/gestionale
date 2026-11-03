@@ -9,12 +9,17 @@ function useDaConfermare(localeId?: string) {
   useEffect(() => {
     if (!localeId) return;
     const conta = async () => {
-      const { count } = await sb().from("ordini").select("id", { count: "exact", head: true }).eq("locale_id", localeId).eq("stato", "da_confermare");
-      setN(count ?? 0);
+      const [o, r] = await Promise.all([
+        sb().from("ordini").select("id", { count: "exact", head: true }).eq("locale_id", localeId).eq("stato", "da_confermare"),
+        sb().from("richieste_tavolo").select("id", { count: "exact", head: true }).eq("locale_id", localeId).eq("stato", "in_attesa")
+          .gte("creato_at", new Date(Date.now() - 15 * 60_000).toISOString()),
+      ]);
+      setN((o.count ?? 0) + (r.count ?? 0));
     };
     void conta();
     const canale = sb().channel(`contatore-${localeId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "ordini", filter: `locale_id=eq.${localeId}` }, () => void conta()).subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "ordini", filter: `locale_id=eq.${localeId}` }, () => void conta())
+      .on("postgres_changes", { event: "*", schema: "public", table: "richieste_tavolo", filter: `locale_id=eq.${localeId}` }, () => void conta()).subscribe();
     const t = setInterval(() => void conta(), 30_000);
     return () => { void sb().removeChannel(canale); clearInterval(t); };
   }, [localeId]);
@@ -39,8 +44,7 @@ export function Guscio() {
           {ruolo && <span className="pill">{NOMI_RUOLO[ruolo]}</span>}
         </div>
         <nav className="barra-nav">
-          <NavLink to="/ordini">Ordini{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>
-          <NavLink to="/sala">Sala</NavLink>
+          <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>
           <NavLink to="/catalogo">Catalogo</NavLink>
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
           <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>

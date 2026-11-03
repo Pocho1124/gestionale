@@ -354,3 +354,27 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .ordina-invia:disabled { opacity: .5; }
 .ordina-barra { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(680px, calc(100% - 28px));
   margin: 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); z-index: 5; }
+
+/* Coda richieste e ordini in cima alla sala */
+.coda { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.coda-voce { background: var(--superficie); border: 2px solid #D79A32; border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px;
+  animation: pulsa 1.6s ease-in-out infinite; }
+.coda-richiesta { border-color: #C2493D; }
+.coda-voce header { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.coda-voce p { margin: 0; }
+.coda-voce footer { justify-content: flex-end; }
+@keyframes pulsa { 0%, 100% { box-shadow: 0 0 0 0 rgba(215, 154, 50, .0); } 50% { box-shadow: 0 0 0 6px rgba(215, 154, 50, .25); } }
+@media (prefers-reduced-motion: reduce) { .coda-voce { animation: none; } }
+.tavolo-allerta circle { fill: #C2493D; stroke: #fff; stroke-width: 2; }
+.tavolo-allerta text { text-anchor: middle; font: 800 15px var(--corpo); fill: #fff; pointer-events: none; }
+.pannello-titolo { margin: 6px 0 0; font-size: 1rem; display: flex; justify-content: space-between; align-items: baseline; }
+.ordine-mini { border-left: 4px solid var(--muto); padding: 4px 0 4px 8px; display: grid; gap: 4px; }
+.ordine-mini p { margin: 0; font-size: .9rem; }
+.aggiungi-comanda { display: grid; gap: 8px; border: 1px solid var(--linea); border-radius: 10px; padding: 8px; }
+.aggiungi-lista { max-height: 320px; overflow: auto; display: grid; gap: 6px; }
+.aggiungi-lista p { margin: 4px 0 2px; }
+.aggiungi-voce { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
+
+.ordina-link { margin-top: 14px; background: none; border: 0; padding: 0; color: var(--m-primario); font: 600 .9rem var(--m-font-testo); text-decoration: underline; cursor: pointer; }
+.ordina-codice { margin: 8px 0; padding: 10px 12px; border: 2px dashed var(--m-primario); border-radius: 10px; text-align: center; }
+.ordina-codice strong { letter-spacing: .3em; font-size: 1.2rem; }

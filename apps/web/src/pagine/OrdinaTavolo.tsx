@@ -17,6 +17,17 @@ const STATI: Record<string, { testo: string; icona: string }> = {
 };
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 const euro = (c: number) => formatta(centesimi(c));
+const leggi = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
+const scrivi = (k: string, v: string) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* memoria non disponibile */ } };
+/** Segreto di questo telefono: solo lui potrà ricevere il codice del tavolo quando lo staff accetta. */
+function segretoDispositivo(token: string) {
+  let s = leggi(`segreto-${token}`);
+  if (s.length < 16) {
+    s = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+    scrivi(`segreto-${token}`, s);
+  }
+  return s;
+}
 
 /** Pagina aperta dal QR del tavolo: si sfoglia il menu, si compone l'ordine e lo si invia; lo staff conferma. */
 export function OrdinaTavolo() {
@@ -26,7 +37,9 @@ export function OrdinaTavolo() {
   const [menu, setMenu] = useState<MenuPubblico | null>(null);
   const [carrello, setCarrello] = useState<Record<string, RigaCarrello>>({});
   const [vista, setVista] = useState<"menu" | "carrello" | "ordini">("menu");
-  const [codice, setCodice] = useState(() => { try { return localStorage.getItem(chiaveCodice) ?? ""; } catch { return ""; } });
+  const [codice, setCodice] = useState(() => leggi(chiaveCodice));
+  const [richiesta, setRichiesta] = useState(() => leggi(`richiesta-${token}`));
+  const [mostraCodice, setMostraCodice] = useState(false);
   const [nota, setNota] = useState("");
   const [ordini, setOrdini] = useState<OrdineCliente[]>([]);
   const [messaggio, setMessaggio] = useState<{ testo: string; errore?: boolean } | null>(null);
@@ -49,6 +62,29 @@ export function OrdinaTavolo() {
   useEffect(() => { void carica(); const t = setInterval(() => void carica(), 30_000); return () => clearInterval(t); }, [carica]);
   useEffect(() => { void caricaOrdini(); const t = setInterval(() => void caricaOrdini(), 8_000); return () => clearInterval(t); }, [caricaOrdini]);
 
+  // Richiesta inviata a tavolo chiuso: si attende che il personale la accetti; il codice arriva da solo
+  useEffect(() => {
+    if (!richiesta) return;
+    const controlla = async () => {
+      const { data } = await sb().rpc("stato_richiesta", { p_token: token, p_richiesta: richiesta, p_segreto: segretoDispositivo(token) });
+      const e = data as { stato?: string; codice?: string | null; motivo?: string; errore?: string } | null;
+      if (!e || e.errore) { scrivi(`richiesta-${token}`, ""); setRichiesta(""); return; }
+      if (e.stato === "accettata") {
+        scrivi(`richiesta-${token}`, ""); setRichiesta("");
+        if (e.codice) { setCodice(e.codice); scrivi(chiaveCodice, e.codice); }
+        setVista("ordini");
+        setMessaggio({ testo: `Il personale ha confermato il tuo ordine! Codice del tavolo: ${e.codice ?? "—"} (condividilo con chi è con te per ordinare dal suo telefono).` });
+        void carica();
+      } else if (e.stato === "rifiutata" || e.stato === "scaduta") {
+        scrivi(`richiesta-${token}`, ""); setRichiesta("");
+        setMessaggio({ testo: e.stato === "scaduta" ? "Nessuno ha ancora risposto: chiama il personale al tavolo." : `Il personale non ha accettato la richiesta${e.motivo ? `: ${e.motivo}` : ""}.`, errore: true });
+      }
+    };
+    void controlla();
+    const t = setInterval(() => void controlla(), 4_000);
+    return () => clearInterval(t);
+  }, [richiesta, token, chiaveCodice, carica]);
+
   const aspetto = menu?.aspetto ?? ASPETTO_PREDEFINITO;
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); }, [aspetto.font_titoli, aspetto.font_testo]);
   const stile = {
@@ -67,25 +103,36 @@ export function OrdinaTavolo() {
   });
   const inAttesa = useMemo(() => ordini.filter((o) => o.stato === "da_confermare").length, [ordini]);
 
-  async function invia() {
-    if (!/^\d{4}$/.test(codice)) { setMessaggio({ testo: "Inserisci il codice di 4 cifre che ti ha dato il personale", errore: true }); return; }
-    setInvio(true); setMessaggio(null);
-    const { data, error } = await sb().rpc("invia_ordine", {
-      p_token: token, p_codice: codice, p_nota: nota.trim(),
+  async function inviaRichiesta() {
+    const { data, error } = await sb().rpc("richiedi_tavolo", {
+      p_token: token, p_segreto: segretoDispositivo(token), p_nota: nota.trim(),
       p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim() })),
     });
-    setInvio(false);
-    const esito = data as { errore?: string; codice_errato?: boolean } | null;
-    if (error || esito?.errore) {
-      if (esito?.codice_errato) { setCodice(""); try { localStorage.removeItem(chiaveCodice); } catch { /* memoria non disponibile */ } }
-      setMessaggio({ testo: esito?.errore ?? error?.message ?? "Invio non riuscito", errore: true });
-      if (error) void carica();
-      return;
-    }
-    try { localStorage.setItem(chiaveCodice, codice); } catch { /* memoria non disponibile */ }
-    setCarrello({}); setNota(""); setVista("ordini");
-    setMessaggio({ testo: "Ordine inviato! Il personale lo sta confermando." });
-    void caricaOrdini();
+    const e = data as { richiesta?: string; errore?: string } | null;
+    if (error || !e?.richiesta) { setMessaggio({ testo: e?.errore ?? error?.message ?? "Invio non riuscito", errore: true }); void carica(); return; }
+    scrivi(`richiesta-${token}`, e.richiesta); setRichiesta(e.richiesta);
+    setCarrello({}); setNota("");
+    setMessaggio({ testo: "Richiesta inviata! Il personale sta arrivando a confermare il tuo ordine." });
+  }
+
+  async function invia() {
+    setInvio(true); setMessaggio(null);
+    try {
+      if (!/^\d{4}$/.test(codice)) { await inviaRichiesta(); return; }
+      const { data, error } = await sb().rpc("invia_ordine", {
+        p_token: token, p_codice: codice, p_nota: nota.trim(),
+        p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim() })),
+      });
+      const esito = data as { errore?: string; codice_errato?: boolean } | null;
+      // Codice vecchio (tavolo chiuso e riaperto) o sbagliato: si passa alla richiesta al personale
+      if (esito?.codice_errato || esito?.errore?.includes("non è ancora aperto")) {
+        setCodice(""); scrivi(chiaveCodice, ""); await inviaRichiesta(); return;
+      }
+      if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? "Invio non riuscito", errore: true }); if (error) void carica(); return; }
+      setCarrello({}); setNota(""); setVista("ordini");
+      setMessaggio({ testo: "Ordine inviato! Il personale lo sta confermando." });
+      void caricaOrdini();
+    } finally { setInvio(false); }
   }
 
   if (info === null) return <p className="centrato muto">Caricamento…</p>;
@@ -97,7 +144,7 @@ export function OrdinaTavolo() {
         {aspetto.logo_dati || aspetto.logo_url ? <img className="menu-logo" src={(aspetto.logo_dati || aspetto.logo_url)!} alt={info.locale} /> : <h1>{info.locale}</h1>}
         <p className="ordina-tavolo">Tavolo {info.tavolo}</p>
       </header>
-      {!info.aperto && <p className="ordina-avviso">Il tavolo non è ancora aperto: puoi sfogliare il menu, per ordinare chiedi al personale di aprirlo.</p>}
+      {richiesta && <p className="ordina-avviso" role="status">⏳ Richiesta inviata: il personale sta arrivando a confermare il tuo ordine…</p>}
       {messaggio && <p className={`ordina-avviso${messaggio.errore ? " errore" : " ok"}`} role="status">{messaggio.testo}</p>}
 
       <nav className="ordina-schede">
@@ -150,14 +197,18 @@ export function OrdinaTavolo() {
               <label className="ordina-campo">Nota per il personale
                 <input maxLength={200} value={nota} placeholder="Facoltativa" onChange={(e) => setNota(e.target.value)} />
               </label>
-              <label className="ordina-campo">Codice del tavolo
-                <input inputMode="numeric" pattern="[0-9]*" maxLength={4} value={codice} placeholder="4 cifre, te lo dà il personale"
-                  onChange={(e) => setCodice(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-              </label>
-              <button className="ordina-invia" disabled={invio || !info.aperto} onClick={() => void invia()}>
+              {mostraCodice || codice ? (
+                <label className="ordina-campo">Codice del tavolo (facoltativo)
+                  <input inputMode="numeric" pattern="[0-9]*" maxLength={4} value={codice} placeholder="4 cifre"
+                    onChange={(e) => setCodice(e.target.value.replace(/\D/g, "").slice(0, 4))} />
+                </label>
+              ) : (
+                <button className="ordina-link" onClick={() => setMostraCodice(true)}>Hai già il codice del tavolo? Inseriscilo</button>
+              )}
+              <button className="ordina-invia" disabled={invio || !!richiesta} onClick={() => void invia()}>
                 {invio ? "Invio…" : `Invia ordine · ${euro(totale)}`}
               </button>
-              <p className="menu-allergeni">L'ordine viene confermato dal personale prima di andare in cucina.</p>
+              <p className="menu-allergeni">L'ordine viene confermato dal personale prima di andare in cucina.{!codice && " Senza codice, il personale riceve la tua richiesta e apre il tavolo."}</p>
             </>
           )}
         </section>
@@ -166,7 +217,8 @@ export function OrdinaTavolo() {
       {vista === "ordini" && (
         <section className="menu-categoria">
           <h2>Ordini inviati</h2>
-          {!/^\d{4}$/.test(codice) ? <p className="menu-desc">Inserisci il codice del tavolo nel tuo ordine per vedere gli ordini inviati.</p>
+          {/^\d{4}$/.test(codice) && <p className="ordina-codice">Codice del tavolo: <strong>{codice}</strong> · condividilo con chi è con te</p>}
+          {!/^\d{4}$/.test(codice) ? <p className="menu-desc">{richiesta ? "In attesa della conferma del personale…" : "Qui vedrai gli ordini dopo la conferma del personale."}</p>
             : ordini.length === 0 ? <p className="menu-desc">Nessun ordine inviato da questo tavolo.</p>
             : ordini.map((o) => (
               <article key={o.id} className="menu-piatto">
