@@ -9,6 +9,7 @@ import { Aspetto } from "./pagine/Aspetto";
 import { MenuPubblico } from "./pagine/MenuPubblico";
 import { Sala } from "./pagine/Sala";
 import { OrdinaTavolo } from "./pagine/OrdinaTavolo";
+import { Impostazioni } from "./pagine/Impostazioni";
 
 function AreaRiservata() {
   const { pronta, sessione, locale, puoModificare } = useSessione();
@@ -21,6 +22,7 @@ function AreaRiservata() {
         <Route path="/catalogo" element={<Catalogo />} />
         <Route path="/sala" element={<Sala />} />
         <Route path="/ordini" element={<Navigate to="/sala" replace />} />
+        <Route path="/impostazioni" element={<Impostazioni />} />
         {puoModificare && <Route path="/aspetto" element={<Aspetto />} />}
         <Route path="*" element={<Navigate to="/catalogo" replace />} />
       </Route>

@@ -60,7 +60,7 @@ set local role anon; select pg_temp.anonimo();
 select is(public.stato_richiesta('token-tavolo-nove-prova', (select richiesta from ctx), 'segreto-del-telefono-123') ->> 'codice',
           (select codice from ctx), 'Il codice arriva da solo sul telefono');
 select is(public.invia_ordine('token-tavolo-nove-prova', (select codice from ctx), '[{"prodotto_id":"c4000000-0000-0000-0000-000000000001","quantita":1}]') ->> 'stato',
-          'da_confermare', 'Con il codice ricevuto il cliente ordina di nuovo');
+          'confermato', 'Con il codice ricevuto il cliente ordina e va diretto in cucina');
 
 -- Un amico al tavolo già aperto: nuova richiesta, accettata senza riaprire
 insert into ctx (richiesta) select (public.richiedi_tavolo('token-tavolo-nove-prova', 'telefono-amico-abcdef-99',

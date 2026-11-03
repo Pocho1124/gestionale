@@ -11,7 +11,7 @@ interface RigaCarrello { piatto: PiattoMenu; quantita: number; nota: string }
 interface OrdineCliente { id: string; stato: string; motivo: string; creato_at: string; righe: { nome: string; quantita: number; prezzo_cent: number; nota: string }[] }
 
 const STATI: Record<string, { testo: string; icona: string }> = {
-  da_confermare: { testo: "In attesa di conferma", icona: "⏳" }, confermato: { testo: "Confermato", icona: "✅" },
+  da_confermare: { testo: "In attesa di conferma", icona: "⏳" }, confermato: { testo: "Inviato in cucina", icona: "✅" },
   in_preparazione: { testo: "In preparazione", icona: "👨‍🍳" }, pronto: { testo: "Pronto, sta arrivando", icona: "🛎️" },
   servito: { testo: "Servito", icona: "🍽️" }, rifiutato: { testo: "Non accettato", icona: "❌" },
 };
@@ -42,6 +42,8 @@ export function OrdinaTavolo() {
   const [mostraCodice, setMostraCodice] = useState(false);
   const [nota, setNota] = useState("");
   const [ordini, setOrdini] = useState<OrdineCliente[]>([]);
+  const [conto, setConto] = useState<string | null>(null);
+  const [notaConto, setNotaConto] = useState("");
   const [messaggio, setMessaggio] = useState<{ testo: string; errore?: boolean } | null>(null);
   const [invio, setInvio] = useState(false);
 
@@ -56,7 +58,10 @@ export function OrdinaTavolo() {
   const caricaOrdini = useCallback(async () => {
     if (!/^\d{4}$/.test(codice)) return;
     const { data } = await sb().rpc("ordini_tavolo", { p_token: token, p_codice: codice });
-    if (data && !(data as { errore?: string }).errore) setOrdini((data as { ordini: OrdineCliente[] }).ordini);
+    if (data && !(data as { errore?: string }).errore) {
+      setOrdini((data as { ordini: OrdineCliente[] }).ordini);
+      setConto((data as { conto?: string | null }).conto ?? null);
+    }
   }, [token, codice]);
 
   useEffect(() => { void carica(); const t = setInterval(() => void carica(), 30_000); return () => clearInterval(t); }, [carica]);
@@ -73,7 +78,7 @@ export function OrdinaTavolo() {
         scrivi(`richiesta-${token}`, ""); setRichiesta("");
         if (e.codice) { setCodice(e.codice); scrivi(chiaveCodice, e.codice); }
         setVista("ordini");
-        setMessaggio({ testo: `Il personale ha confermato il tuo ordine! Codice del tavolo: ${e.codice ?? "—"} (condividilo con chi è con te per ordinare dal suo telefono).` });
+        setMessaggio({ testo: `Tavolo aperto e ordine inviato in cucina! Codice del tavolo: ${e.codice ?? "—"} — d'ora in poi gli ordini vanno diretti in cucina; condividilo con chi è con te.` });
         void carica();
       } else if (e.stato === "rifiutata" || e.stato === "scaduta") {
         scrivi(`richiesta-${token}`, ""); setRichiesta("");
@@ -130,7 +135,7 @@ export function OrdinaTavolo() {
       }
       if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? "Invio non riuscito", errore: true }); if (error) void carica(); return; }
       setCarrello({}); setNota(""); setVista("ordini");
-      setMessaggio({ testo: "Ordine inviato! Il personale lo sta confermando." });
+      setMessaggio({ testo: "Ordine inviato in cucina! 🍽️" });
       void caricaOrdini();
     } finally { setInvio(false); }
   }
@@ -147,10 +152,10 @@ export function OrdinaTavolo() {
       {richiesta && <p className="ordina-avviso" role="status">⏳ Richiesta inviata: il personale sta arrivando a confermare il tuo ordine…</p>}
       {messaggio && <p className={`ordina-avviso${messaggio.errore ? " errore" : " ok"}`} role="status">{messaggio.testo}</p>}
 
-      <nav className="ordina-schede">
+      <nav className="ordina-schede" aria-label="Sezioni">
         <button className={vista === "menu" ? "attiva" : ""} onClick={() => setVista("menu")}>Menu</button>
         <button className={vista === "carrello" ? "attiva" : ""} onClick={() => setVista("carrello")}>Il tuo ordine{pezzi ? ` (${pezzi})` : ""}</button>
-        <button className={vista === "ordini" ? "attiva" : ""} onClick={() => setVista("ordini")}>Ordini inviati{inAttesa ? " ⏳" : ""}</button>
+        <button className={vista === "ordini" ? "attiva" : ""} onClick={() => setVista("ordini")}>Ordini e conto{inAttesa ? " ⏳" : ""}</button>
       </nav>
 
       {vista === "menu" && menu?.categorie.map((c) => (
@@ -208,7 +213,7 @@ export function OrdinaTavolo() {
               <button className="ordina-invia" disabled={invio || !!richiesta} onClick={() => void invia()}>
                 {invio ? "Invio…" : `Invia ordine · ${euro(totale)}`}
               </button>
-              <p className="menu-allergeni">L'ordine viene confermato dal personale prima di andare in cucina.{!codice && " Senza codice, il personale riceve la tua richiesta e apre il tavolo."}</p>
+              <p className="menu-allergeni">{codice ? "L'ordine va diretto in cucina." : "Il personale riceve la tua richiesta, apre il tavolo e da lì gli ordini vanno diretti in cucina."}</p>
             </>
           )}
         </section>
@@ -218,6 +223,19 @@ export function OrdinaTavolo() {
         <section className="menu-categoria">
           <h2>Ordini inviati</h2>
           {/^\d{4}$/.test(codice) && <p className="ordina-codice">Codice del tavolo: <strong>{codice}</strong> · condividilo con chi è con te</p>}
+          {/^\d{4}$/.test(codice) && ordini.some((o) => o.stato !== "rifiutato") && (
+            conto === "in_attesa" ? <p className="ordina-avviso ok">🧾 Conto richiesto: il personale sta arrivando.</p> : (
+              <div className="ordina-conto">
+                <input maxLength={120} value={notaConto} placeholder="Nota per il conto (es. pago con carta, conti separati)" onChange={(e) => setNotaConto(e.target.value)} />
+                <button className="ordina-invia" onClick={async () => {
+                  const { data, error } = await sb().rpc("chiedi_conto", { p_token: token, p_codice: codice, p_nota: notaConto.trim() });
+                  const esito = data as { errore?: string } | null;
+                  if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? "Richiesta non riuscita", errore: true }); return; }
+                  setConto("in_attesa"); setMessaggio({ testo: "Conto richiesto: il personale sta arrivando. 🧾" });
+                }}>🧾 Chiedi il conto · {euro(ordini.filter((o) => o.stato !== "rifiutato").reduce((n, o) => n + o.righe.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0))}</button>
+              </div>
+            )
+          )}
           {!/^\d{4}$/.test(codice) ? <p className="menu-desc">{richiesta ? "In attesa della conferma del personale…" : "Qui vedrai gli ordini dopo la conferma del personale."}</p>
             : ordini.length === 0 ? <p className="menu-desc">Nessun ordine inviato da questo tavolo.</p>
             : ordini.map((o) => (

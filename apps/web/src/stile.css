@@ -378,3 +378,17 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .ordina-link { margin-top: 14px; background: none; border: 0; padding: 0; color: var(--m-primario); font: 600 .9rem var(--m-font-testo); text-decoration: underline; cursor: pointer; }
 .ordina-codice { margin: 8px 0; padding: 10px 12px; border: 2px dashed var(--m-primario); border-radius: 10px; text-align: center; }
 .ordina-codice strong { letter-spacing: .3em; font-size: 1.2rem; }
+
+/* Popup del conto */
+.popup-sfondo { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 16px; }
+.popup { background: var(--superficie); color: var(--testo); border-radius: 18px; padding: 22px; width: min(420px, 100%); text-align: center; display: grid; gap: 8px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4); animation: entra .2s ease-out; }
+.popup h2 { margin: 0; } .popup p { margin: 0; }
+.popup-icona { font-size: 2.6rem; }
+.popup-azioni { display: grid; gap: 8px; margin-top: 8px; }
+.popup-dopo { background: none; border: 0; color: var(--muto); cursor: pointer; text-decoration: underline; }
+@keyframes entra { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+.tabella { width: 100%; border-collapse: collapse; } .tabella th, .tabella td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--linea); }
+.tabella td.numero { font-variant-numeric: tabular-nums; }
+.ordina-conto { display: grid; gap: 8px; margin: 12px 0; }
+.ordina-conto input { border: 1px solid color-mix(in srgb, var(--m-testo) 30%, transparent); background: transparent; color: var(--m-testo); border-radius: 8px; padding: 8px 10px; font: 400 .9rem var(--m-font-testo); }

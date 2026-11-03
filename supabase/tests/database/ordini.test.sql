@@ -55,20 +55,23 @@ select throws_ok($$ select public.invia_ordine('token-di-prova-tavolo-7', (selec
                     '[{"prodotto_id":"b4000000-0000-0000-0000-000000000002","quantita":1}]') $$, '22023', null, 'Un piatto esaurito non si ordina');
 select is(public.invia_ordine('token-di-prova-tavolo-7', (select codice from ctx),
           '[{"prodotto_id":"b4000000-0000-0000-0000-000000000001","quantita":2,"nota":"senza rucola"}]', 'Siamo di fretta') ->> 'stato',
-          'da_confermare', 'Con QR e codice giusti l''ordine arriva da confermare');
+          'confermato', 'Con QR e codice giusti l''ordine va diretto in cucina');
 select is(jsonb_array_length(public.ordini_tavolo('token-di-prova-tavolo-7', (select codice from ctx)) -> 'ordini'), 1, 'Il cliente vede il suo ordine');
 select throws_ok($$ select count(*) from public.ordini $$, '42501', null, 'Il cliente non legge la tabella degli ordini');
 select throws_ok($$ select public.verifica_tavolo('token-di-prova-tavolo-7', '0000') $$, '42501', null, 'La verifica interna non è richiamabile dal cliente');
 
--- Lo staff decide
+-- Lo staff decide (ordine da confermare creato a mano per provare i permessi)
+reset role;
+insert into public.ordini (id, locale_id, sessione_id, tavolo_id, stato)
+  select 'b5000000-0000-0000-0000-000000000001', locale_id, id, tavolo_id, 'da_confermare' from public.sessioni_tavolo where chiusa_at is null;
 set local role authenticated; select pg_temp.come('b0444444-4444-4444-4444-444444444444');
-select throws_ok($$ select public.decidi_ordine((select id from public.ordini limit 1), true) $$, '42501', null, 'La cucina non conferma gli ordini');
+select throws_ok($$ select public.decidi_ordine('b5000000-0000-0000-0000-000000000001', true) $$, '42501', null, 'La cucina non conferma gli ordini');
 select pg_temp.come('b0333333-3333-3333-3333-333333333333');
-select lives_ok($$ select public.decidi_ordine((select id from public.ordini limit 1), true) $$, 'Il cameriere conferma l''ordine');
-select is((select prezzo_cent * quantita from public.righe_ordine limit 1), 2400, 'Il prezzo è copiato nell''ordine');
+select lives_ok($$ select public.decidi_ordine('b5000000-0000-0000-0000-000000000001', true) $$, 'Il cameriere conferma l''ordine');
+select is((select sum(prezzo_cent * quantita)::int from public.righe_ordine), 2400, 'Il prezzo è copiato nell''ordine');
 select pg_temp.come('b0444444-4444-4444-4444-444444444444');
-select lives_ok($$ select public.avanza_ordine((select id from public.ordini limit 1), 'in_preparazione') $$, 'La cucina mette in preparazione');
-select throws_ok($$ select public.avanza_ordine((select id from public.ordini limit 1), 'servito') $$, '22023', null, 'Non si saltano i passaggi');
+select lives_ok($$ select public.avanza_ordine('b5000000-0000-0000-0000-000000000001', 'in_preparazione') $$, 'La cucina mette in preparazione');
+select throws_ok($$ select public.avanza_ordine('b5000000-0000-0000-0000-000000000001', 'servito') $$, '22023', null, 'Non si saltano i passaggi');
 
 -- Dieci codici sbagliati bloccano il tavolo
 set local role anon; select pg_temp.anonimo();

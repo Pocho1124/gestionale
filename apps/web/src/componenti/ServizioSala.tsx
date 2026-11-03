@@ -3,6 +3,8 @@ import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
+import { stampaConto } from "../lib/conto";
+import { useSessione } from "../lib/sessione";
 
 export interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string }
 export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string; stato: string; origine: string; nota: string; motivo: string; creato_at: string; righe_ordine: RigaOrdine[] }
@@ -115,6 +117,7 @@ export function PannelloTavolo(props: {
   onFatto: () => Promise<void>;
 }) {
   const avvisa = useAvviso();
+  const { locale } = useSessione();
   const { tavolo, sessione } = props;
   const [coperti, setCoperti] = useState(2);
   const [attesa, setAttesa] = useState(false);
@@ -205,6 +208,10 @@ export function PannelloTavolo(props: {
             </div>
           )}
 
+          <button className="btn" onClick={async () => {
+            const errore = await stampaConto(sessione.id, locale?.nome ?? "");
+            if (errore) avvisa(errore, "errore");
+          }}>🖨️ Stampa conto</button>
           <button className="btn btn-pericolo" disabled={attesa}
             onClick={() => { if (confirm(`Chiudere il tavolo ${tavolo.nome}? Il codice ${sessione.codice} smetterà di valere.`)) void esegui(() => sb().rpc("chiudi_tavolo", { p_tavolo: tavolo.id }), `Tavolo ${tavolo.nome} chiuso`); }}>
             Chiudi tavolo

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useSessione } from "../lib/sessione";
 import { sb } from "../lib/supabase";
+import { NotificheSala } from "./NotificheSala";
 
 /** Numero di ordini da confermare, aggiornato in tempo reale. */
 function useDaConfermare(localeId?: string) {
@@ -47,6 +48,7 @@ export function Guscio() {
           <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>
           <NavLink to="/catalogo">Catalogo</NavLink>
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
+          {ruolo === "owner" && <NavLink to="/impostazioni">Impostazioni</NavLink>}
           <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>
         </nav>
         <div className="barra-utente">
@@ -55,6 +57,7 @@ export function Guscio() {
         </div>
       </header>
       <main className="contenuto"><Outlet /></main>
+      {ruolo && ruolo !== "cucina" && <NotificheSala localeId={locale.id} localeNome={locale.nome} />}
     </div>
   );
 }

@@ -759,15 +759,36 @@ async function chiediConferma(chat, azione, cat) {
 // ---------------------------------------------------------------- Notifiche di sala (richieste dal tavolo e ordini da confermare)
 const notificati = new Set();
 let erroreSalaSegnalato = false;
+const avvioBot = new Date().toISOString();
+
+/** Utenti gestiti dal backoffice (Impostazioni), aggiornati ogni 30 s; quelli del file di configurazione restano sempre validi. */
+let utentiWeb = new Set();
+async function aggiornaUtenti() {
+  try {
+    const righe = await db(`telegram_utenti?select=telegram_id&locale_id=eq.${C.locale}&attivo=eq.true`);
+    utentiWeb = new Set(righe.map((r) => String(r.telegram_id)));
+  } catch { /* tabella non ancora presente o rete: si tiene l'elenco precedente */ }
+}
+export const autorizzato = (id) => C.utenti.has(String(id)) || utentiWeb.has(String(id));
+const tuttiGliUtenti = () => new Set([...C.utenti, ...utentiWeb]);
 
 export async function controllaSala() {
   const quindici = encodeURIComponent(new Date(Date.now() - 15 * 60_000).toISOString());
-  const [richieste, ordini] = await Promise.all([
+  const dall = encodeURIComponent(avvioBot);
+  const [richieste, ordini, conti] = await Promise.all([
     db(`richieste_tavolo?select=id,righe,nota,tavoli(nome)&locale_id=eq.${C.locale}&stato=eq.in_attesa&creato_at=gte.${quindici}&order=creato_at`),
-    db(`ordini?select=id,nota,tavoli(nome),righe_ordine(nome,quantita,prezzo_cent,nota)&locale_id=eq.${C.locale}&stato=eq.da_confermare&order=creato_at`),
+    // Ordini dal telefono: da confermare (casi particolari) oppure già in cucina, solo come aggiornamento
+    db(`ordini?select=id,stato,nota,tavoli(nome),righe_ordine(nome,quantita,prezzo_cent,nota)&locale_id=eq.${C.locale}&origine=eq.cliente&or=(stato.eq.da_confermare,creato_at.gte.${dall})&order=creato_at`),
+    db(`richieste_conto?select=id,nota,sessione_id,tavoli(nome)&locale_id=eq.${C.locale}&stato=eq.in_attesa&order=creato_at`),
   ]);
-  const nuove = richieste.filter((r) => !notificati.has(r.id)), nuovi = ordini.filter((o) => !notificati.has(o.id));
-  if (!nuove.length && !nuovi.length) return;
+  const nuove = richieste.filter((r) => !notificati.has(r.id)), nuovi = ordini.filter((o) => !notificati.has(o.id)), nuoviConti = conti.filter((c) => !notificati.has(c.id));
+  if (!nuove.length && !nuovi.length && !nuoviConti.length) return;
+  // Totale del tavolo per le richieste di conto
+  const totali = new Map();
+  for (const c of nuoviConti) {
+    const ord = await db(`ordini?select=righe_ordine(quantita,prezzo_cent)&sessione_id=eq.${c.sessione_id}&stato=neq.rifiutato`);
+    totali.set(c.id, ord.reduce((n, o) => n + o.righe_ordine.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0));
+  }
   const prodotti = nuove.length ? new Map((await db(`prodotti?select=id,nome,prezzo_cent&locale_id=eq.${C.locale}`)).map((p) => [p.id, p])) : new Map();
   const righeTesto = (righe) => righe.map((r) => `• ${r.quantita}× ${r.nome}${r.nota ? ` (${r.nota})` : ""}`).join("\n");
   const messaggi = [
@@ -776,13 +797,18 @@ export async function controllaSala() {
       return { id: r.id, testo: `🔔 Tavolo ${r.tavoli?.nome ?? "?"} vuole ordinare\n${righeTesto(righe)}\nTotale ${euro(righe.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${r.nota ? `\n📝 ${r.nota}` : ""}`,
                pulsanti: [{ text: "✅ Apri tavolo e conferma", callback_data: `sa:${r.id}` }, { text: "❌ Rifiuta", callback_data: `sr:${r.id}` }] };
     }),
-    ...nuovi.map((o) => ({ id: o.id, testo: `⏳ Tavolo ${o.tavoli?.nome ?? "?"}: nuovo ordine\n${righeTesto(o.righe_ordine)}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}`,
-                          pulsanti: [{ text: "✅ Conferma", callback_data: `so:${o.id}` }, { text: "❌ Rifiuta", callback_data: `sx:${o.id}` }] })),
+    ...nuovi.map((o) => o.stato === "da_confermare"
+      ? { id: o.id, testo: `⏳ Tavolo ${o.tavoli?.nome ?? "?"}: ordine da confermare\n${righeTesto(o.righe_ordine)}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}`,
+          pulsanti: [{ text: "✅ Conferma", callback_data: `so:${o.id}` }, { text: "❌ Rifiuta", callback_data: `sx:${o.id}` }] }
+      : { id: o.id, testo: `🍽️ Tavolo ${o.tavoli?.nome ?? "?"} ha ordinato (in cucina)\n${righeTesto(o.righe_ordine)}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}` }),
+    ...nuoviConti.map((c) => ({ id: c.id, testo: `🧾 Tavolo ${c.tavoli?.nome ?? "?"} chiede il conto · ${euro(totali.get(c.id) ?? 0)}${c.nota ? `\n📝 ${c.nota}` : ""}\nStampalo dal gestionale.`,
+                               pulsanti: [{ text: "✅ Gestita", callback_data: `sc:${c.id}` }] })),
   ];
   for (const m of messaggi) {
     notificati.add(m.id);
-    for (const utente of C.utenti) {
-      await tg("sendMessage", { chat_id: utente, text: m.testo, reply_markup: { inline_keyboard: [m.pulsanti] } }).catch((e) => log(`Notifica non inviata: ${e.message}`));
+    for (const utente of tuttiGliUtenti()) {
+      await tg("sendMessage", { chat_id: utente, text: m.testo, ...(m.pulsanti ? { reply_markup: { inline_keyboard: [m.pulsanti] } } : {}) })
+        .catch((e) => log(`Notifica non inviata: ${e.message}`));
     }
   }
   if (notificati.size > 2000) notificati.clear();
@@ -794,9 +820,14 @@ export async function gestisciSala(q, tipo, id) {
     if (tipo === "sa") {
       const r = await db("rpc/accetta_richiesta", { metodo: "POST", corpo: { p_richiesta: id, p_coperti: 2 } });
       await tg("answerCallbackQuery", { callback_query_id: q.id, text: `Codice ${r.codice}` });
-      return chiudi(`✅ Tavolo aperto · codice ${r.codice} · ordine confermato.\nIl codice arriva da solo sul telefono del cliente. Coperti impostati a 2: correggili dalla Sala se serve.`);
+      return chiudi(`✅ Tavolo aperto · codice ${r.codice} · ordine in cucina.\nIl codice arriva da solo sul telefono del cliente. Coperti impostati a 2: correggili dalla Sala se serve.`);
     }
     if (tipo === "sr") await db("rpc/rifiuta_richiesta", { metodo: "POST", corpo: { p_richiesta: id, p_motivo: "Chiedi al personale al tavolo" } });
+    if (tipo === "sc") {
+      await db("rpc/gestisci_conto", { metodo: "POST", corpo: { p_richiesta: id } });
+      await tg("answerCallbackQuery", { callback_query_id: q.id, text: "Fatto" });
+      return chiudi("✅ Conto gestito.");
+    }
     if (tipo === "so" || tipo === "sx") {
       await db("rpc/decidi_ordine", { metodo: "POST", corpo: { p_ordine: id, p_conferma: tipo === "so", p_motivo: tipo === "sx" ? "Chiedi al personale al tavolo" : "" } });
     }
@@ -810,7 +841,7 @@ export async function gestisciSala(q, tipo, id) {
 
 async function gestisciPulsante(q) {
   const [tipo, id, scelta] = String(q.data || "").split(":");
-  if (["sa", "sr", "so", "sx"].includes(tipo)) return gestisciSala(q, tipo, id);
+  if (["sa", "sr", "so", "sx", "sc"].includes(tipo)) return gestisciSala(q, tipo, id);
   const pend = inAttesa.get(id);
   inAttesa.delete(id);
   if (tipo === "cat" && pend && pend.scade >= Date.now()) {
@@ -851,6 +882,8 @@ async function gestisciPulsante(q) {
 async function avvia() {
   const io = await tg("getMe");
   log(`Bot @${io.username} avviato. Utenti autorizzati: ${C.utenti.size}`);
+  await aggiornaUtenti();
+  setInterval(() => void aggiornaUtenti(), 30_000);
   // Controllo della sala ogni 5 secondi, in parallelo alla ricezione dei messaggi
   let inCorso = false;
   setInterval(async () => {
@@ -870,7 +903,15 @@ async function avvia() {
         offset = u.update_id + 1;
         const da = u.message?.from?.id ?? u.callback_query?.from?.id;
         const privata = (u.message?.chat?.type ?? u.callback_query?.message?.chat?.type) === "private";
-        if (!privata || !C.utenti.has(String(da))) { log(`Ignorato messaggio da utente non autorizzato ${da}`); continue; }
+        if (!privata) continue;
+        if (!autorizzato(da)) {
+          // A chi non è autorizzato il bot dice solo il suo ID, da comunicare al titolare
+          if (/^\/(id|start)\b/.test(u.message?.text ?? "")) {
+            await invia(u.message.chat.id, `Il tuo ID Telegram è ${da}.\nComunicalo al titolare: lo aggiunge dal gestionale (Impostazioni).`).catch(() => {});
+          }
+          log(`Messaggio da utente non autorizzato ${da}`);
+          continue;
+        }
         try {
           if (u.message) await gestisciMessaggio(u.message);
           else if (u.callback_query) await gestisciPulsante(u.callback_query);
