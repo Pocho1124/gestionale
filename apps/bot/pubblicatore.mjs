@@ -1,4 +1,5 @@
-// Pubblica su GitHub Pages una copia statica del menu dei clienti (solo dati pubblici).
+// Pubblica una copia statica del menu dei clienti (solo dati pubblici) sul dominio del locale tramite Cloudflare:
+// le pagine vanno nell'archivio KV del locale e il Worker del menu le serve su menu.<dominio>.
 // Il server non riceve nessuna connessione da internet: è lui a inviare la pagina quando il menu cambia.
 // Nessuna dipendenza esterna: Node 22. Configurazione da variabili d'ambiente.
 
@@ -10,8 +11,11 @@ const C = {
   anon: obbligatoria("SUPABASE_ANON_KEY"),
   // Archivio delle immagini (Supabase Storage), raggiunto sulla rete interna dei servizi
   archivio: (process.env.ARCHIVIO_URL || "http://immagini:5000").replace(/\/$/, ""),
-  token: obbligatoria("GITHUB_TOKEN"),
-  repo: obbligatoria("GITHUB_REPO"),                 // es. Pocho1124/menu
+  // Destinazione: archivio KV di Cloudflare letto dal Worker del menu sul dominio del locale
+  cloudflare: {
+    account: obbligatoria("CLOUDFLARE_ACCOUNT_ID"), kv: obbligatoria("CLOUDFLARE_KV_ID"), token: obbligatoria("CLOUDFLARE_TOKEN"),
+    indirizzo: obbligatoria("MENU_URL").replace(/\/$/, ""),     // es. https://menu.enotechiasantalucia.it
+  },
   slugs: obbligatoria("SLUGS").split(",").map((s) => s.trim()).filter(Boolean),
   // Al massimo 15 s tra un controllo e l'altro; il bot chiede comunque una pubblicazione immediata dopo ogni modifica
   intervallo: Math.min(Number(process.env.INTERVALLO_SECONDI || 15), 15) * 1000,
@@ -312,31 +316,51 @@ async function menuPubblico(slug) {
   return r.json();
 }
 
-async function github(percorso, opzioni = {}) {
-  const r = await fetch(`https://api.github.com/repos/${C.repo}/contents/${percorso}`, {
-    ...opzioni,
-    headers: {
-      Authorization: `Bearer ${C.token}`, Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "gestionale-pubblicatore",
-      ...(opzioni.body ? { "Content-Type": "application/json" } : {}),
-    },
-    signal: AbortSignal.timeout(30_000),
+
+const TIPI = { html: "text/html; charset=utf-8", json: "application/json; charset=utf-8", jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const giaInviati = new Map();   // chiave -> impronta dell'ultimo contenuto inviato a Cloudflare
+
+/** Scrive un file nell'archivio KV del menu (Cloudflare): il Worker lo serve sul dominio. */
+async function suCloudflare(percorso, base64) {
+  if (!/^[a-z0-9][a-z0-9._/-]*$/i.test(percorso) || percorso.includes("..")) throw new Error(`percorso non valido: ${percorso}`);
+  const impronta = createHash("sha256").update(base64).digest("hex");
+  if (giaInviati.get(percorso) === impronta) return;
+  const est = percorso.split(".").pop().toLowerCase();
+  const modulo = new FormData();
+  modulo.append("value", new Blob([Buffer.from(base64, "base64")]));
+  modulo.append("metadata", JSON.stringify({ tipo: TIPI[est] ?? "application/octet-stream" }));
+  const cf = C.cloudflare;
+  const r = await fetch(`${API_KV()}/values/${encodeURIComponent(percorso)}`, {
+    method: "PUT", body: modulo, headers: { Authorization: `Bearer ${cf.token}` }, signal: AbortSignal.timeout(30_000),
   });
-  if (r.status === 404) return null;
-  const j = await r.json();
-  if (!r.ok) throw new Error(`GitHub ${r.status}: ${j.message}`);
-  return j;
+  if (!r.ok) throw new Error(`Cloudflare ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  giaInviati.set(percorso, impronta);
 }
 
-async function pubblicaBinario(percorso, base64, messaggio) {
-  const esistente = await github(percorso);
-  await github(percorso, {
-    method: "PUT",
-    body: JSON.stringify({ message: messaggio, content: base64, ...(esistente ? { sha: esistente.sha } : {}) }),
-  });
+async function pubblicaBinario(percorso, base64) {
+  return suCloudflare(percorso, base64);
 }
 
-const pubblica = (percorso, testo, messaggio) => pubblicaBinario(percorso, Buffer.from(testo).toString("base64"), messaggio);
+const API_KV = () => `https://api.cloudflare.com/client/v4/accounts/${C.cloudflare.account}/storage/kv/namespaces/${C.cloudflare.kv}`;
+
+/** Elenco delle chiavi con un prefisso (es. le foto di un locale). */
+async function chiaviCloudflare(prefisso) {
+  const r = await fetch(`${API_KV()}/keys?prefix=${encodeURIComponent(prefisso)}&limit=1000`, {
+    headers: { Authorization: `Bearer ${C.cloudflare.token}` }, signal: AbortSignal.timeout(20_000),
+  });
+  if (!r.ok) throw new Error(`Cloudflare ${r.status}`);
+  return ((await r.json()).result ?? []).map((k) => k.name);
+}
+
+async function eliminaCloudflare(chiave) {
+  const r = await fetch(`${API_KV()}/values/${encodeURIComponent(chiave)}`, {
+    method: "DELETE", headers: { Authorization: `Bearer ${C.cloudflare.token}` }, signal: AbortSignal.timeout(20_000),
+  });
+  if (!r.ok && r.status !== 404) throw new Error(`Cloudflare ${r.status}`);
+  giaInviati.delete(chiave);
+}
+
+const pubblica = (percorso, testo) => pubblicaBinario(percorso, Buffer.from(testo).toString("base64"));
 
 const ultimo = new Map();      // slug -> impronta dell'ultimo menu pubblicato
 const ultimeImmagini = new Map();  // "slug/nome" -> impronta dell'ultima immagine pubblicata
@@ -381,7 +405,7 @@ async function immagine(slug, nome, dati, percorso) {
 }
 
 /** Pubblica le foto dei piatti cambiate e rimuove dal sito quelle non più usate. Restituisce id -> percorso relativo. */
-async function fotoDeiPiatti(slug, menu) {
+export async function fotoDeiPiatti(slug, menu) {
   const percorsi = {};
   for (const c of menu.categorie) {
     for (const p of c.prodotti) {
@@ -415,12 +439,12 @@ async function fotoDeiPiatti(slug, menu) {
     }
   }
   // Le foto di piatti rimossi o nascosti non devono restare raggiungibili sul sito pubblico
-  const presenti = await github(`${slug}/foto`).catch(() => null);
+  const presenti = await chiaviCloudflare(`${slug}/foto/`).catch(() => null);
   if (Array.isArray(presenti)) {
-    for (const f of presenti) {
-      const id = f.name.replace(/\.jpg$/, "");
+    for (const chiave of presenti) {
+      const id = chiave.slice(`${slug}/foto/`.length).replace(/\.jpg$/, "");
       if (percorsi[id]) continue;
-      await github(f.path, { method: "DELETE", body: JSON.stringify({ message: `Foto rimossa`, sha: f.sha }) });
+      await eliminaCloudflare(chiave);
       ultimeImmagini.delete(`${slug}/foto/${id}`);
     }
   }
@@ -447,7 +471,7 @@ async function giro() {
       ultimo.set(slug, impronta);
       log(`Pubblicato il menu «${slug}»`);
     } catch (e) {
-      // Offline o GitHub irraggiungibile: online resta l'ultima versione, si riprova al giro successivo
+      // Offline o Cloudflare irraggiungibile: online resta l'ultima versione, si riprova al giro successivo
       log(`Pubblicazione di «${slug}» non riuscita:`, e.message);
     }
   }
@@ -462,12 +486,13 @@ async function giroSicuro() {
 }
 
 async function avvia() {
+  log(`Destinazione del menu: ${C.cloudflare.indirizzo}`);
   // Solo rete interna dei servizi: il bot chiama POST /ora dopo ogni modifica confermata
   createServer((req, res) => {
     if (req.method === "POST" && req.url === "/ora") { res.writeHead(202).end(); void giroSicuro(); }
     else res.writeHead(404).end();
   }).listen(8090);
-  log(`Pubblicatore avviato: ${C.slugs.join(", ")} → ${C.repo}, controllo ogni ${C.intervallo / 1000} s`);
+  log(`Pubblicatore avviato: ${C.slugs.join(", ")} → ${C.cloudflare.indirizzo}, controllo ogni ${C.intervallo / 1000} s`);
   for (;;) {
     await giroSicuro();
     await new Promise((r) => setTimeout(r, C.intervallo));

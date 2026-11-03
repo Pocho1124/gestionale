@@ -1,47 +1,85 @@
 #!/bin/bash
-# Pubblica su internet SOLO il menu dei clienti, come pagina statica su GitHub Pages (gratuito).
-# Il server non apre porte: invia lui la pagina a GitHub quando il menu cambia.
+# Menu pubblico dei clienti sul dominio del locale tramite Cloudflare (Worker + archivio KV).
+# Il server non apre porte: è lui a inviare pagine e immagini a Cloudflare quando il menu cambia.
+# Due token Cloudflare: CONFIGURAZIONE (usato solo ora, non salvato) e PUBBLICAZIONE (solo archivio KV, salvato sul server).
 # Uso (terminale di Cockpit):
 #   sudo docker run --rm --entrypoint cat ghcr.io/pocho1124/gestionale-migrator:latest /deploy/pubblicatore-installa.sh > /tmp/pubblicatore-installa.sh && sudo bash /tmp/pubblicatore-installa.sh
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "Lancia con sudo"; exit 1; }
-[[ -f /opt/gestionale/bot/pubblicatore.mjs ]] || { echo "Codice del pubblicatore assente: rilancia prima installa-pi.sh."; exit 1; }
+[[ -f /opt/gestionale/bot/pubblicatore.mjs ]] || { echo "Codice del pubblicatore assente: lancia prima sudo /opt/gestionale/aggiorna.sh --forza"; exit 1; }
+IMMAGINE=ghcr.io/pocho1124/gestionale-migrator:latest
+API=https://api.cloudflare.com/client/v4
+ENVF=/opt/gestionale/pubblicatore.env
+WORKER=$(mktemp)
+trap 'rm -f "$WORKER"' EXIT
+docker run --rm --entrypoint cat "$IMMAGINE" /deploy/cloudflare/menu-worker.js > "$WORKER"
+[[ -s "$WORKER" ]] || { echo "Worker del menu non trovato nell'immagine: aggiorna prima il server"; exit 1; }
 ANON=$(grep '^ANON_KEY=' /opt/supabase/.env | cut -d= -f2-)
 PSQL=(docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -At)
-
-read -rp "Repository pubblico del menu [Pocho1124/menu]: " REPO
-REPO=${REPO:-Pocho1124/menu}
-[[ "$REPO" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || { echo "Nome del repository non valido."; exit 1; }
-
-read -rsp "Incolla il token GitHub del menu e premi Invio: " TOKEN; echo
-INFO=$(curl -s --max-time 15 -H "Authorization: Bearer $TOKEN" -H "User-Agent: gestionale" "https://api.github.com/repos/$REPO")
-grep -q '"full_name"' <<<"$INFO" || { echo "Repository non trovato o token non valido."; exit 1; }
-grep -q '"private": *false' <<<"$INFO" || { echo "Il repository deve essere PUBBLICO (GitHub Pages gratuito)."; exit 1; }
-grep -q '"push": *true' <<<"$INFO" || { echo "Il token non ha il permesso di scrittura (Contents: Read and write)."; exit 1; }
-echo "Repository $REPO raggiungibile, scrittura consentita."
+json() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
+ok() { python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('success') else (print(json.dumps(d.get('errors')), file=sys.stderr) or 1))"; }
 
 ELENCO=$("${PSQL[@]}" -c "select string_agg(slug, ',' order by slug) from public.locali where attivo")
 echo "Locali da pubblicare: ${ELENCO:-nessuno}"
 read -rp "Premi Invio per confermare, oppure scrivi gli indirizzi separati da virgola: " SCELTA
-SLUGS=${SCELTA:-$ELENCO}
-SLUGS=${SLUGS// /}
+SLUGS=${SCELTA:-$ELENCO}; SLUGS=${SLUGS// /}
 [[ "$SLUGS" =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "Elenco non valido."; exit 1; }
+SLUG=${SLUGS%%,*}
 
+read -rp "ID account Cloudflare (Panoramica del dominio, colonna a destra): " ACCOUNT
+[[ "$ACCOUNT" =~ ^[0-9a-f]{32}$ ]] || { echo "ID account non valido"; exit 1; }
+read -rp "Dominio [enotechiasantalucia.it]: " DOMINIO; DOMINIO=${DOMINIO:-enotechiasantalucia.it}
+read -rp "Indirizzo del menu [menu.$DOMINIO]: " HOST; HOST=${HOST:-menu.$DOMINIO}
+[[ "$HOST" =~ ^[a-z0-9.-]+$ ]] || { echo "Indirizzo non valido"; exit 1; }
+read -rsp "Token di CONFIGURAZIONE (non viene salvato): " TCONF; echo
+read -rsp "Token di PUBBLICAZIONE (solo archivio KV): " TPUB; echo
+cf() { local metodo=$1 percorso=$2; shift 2; curl -sS --max-time 30 -X "$metodo" "$API$percorso" -H "Authorization: Bearer $TCONF" "$@"; }
+
+echo "== 1/6 Verifica dei token"
+curl -sS "$API/user/tokens/verify" -H "Authorization: Bearer $TCONF" | ok || { echo "Token di configurazione non valido"; exit 1; }
+curl -sS "$API/user/tokens/verify" -H "Authorization: Bearer $TPUB" | ok || { echo "Token di pubblicazione non valido"; exit 1; }
+
+echo "== 2/6 Zona del dominio"
+ZONA=$(cf GET "/zones?name=$DOMINIO" | json "d['result'][0]['id'] if d.get('result') else ''")
+[[ -n "$ZONA" ]] || { echo "Dominio $DOMINIO non trovato nell'account (o token senza permesso Zone: Read)"; exit 1; }
+
+echo "== 3/6 Archivio del menu (KV)"
+KV=$(cf GET "/accounts/$ACCOUNT/storage/kv/namespaces?per_page=100" | json "next((n['id'] for n in d.get('result') or [] if n['title']=='menu-gestionale'), '')")
+[[ -n "$KV" ]] || KV=$(cf POST "/accounts/$ACCOUNT/storage/kv/namespaces" -H "Content-Type: application/json" --data '{"title":"menu-gestionale"}' | json "d['result']['id']")
+echo "Archivio: $KV"
+
+echo "== 4/6 Worker del menu"
+META=$(printf '{"main_module":"menu-worker.js","compatibility_date":"2025-01-01","bindings":[{"type":"kv_namespace","name":"MENU","namespace_id":"%s"},{"type":"plain_text","name":"PREDEFINITO","text":"%s"}]}' "$KV" "$SLUG")
+cf PUT "/accounts/$ACCOUNT/workers/scripts/menu" -F "metadata=$META;type=application/json" -F "menu-worker.js=@$WORKER;type=application/javascript+module" | ok \
+  || { echo "Caricamento del Worker non riuscito"; exit 1; }
+
+echo "== 5/6 Indirizzo $HOST"
+cf PUT "/accounts/$ACCOUNT/workers/domains" -H "Content-Type: application/json" \
+  --data "{\"environment\":\"production\",\"hostname\":\"$HOST\",\"service\":\"menu\",\"zone_id\":\"$ZONA\"}" | ok \
+  || { echo "Collegamento di $HOST non riuscito (se esiste già un record DNS «${HOST%%.*}», eliminalo e riprova)"; exit 1; }
+
+echo "== 6/6 Pubblicatore"
+curl -sS -X PUT "$API/accounts/$ACCOUNT/storage/kv/namespaces/$KV/values/prova-scrittura" -H "Authorization: Bearer $TPUB" \
+  -F value=ok -F 'metadata={"tipo":"text/plain"}' | ok || { echo "Il token di pubblicazione non può scrivere nell'archivio KV"; exit 1; }
+[[ -f "$ENVF" ]] && cp "$ENVF" "$ENVF.precedente"
 umask 077
-cat > /opt/gestionale/pubblicatore.env <<ENV
+cat > "$ENVF" <<ENV
 SUPABASE_URL=http://gateway:8000
 SUPABASE_ANON_KEY=$ANON
-GITHUB_TOKEN=$TOKEN
-GITHUB_REPO=$REPO
 SLUGS=$SLUGS
 INTERVALLO_SECONDI=15
+CLOUDFLARE_ACCOUNT_ID=$ACCOUNT
+CLOUDFLARE_KV_ID=$KV
+CLOUDFLARE_TOKEN=$TPUB
+MENU_URL=https://$HOST
 ENV
-chmod 600 /opt/gestionale/pubblicatore.env
+chmod 600 "$ENVF"
 umask 022
+unset TCONF TPUB
 
 mkdir -p /opt/gestionale/pubblicatore-servizio
 cat > /opt/gestionale/pubblicatore-servizio/docker-compose.yml <<'YML'
-# Pubblicatore del menu: solo connessioni in uscita verso GitHub
+# Pubblicatore del menu: solo connessioni in uscita verso Cloudflare
 name: gestionale-pubblicatore
 services:
   pubblicatore:
@@ -63,14 +101,12 @@ networks:
     external: true
     name: supabase_default
 YML
-
 cd /opt/gestionale/pubblicatore-servizio
 docker compose up -d --force-recreate >/dev/null
 sleep 10
 docker logs --tail 6 gestionale-pubblicatore
 
-PROPRIETARIO=$(echo "${REPO%%/*}" | tr '[:upper:]' '[:lower:]')
-NOME_REPO=${REPO##*/}
 echo
 echo "Indirizzi pubblici del menu (da usare nei QR code):"
-for S in ${SLUGS//,/ }; do echo "  https://$PROPRIETARIO.github.io/$NOME_REPO/$S/"; done
+for S in ${SLUGS//,/ }; do echo "  https://$HOST/$S/"; done
+echo "Il certificato HTTPS può richiedere qualche minuto alla prima apertura. Ora puoi eliminare il token di CONFIGURAZIONE da Cloudflare."
