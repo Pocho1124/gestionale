@@ -92,9 +92,10 @@ export async function elabora(r: { file: Blob; dest: { w: number; h: number }; l
     const tipi = r.trasparenza ? ["image/webp", "image/png"] : ["image/jpeg"];
     for (const tipo of tipi) {
       for (const q of r.qualita) {
-        const blob = tela instanceof HTMLCanvasElement
-          ? await new Promise<Blob | null>((ok) => tela.toBlob(ok, tipo, q))
-          : await (tela as OffscreenCanvas).convertToBlob({ type: tipo, quality: q });
+        // Nel worker HTMLCanvasElement non esiste: si riconosce la tela dal metodo che offre
+        const blob = "convertToBlob" in tela
+          ? await (tela as OffscreenCanvas).convertToBlob({ type: tipo, quality: q })
+          : await new Promise<Blob | null>((ok) => (tela as HTMLCanvasElement).toBlob(ok, tipo, q));
         // Alcuni browser non sanno scrivere WebP e restituiscono PNG: si accetta solo il tipo chiesto
         if (blob && blob.type === tipo && blob.size <= r.limite) return blob;
         if (tipo === "image/png") break;   // il PNG non ha qualità: un solo tentativo
