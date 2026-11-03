@@ -7,7 +7,7 @@ import { messaggioErrore } from "../lib/errori";
 import type { Aspetto } from "../lib/tipi";
 import { preparaImmagine } from "../lib/immagini";
 import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
-import { CodaRichieste, PannelloTavolo, suona, type CategoriaBreve, type OrdineSala, type ProdottoBreve, type RichiestaSala } from "../componenti/ServizioSala";
+import { CodaRichieste, PannelloTavolo, suona, type CategoriaBreve, type ComandaStampa, type OrdineSala, type ProdottoBreve, type RichiestaSala } from "../componenti/ServizioSala";
 
 interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_path: string | null; sfondo_opacita: number; pavimento: Pavimento }
 type Pavimento = "parquet" | "cotto" | "marmo" | "cemento" | "nessuno";
@@ -17,6 +17,18 @@ interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoE
 type Selezione = { tipo: "tavolo" | "elemento"; id: string } | null;
 interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string }
 interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "nopass"; password: string; nascosta: boolean; url_ordini: string }
+
+/** Prodotto letto dal database con gruppi e voci, nel formato usato dalla composizione. */
+type GrezzoProdotto = Omit<ProdottoBreve, "gruppi"> & { gruppi_opzioni: { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number;
+  opzioni: { id: string; nome: string; sovrapprezzo_cent: number; disponibile: boolean; posizione: number }[] }[] };
+const daGrezzo = ({ gruppi_opzioni, ...p }: GrezzoProdotto): ProdottoBreve => ({
+  ...p,
+  gruppi: [...(gruppi_opzioni ?? [])].sort((a, b) => a.posizione - b.posizione).map((g) => ({
+    id: g.id, nome: g.nome, min: g.min_scelte, max: g.max_scelte,
+    scelte: g.opzioni.filter((o) => o.disponibile).sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome))
+      .map((o) => ({ id: o.id, nome: o.nome, sovrapprezzo_cent: o.sovrapprezzo_cent })),
+  })),
+});
 
 const W = 1000;
 /** Altezza della piantina in punti, proporzionale alle misure reali della sala. */
@@ -73,6 +85,7 @@ export function Sala() {
   const [richieste, setRichieste] = useState<RichiestaSala[]>([]);
   const [prodotti, setProdotti] = useState<ProdottoBreve[]>([]);
   const [categorie, setCategorie] = useState<CategoriaBreve[]>([]);
+  const [comande, setComande] = useState<ComandaStampa[]>([]);
   const [suoni, setSuoni] = useState(() => { try { return localStorage.getItem("gestionale.suoni") === "1"; } catch { return false; } });
   const noti = useRef<Set<string> | null>(null);
 
@@ -84,16 +97,21 @@ export function Sala() {
       sb().from("tavoli").select("*").eq("locale_id", locale.id).order("nome"),
       sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at").eq("locale_id", locale.id).is("chiusa_at", null),
       sb().from("elementi_sala").select("*").eq("locale_id", locale.id),
-      sb().from("ordini").select("id, tavolo_id, sessione_id, stato, origine, nota, motivo, creato_at, righe_ordine(nome, quantita, prezzo_cent, nota)")
+      sb().from("ordini").select("id, tavolo_id, sessione_id, stato, origine, nota, motivo, creato_at, righe_ordine(nome, quantita, prezzo_cent, nota, opzioni)")
         .eq("locale_id", locale.id).gte("creato_at", new Date(Date.now() - 24 * 3600_000).toISOString()).order("creato_at", { ascending: false }),
       sb().from("richieste_tavolo").select("id, tavolo_id, righe, nota, creato_at").eq("locale_id", locale.id).eq("stato", "in_attesa").gte("creato_at", quindiciMinuti).order("creato_at"),
-      sb().from("prodotti").select("id, nome, prezzo_cent, disponibile, visibile, categoria_id").eq("locale_id", locale.id).order("posizione").order("nome"),
+      sb().from("prodotti").select("id, nome, prezzo_cent, disponibile, visibile, categoria_id, gruppi_opzioni(id, nome, min_scelte, max_scelte, posizione, opzioni(id, nome, sovrapprezzo_cent, disponibile, posizione))")
+        .eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("categorie").select("id, nome").eq("locale_id", locale.id).order("posizione").order("nome"),
     ]);
+    // Stato di stampa delle comande delle ultime 24 ore (tabella assente prima dell'aggiornamento: si ignora)
+    const k = await sb().from("comande_stampa").select("id, ordine_id, stato, tipo, errore, reparti(nome)").eq("locale_id", locale.id)
+      .gte("creata_at", new Date(Date.now() - 24 * 3600_000).toISOString());
+    if (!k.error) setComande(k.data as unknown as ComandaStampa[]);
     const errore = s.error ?? t.error ?? x.error ?? e.error ?? o.error ?? r.error ?? p.error ?? c.error;
     if (errore) { avvisa(messaggioErrore(errore), "errore"); return; }
     setSale(s.data as Sala[]); setTavoli(t.data as Tavolo[]); setSessioni(x.data as SessioneT[]); setElementi(e.data as Elemento[]);
-    setOrdini(o.data as unknown as OrdineSala[]); setProdotti(p.data as ProdottoBreve[]); setCategorie(c.data as CategoriaBreve[]);
+    setOrdini(o.data as unknown as OrdineSala[]); setProdotti((p.data as unknown as GrezzoProdotto[]).map(daGrezzo)); setCategorie(c.data as CategoriaBreve[]);
     const nuoveRichieste = r.data as RichiestaSala[];
     setRichieste(nuoveRichieste);
     // Suono per richieste e ordini da confermare arrivati dopo il primo caricamento
@@ -113,6 +131,7 @@ export function Sala() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tavoli", filter: `locale_id=eq.${locale.id}` }, () => void carica())
       .on("postgres_changes", { event: "*", schema: "public", table: "ordini", filter: `locale_id=eq.${locale.id}` }, () => void carica())
       .on("postgres_changes", { event: "*", schema: "public", table: "richieste_tavolo", filter: `locale_id=eq.${locale.id}` }, () => void carica())
+      .on("postgres_changes", { event: "*", schema: "public", table: "comande_stampa", filter: `locale_id=eq.${locale.id}` }, () => void carica())
       .subscribe();
     // Orologio dei tavoli e rete di sicurezza se il tempo reale si interrompe
     const t = setInterval(() => { setOra((n) => n + 1); void carica(); }, 20_000);
@@ -183,7 +202,7 @@ export function Sala() {
               <aside className="sala-pannello">
                 {vista === "servizio"
                   ? <PannelloTavolo tavolo={tavoloSel} sessione={tavoloSel ? sessionePer(tavoloSel.id) : undefined} ordini={ordini}
-                      prodotti={prodotti} categorie={categorie} onFatto={carica} />
+                      prodotti={prodotti} categorie={categorie} comande={comande} onFatto={carica} />
                   : <PannelloPiantina locale={locale.id} sala={salaCorrente!} tavolo={tavoloSel} elemento={elementoSel} tavoli={tavoli}
                       onFatto={carica} onSeleziona={setSelezione} />}
               </aside>
@@ -537,7 +556,9 @@ function Cartoncini({ locale, tavoli, sale }: { locale: { id: string; nome: stri
     })();
   }, [locale.id]);
 
-  const base = (salvato?.url_ordini || window.location.origin).replace(/\/?$/, "/");
+  // Senza indirizzo degli ordini si usa il server del locale in HTTP: i telefoni dei clienti non hanno
+  // il certificato interno, e la pagina del tavolo resta apposta raggiungibile anche in HTTP
+  const base = (salvato?.url_ordini || `http://${window.location.hostname}`).replace(/\/?$/, "/");
   const urlTavolo = useCallback((t: Tavolo) => `${base}t/${encodeURIComponent(t.qr_token)}`, [base]);
 
   // QR generati sul dispositivo: nessun servizio esterno

@@ -27,7 +27,7 @@ function useDaConfermare(localeId?: string) {
   return n;
 }
 
-const NOMI_RUOLO = { owner: "Titolare", manager: "Responsabile", cameriere: "Sala", cucina: "Cucina" } as const;
+import { NOMI_RUOLO, puo } from "../lib/permessi";
 
 export function Guscio() {
   const { locale, locali, ruolo, puoModificare, scegliLocale, esci, sessione } = useSessione();
@@ -48,7 +48,9 @@ export function Guscio() {
           <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>
           <NavLink to="/catalogo">Catalogo</NavLink>
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
-          {ruolo === "owner" && <NavLink to="/impostazioni">Impostazioni</NavLink>}
+          {puo(ruolo, "magazzino") && <NavLink to="/magazzino">Magazzino</NavLink>}
+          {puo(ruolo, "cassa") && <NavLink to="/cassa">Cassa</NavLink>}
+          {puo(ruolo, "utenti") && <NavLink to="/impostazioni">Impostazioni</NavLink>}
           <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>
         </nav>
         <div className="barra-utente">
@@ -57,7 +59,7 @@ export function Guscio() {
         </div>
       </header>
       <main className="contenuto"><Outlet /></main>
-      {ruolo && ruolo !== "cucina" && <NotificheSala localeId={locale.id} localeNome={locale.nome} />}
+      {ruolo && ruolo !== "cucina" && <NotificheSala localeId={locale.id} localeNome={locale.nome} gestisceConto={puo(ruolo, "sala.chiudi")} />}
     </div>
   );
 }

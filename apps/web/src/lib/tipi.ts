@@ -1,4 +1,4 @@
-export type Ruolo = "owner" | "manager" | "cameriere" | "cucina";
+export type Ruolo = "owner" | "manager" | "caposala" | "cameriere" | "cucina";
 
 export interface Locale { id: string; nome: string; slug: string; organizzazione_id: string }
 
@@ -30,10 +30,14 @@ export interface MenuPubblico {
       id: string; nome: string; descrizione: string; prezzo_cent: number; disponibile: boolean;
       allergeni: string[]; etichette: string[]; immagine_url: string | null; foto?: number | null;
       vino?: SchedaVino | null; abbinamenti?: { id: string; motivo: string }[]; foto_path?: string | null;
-      opzioni: { nome: string; min: number; max: number; scelte: { nome: string; sovrapprezzo_cent: number }[] }[];
+      opzioni: GruppoScelte[];
     }[];
   }[];
 }
+
+/** Gruppo di scelte di un piatto componibile (es. «Salumi», da 1 a 3 voci). */
+export interface GruppoScelte { id: string; nome: string; min: number; max: number; scelte: Scelta[] }
+export interface Scelta { id: string; nome: string; sovrapprezzo_cent: number }
 
 export interface SchedaVino {
   tipo: "rosso" | "bianco" | "rosato" | "bollicine" | "dolce";

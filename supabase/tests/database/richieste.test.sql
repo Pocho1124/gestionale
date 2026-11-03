@@ -73,7 +73,9 @@ select is((select count(*) from public.sessioni_tavolo where chiusa_at is null),
 -- Comanda dalla sala
 select lives_ok($$ select public.ordine_sala('c2000000-0000-0000-0000-000000000001', '[{"prodotto_id":"c4000000-0000-0000-0000-000000000001","quantita":3}]', 'Al banco') $$,
                 'Il cameriere aggiunge una comanda');
-select lives_ok($$ select public.chiudi_tavolo('c2000000-0000-0000-0000-000000000001') $$, 'Il cameriere chiude il tavolo');
+select pg_temp.come('c0111111-1111-1111-1111-111111111111');
+select lives_ok($$ select public.chiudi_tavolo('c2000000-0000-0000-0000-000000000001', 'carta') $$, 'L''amministratore chiude il tavolo con il pagamento');
+select pg_temp.come('c0333333-3333-3333-3333-333333333333');
 select throws_ok($$ select public.ordine_sala('c2000000-0000-0000-0000-000000000001', '[{"prodotto_id":"c4000000-0000-0000-0000-000000000001","quantita":1}]') $$,
                  '22023', null, 'A tavolo chiuso la comanda chiede di aprirlo');
 

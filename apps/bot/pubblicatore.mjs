@@ -44,7 +44,7 @@ const PREDEFINITO = {
 export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fotoPiatti = {}, versione = "") {
   const TIPI = { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" };
   const perId = new Map(menu.categorie.flatMap((c) => c.prodotti.map((p) => [p.id, p])));
-  const apribile = (p) => !!(fotoPiatti[p.id] || p.descrizione || p.vino || p.abbinamenti?.length);
+  const apribile = (p) => !!(fotoPiatti[p.id] || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length);
   const numeroVini = menu.categorie.reduce((n, c) => n + c.prodotti.filter((p) => p.vino && p.disponibile).length, 0);
   // Dati per scheda e quiz: senza immagini incorporate, «<» neutralizzato per non chiudere lo <script>
   const dati = JSON.stringify({ versione, foto: fotoPiatti, categorie: menu.categorie }).replace(/</g, "\\u003c");
@@ -70,7 +70,7 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
       <div class="piatti">${c.prodotti.map((p) => `
         <article class="piatto${p.disponibile ? "" : " esaurito"}${apribile(p) ? " apribile" : ""}"${apribile(p) ? ` tabindex="0" role="button" data-id="${esc(p.id)}"` : ""}>
           ${layout === "griglia" && /^https:\/\//.test(p.immagine_url ?? "") ? `<img class="foto" src="${esc(p.immagine_url)}" alt="" loading="lazy">` : ""}
-          <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${esc(euro(p.prezzo_cent))}</span></div>
+          <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${p.opzioni?.length ? "da " : ""}${esc(euro(p.prezzo_cent))}</span></div>
           ${p.vino ? `<p class="vino-info">${esc([TIPI[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · "))}</p>` : ""}
           ${a.mostra_descrizioni && p.descrizione ? `<p class="desc">${esc(p.descrizione)}</p>` : ""}
           ${!p.vino && p.abbinamenti?.length ? `<p class="abbinamento">🍷 Si abbina con ${esc(p.abbinamenti.slice(0, 2).map((x) => perId.get(x.id)?.nome).filter(Boolean).join(" o "))}</p>` : ""}
@@ -235,6 +235,11 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     }
     if (p.descrizione) n.push(el("p", "desc", p.descrizione));
     if (v && v.note) n.push(el("p", "desc", v.note));
+    // Piatto componibile: gruppi con le voci e i loro prezzi (la scelta si fa al tavolo)
+    (p.opzioni || []).forEach((g) => {
+      n.push(el("p", "quiz-passo", g.nome + " · " + (g.min === g.max ? "scegli " + g.max : g.min > 0 ? "da " + g.min + " a " + g.max : "fino a " + g.max)));
+      g.scelte.forEach((c) => { const r2 = el("div", "riga"); r2.append(el("span", null, c.nome), el("span", "prezzo", c.sovrapprezzo_cent ? "+ " + euro(c.sovrapprezzo_cent) : "incluso")); n.push(r2); });
+    });
     if (p.allergeni && p.allergeni.length) n.push(el("p", "allergeni", "Allergeni: " + p.allergeni.join(", ")));
     const ab = (p.abbinamenti || []).map((a) => ({ q: per.get(a.id), m: a.motivo })).filter((x) => x.q);
     if (ab.length) { n.push(el("p", "quiz-passo", v ? "Ideale con" : "Il sommelier consiglia")); ab.forEach((x) => n.push(riga(x.q, x.m))); }

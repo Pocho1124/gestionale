@@ -14,7 +14,7 @@ begin
   perform set_config('request.jwt.claim.sub', '', true);
 end $$;
 
-select plan(11);
+select plan(12);
 insert into auth.users (id, email, raw_user_meta_data) values
   ('d0111111-1111-1111-1111-111111111111', 'owner@conto.local', '{}'),
   ('d0222222-2222-2222-2222-222222222222', 'manager@conto.local', '{}'),
@@ -41,7 +41,10 @@ select is(public.ordini_tavolo('token-tavolo-quattro-conto', (select codice from
 
 set local role authenticated; select pg_temp.come('d0333333-3333-3333-3333-333333333333');
 select is((select count(*) from public.richieste_conto where stato = 'in_attesa'), 1::bigint, 'Il cameriere vede una sola richiesta di conto');
-select lives_ok($$ select public.gestisci_conto((select id from public.richieste_conto limit 1)) $$, 'Il cameriere la segna come gestita');
+select throws_ok($$ select public.gestisci_conto((select id from public.richieste_conto limit 1)) $$, '42501', null, 'Il cameriere non gestisce il conto');
+select pg_temp.come('d0222222-2222-2222-2222-222222222222');
+select lives_ok($$ select public.gestisci_conto((select id from public.richieste_conto limit 1)) $$, 'Il responsabile segna il conto come gestito');
+select pg_temp.come('d0222222-2222-2222-2222-222222222222');
 select public.chiudi_tavolo('d2000000-0000-0000-0000-000000000001');
 select is((select count(*) from public.richieste_conto where stato = 'in_attesa'), 0::bigint, 'Alla chiusura del tavolo non restano richieste aperte');
 

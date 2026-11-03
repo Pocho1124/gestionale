@@ -392,3 +392,38 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .tabella td.numero { font-variant-numeric: tabular-nums; }
 .ordina-conto { display: grid; gap: 8px; margin: 12px 0; }
 .ordina-conto input { border: 1px solid color-mix(in srgb, var(--m-testo) 30%, transparent); background: transparent; color: var(--m-testo); border-radius: 8px; padding: 8px 10px; font: 400 .9rem var(--m-font-testo); }
+
+/* Magazzino, cassa, stampa */
+.sotto-scorta td { background: color-mix(in srgb, #C2493D 10%, transparent); }
+.dettaglio-articolo { display: grid; gap: 8px; padding: 6px 0; }
+.movimenti { margin: 0; padding-left: 18px; font-size: .88rem; }
+.negativo { color: #C2493D; } .positivo { color: #4C8C5B; }
+.link { background: none; border: 0; padding: 0 0 0 6px; color: var(--primario); text-decoration: underline; cursor: pointer; font: inherit; }
+.stampe-ordine { display: flex; flex-wrap: wrap; gap: 4px; }
+.stampa-errore { background: #C2493D; color: #fff; } .stampa-stampata { opacity: .75; }
+.cassa-griglia { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.cassa-totale { grid-column: 1 / -1; display: grid; gap: 4px; background: var(--superficie); border: 1px solid var(--linea); border-radius: 14px; padding: 16px; }
+.cassa-totale strong { font-size: 2.2rem; font-variant-numeric: tabular-nums; }
+.riga-cassa { display: flex; justify-content: space-between; margin: 2px 0; font-variant-numeric: tabular-nums; }
+
+/* Piatti componibili (tagliere personalizzato) */
+.componi { display: grid; gap: 10px; text-align: left; }
+.componi h3 { margin: 0; }
+.componi-base { margin: 0; opacity: .8; }
+.componi-gruppo { border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 4px; margin: 0; }
+.componi-gruppo legend { font-weight: 700; padding: 0 4px; }
+.componi-regola { font-weight: 400; font-size: .8rem; opacity: .75; }
+.componi-voce { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 8px; cursor: pointer; }
+.componi-voce.scelta { background: color-mix(in srgb, currentColor 10%, transparent); font-weight: 600; }
+.componi-voce.piena { opacity: .45; cursor: not-allowed; }
+.componi-voce input { width: 18px; height: 18px; }
+.componi-prezzo { margin-left: auto; font-variant-numeric: tabular-nums; font-size: .9rem; }
+.componi-azioni { display: flex; gap: 8px; justify-content: flex-end; position: sticky; bottom: 0; padding-top: 6px; background: inherit; }
+.componi-annulla, .componi-conferma { border-radius: 999px; padding: 10px 16px; font: 600 .95rem inherit; cursor: pointer; border: 1px solid currentColor; background: transparent; color: inherit; }
+.componi-conferma { background: var(--m-primario, var(--primario)); border-color: var(--m-primario, var(--primario)); color: var(--m-sfondo, #fff); }
+.componi-conferma:disabled { opacity: .45; cursor: not-allowed; }
+.componi-popup { max-height: 90vh; overflow: auto; text-align: left; }
+.scelte-riga { display: block; font-size: .85em; opacity: .85; }
+
+.gruppo-composizione { display: grid; gap: 6px; border-left: 3px solid var(--primario); padding: 4px 0 4px 10px; }
+.voce-composizione { padding-left: 14px; }

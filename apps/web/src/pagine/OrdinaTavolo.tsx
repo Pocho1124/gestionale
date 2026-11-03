@@ -3,13 +3,14 @@ import { useParams } from "react-router-dom";
 import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { caricaFont, pilaFont } from "../lib/font";
-import type { MenuPubblico, PiattoMenu } from "../lib/tipi";
+import type { MenuPubblico, PiattoMenu, Scelta } from "../lib/tipi";
+import { Componi, chiaveRiga, descriviScelte, prezzoComposto } from "../componenti/Componi";
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
 
 interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean }
-interface RigaCarrello { piatto: PiattoMenu; quantita: number; nota: string }
-interface OrdineCliente { id: string; stato: string; motivo: string; creato_at: string; righe: { nome: string; quantita: number; prezzo_cent: number; nota: string }[] }
+interface RigaCarrello { chiave: string; piatto: PiattoMenu; quantita: number; nota: string; scelte: Scelta[]; prezzo: number }
+interface OrdineCliente { id: string; stato: string; motivo: string; creato_at: string; righe: { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: string[] }[] }
 
 const STATI: Record<string, { testo: string; icona: string }> = {
   da_confermare: { testo: "In attesa di conferma", icona: "⏳" }, confermato: { testo: "Inviato in cucina", icona: "✅" },
@@ -37,6 +38,7 @@ export function OrdinaTavolo() {
   const [info, setInfo] = useState<InfoTavolo | null | "assente">(null);
   const [menu, setMenu] = useState<MenuPubblico | null>(null);
   const [carrello, setCarrello] = useState<Record<string, RigaCarrello>>({});
+  const [componendo, setComponendo] = useState<PiattoMenu | null>(null);
   const [vista, setVista] = useState<"menu" | "carrello" | "ordini">("menu");
   const [codice, setCodice] = useState(() => leggi(chiaveCodice));
   const [richiesta, setRichiesta] = useState(() => leggi(`richiesta-${token}`));
@@ -100,19 +102,25 @@ export function OrdinaTavolo() {
 
   const righe = Object.values(carrello);
   const pezzi = righe.reduce((n, r) => n + r.quantita, 0);
-  const totale = righe.reduce((n, r) => n + r.quantita * r.piatto.prezzo_cent, 0);
-  const cambia = (p: PiattoMenu, delta: number) => setCarrello((c) => {
-    const q = Math.max(0, Math.min(20, (c[p.id]?.quantita ?? 0) + delta));
+  const totale = righe.reduce((n, r) => n + r.quantita * r.prezzo, 0);
+  const componibile = (p: PiattoMenu) => (p.opzioni?.length ?? 0) > 0;
+  /** Aggiunge o toglie una riga; i piatti composti sono righe distinte per ogni combinazione di scelte. */
+  const cambiaRiga = (piatto: PiattoMenu, scelte: Scelta[], delta: number) => setCarrello((c) => {
+    const chiave = chiaveRiga(piatto.id, scelte);
+    const q = Math.max(0, Math.min(20, (c[chiave]?.quantita ?? 0) + delta));
     const nuovo = { ...c };
-    if (q === 0) delete nuovo[p.id]; else nuovo[p.id] = { piatto: p, quantita: q, nota: c[p.id]?.nota ?? "" };
+    if (q === 0) delete nuovo[chiave];
+    else nuovo[chiave] = { chiave, piatto, quantita: q, nota: c[chiave]?.nota ?? "", scelte, prezzo: prezzoComposto(piatto.prezzo_cent, scelte) };
     return nuovo;
   });
+  const cambia = (p: PiattoMenu, delta: number) => cambiaRiga(p, [], delta);
+  const nelCarrello = (p: PiattoMenu) => righe.filter((r) => r.piatto.id === p.id).reduce((n, r) => n + r.quantita, 0);
   const inAttesa = useMemo(() => ordini.filter((o) => o.stato === "da_confermare").length, [ordini]);
 
   async function inviaRichiesta() {
     const { data, error } = await sb().rpc("richiedi_tavolo", {
       p_token: token, p_segreto: segretoDispositivo(token), p_nota: nota.trim(),
-      p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim() })),
+      p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim(), opzioni: r.scelte.map((x) => x.id) })),
     });
     const e = data as { richiesta?: string; errore?: string } | null;
     if (error || !e?.richiesta) { setMessaggio({ testo: e?.errore ?? error?.message ?? "Invio non riuscito", errore: true }); void carica(); return; }
@@ -127,7 +135,7 @@ export function OrdinaTavolo() {
       if (!/^\d{4}$/.test(codice)) { await inviaRichiesta(); return; }
       const { data, error } = await sb().rpc("invia_ordine", {
         p_token: token, p_codice: codice, p_nota: nota.trim(),
-        p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim() })),
+        p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim(), opzioni: r.scelte.map((x) => x.id) })),
       });
       const esito = data as { errore?: string; codice_errato?: boolean } | null;
       // Codice vecchio (tavolo chiuso e riaperto) o sbagliato: si passa alla richiesta al personale
@@ -167,18 +175,24 @@ export function OrdinaTavolo() {
             <article key={p.id} className={`menu-piatto ordina-piatto${p.disponibile ? "" : " esaurito"}`}>
               <div className="menu-riga">
                 <h3>{p.nome}</h3>
-                <span className="menu-prezzo">{euro(p.prezzo_cent)}</span>
+                <span className="menu-prezzo">{componibile(p) ? "da " : ""}{euro(p.prezzo_cent)}</span>
               </div>
               {p.descrizione && <p className="menu-desc">{p.descrizione}</p>}
+              {componibile(p) && <p className="menu-allergeni">Componi a piacere: {p.opzioni.map((g) => g.nome).join(", ")}</p>}
               {p.allergeni.length > 0 && <p className="menu-allergeni">Allergeni: {p.allergeni.join(", ")}</p>}
               <div className="ordina-quantita">
-                {p.disponibile ? (
+                {p.disponibile ? (componibile(p) ? (
                   <>
-                    {carrello[p.id] && <button onClick={() => cambia(p, -1)} aria-label={`Togli ${p.nome}`}>−</button>}
-                    {carrello[p.id] && <strong>{carrello[p.id]!.quantita}</strong>}
-                    <button onClick={() => cambia(p, 1)} aria-label={`Aggiungi ${p.nome}`}>{carrello[p.id] ? "+" : "Aggiungi"}</button>
+                    {nelCarrello(p) > 0 && <strong>{nelCarrello(p)} nel tuo ordine</strong>}
+                    <button onClick={() => setComponendo(p)} aria-label={`Componi ${p.nome}`}>Componi</button>
                   </>
-                ) : <span className="menu-badge">Esaurito</span>}
+                ) : (
+                  <>
+                    {carrello[chiaveRiga(p.id, [])] && <button onClick={() => cambia(p, -1)} aria-label={`Togli ${p.nome}`}>−</button>}
+                    {carrello[chiaveRiga(p.id, [])] && <strong>{carrello[chiaveRiga(p.id, [])]!.quantita}</strong>}
+                    <button onClick={() => cambia(p, 1)} aria-label={`Aggiungi ${p.nome}`}>{carrello[chiaveRiga(p.id, [])] ? "+" : "Aggiungi"}</button>
+                  </>
+                )) : <span className="menu-badge">Esaurito</span>}
               </div>
             </article>
           ))}
@@ -191,13 +205,14 @@ export function OrdinaTavolo() {
           {righe.length === 0 ? <p className="menu-desc">Non hai ancora aggiunto nulla.</p> : (
             <>
               {righe.map((r) => (
-                <article key={r.piatto.id} className="menu-piatto">
-                  <div className="menu-riga"><h3>{r.quantita} × {r.piatto.nome}</h3><span className="menu-prezzo">{euro(r.quantita * r.piatto.prezzo_cent)}</span></div>
+                <article key={r.chiave} className="menu-piatto">
+                  <div className="menu-riga"><h3>{r.quantita} × {r.piatto.nome}</h3><span className="menu-prezzo">{euro(r.quantita * r.prezzo)}</span></div>
+                  {r.scelte.length > 0 && <p className="menu-desc">{r.scelte.map((x) => x.nome).join(", ")}</p>}
                   <div className="ordina-quantita">
-                    <button onClick={() => cambia(r.piatto, -1)} aria-label="Meno">−</button><strong>{r.quantita}</strong>
-                    <button onClick={() => cambia(r.piatto, 1)} aria-label="Più">+</button>
+                    <button onClick={() => cambiaRiga(r.piatto, r.scelte, -1)} aria-label="Meno">−</button><strong>{r.quantita}</strong>
+                    <button onClick={() => cambiaRiga(r.piatto, r.scelte, 1)} aria-label="Più">+</button>
                     <input className="ordina-nota" placeholder="Nota (es. senza cipolla)" maxLength={120} value={r.nota}
-                      onChange={(e) => setCarrello((c) => ({ ...c, [r.piatto.id]: { ...r, nota: e.target.value } }))} />
+                      onChange={(e) => setCarrello((c) => ({ ...c, [r.chiave]: { ...r, nota: e.target.value } }))} />
                   </div>
                 </article>
               ))}
@@ -246,12 +261,17 @@ export function OrdinaTavolo() {
                   <h3>{STATI[o.stato]?.icona} {STATI[o.stato]?.testo ?? o.stato}</h3>
                   <span className="menu-prezzo">{euro(o.righe.reduce((n, r) => n + r.quantita * r.prezzo_cent, 0))}</span>
                 </div>
-                <p className="menu-desc">{o.righe.map((r) => `${r.quantita} × ${r.nome}${r.nota ? ` (${r.nota})` : ""}`).join(" · ")}</p>
+                <p className="menu-desc">{o.righe.map((r) => `${r.quantita} × ${r.nome}${descriviScelte((r.opzioni ?? []).map((nome) => ({ nome })))}${r.nota ? ` — ${r.nota}` : ""}`).join(" · ")}</p>
                 {o.stato === "rifiutato" && o.motivo && <p className="menu-desc">Motivo: {o.motivo}</p>}
                 <p className="menu-allergeni">Inviato alle {new Date(o.creato_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</p>
               </article>
             ))}
         </section>
+      )}
+
+      {componendo && (
+        <Componi nome={componendo.nome} base={componendo.prezzo_cent} gruppi={componendo.opzioni} variante="menu" onChiudi={() => setComponendo(null)}
+          onConferma={(scelte) => { cambiaRiga(componendo, scelte, 1); setComponendo(null); setMessaggio({ testo: `${componendo.nome} aggiunto al tuo ordine` }); }} />
       )}
 
       {vista === "menu" && pezzi > 0 && (

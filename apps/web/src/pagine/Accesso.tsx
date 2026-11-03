@@ -12,7 +12,9 @@ export function Accesso() {
   async function invia(e: FormEvent) {
     e.preventDefault();
     setErrore(null); setAttesa(true);
-    const { error } = await sb().auth.signInWithPassword({ email: email.trim(), password });
+    // Il personale senza email accede con il nome utente (es. «sara»), che corrisponde a un accesso interno
+    const login = email.trim().toLowerCase();
+    const { error } = await sb().auth.signInWithPassword({ email: login.includes("@") ? login : `${login}@staff.locale`, password });
     setAttesa(false);
     if (error) setErrore(messaggioErrore(error));
     setPassword("");
@@ -22,7 +24,7 @@ export function Accesso() {
     <div className="centrato">
       <form className="scheda scheda-stretta" onSubmit={invia}>
         <h1 className="titolo">Gestionale</h1>
-        <label className="campo">Email<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+        <label className="campo">Email o nome utente<input autoComplete="username" autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label className="campo">Password
           <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>

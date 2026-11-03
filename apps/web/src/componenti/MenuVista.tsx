@@ -66,8 +66,8 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
           {aspetto.mostra_descrizioni && c.descrizione && <p className="menu-cat-desc">{c.descrizione}</p>}
           <div className="menu-prodotti">
             {c.prodotti.map((p) => (
-              <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}${p.foto || p.descrizione || p.vino || p.abbinamenti?.length ? " apribile" : ""}`}
-                {...(p.foto || p.descrizione || p.vino || p.abbinamenti?.length ? {
+              <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}${p.foto || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length ? " apribile" : ""}`}
+                {...(p.foto || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length ? {
                   role: "button", tabIndex: 0, "aria-label": `${p.nome}: apri la scheda`,
                   onClick: () => setAperto(p),
                   onKeyDown: (e: { key: string; preventDefault: () => void }) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAperto(p); } },
@@ -77,7 +77,7 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
                   <h3>{p.nome}{p.foto ? <span className="menu-icona-foto" aria-hidden="true"> ◉</span> : null}</h3>
                   {!p.disponibile && <span className="menu-badge">Esaurito</span>}
                   {aspetto.layout !== "elegante" && <span className="menu-puntini" aria-hidden="true" />}
-                  <span className="menu-prezzo">{formatta(centesimi(p.prezzo_cent))}</span>
+                  <span className="menu-prezzo">{p.opzioni?.length ? "da " : ""}{formatta(centesimi(p.prezzo_cent))}</span>
                 </div>
                 {p.vino && <p className="menu-vino-info">{[TIPI_VINO[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · ")}</p>}
                 {aspetto.mostra_descrizioni && p.descrizione && <p className="menu-desc">{p.descrizione}</p>}

@@ -9,6 +9,7 @@ import { ALLERGENI, CORPI_VINO, ETICHETTE, TIPI_VINO, type Categoria, type Prodo
 type RigaVino = SchedaVino & { prodotto_id: string; locale_id: string };
 interface Abbinamento { piatto_id: string; vino_id: string; locale_id: string; motivo: string }
 import { preparaImmagine } from "../lib/immagini";
+import { EditorComposizione } from "../componenti/EditorComposizione";
 import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
 
 const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
@@ -338,6 +339,7 @@ function RigaProdotto(props: {
               </label>
             ))}
           </fieldset>
+          <EditorComposizione prodotto={p} />
           <fieldset className="chip-gruppo vino-gruppo"><legend>Vino</legend>
             <label className="interruttore"><input type="checkbox" checked={!!props.vino}
               onChange={(e) => props.onVino(e.target.checked ? {} : null)} />Questo prodotto è un vino (il prezzo è al calice)</label>

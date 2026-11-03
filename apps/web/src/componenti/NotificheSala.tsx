@@ -15,7 +15,7 @@ const suoniAttivi = () => { try { return localStorage.getItem("gestionale.suoni"
  * - popup quando un tavolo chiede il conto (Stampa conto / Gestita / Chiudi tavolo);
  * - avviso quando un tavolo ordina o chiede di aprire.
  */
-export function NotificheSala({ localeId, localeNome }: { localeId: string; localeNome: string }) {
+export function NotificheSala({ localeId, localeNome, gestisceConto }: { localeId: string; localeNome: string; gestisceConto: boolean }) {
   const avvisa = useAvviso();
   const vai = useNavigate();
   const [conti, setConti] = useState<RichiestaConto[]>([]);
@@ -58,7 +58,7 @@ export function NotificheSala({ localeId, localeNome }: { localeId: string; loca
     return () => { void sb().removeChannel(canale); clearInterval(t); };
   }, [localeId, caricaConti, avvisa]);
 
-  const conto = conti.find((c) => !nascosti.has(c.id));
+  const conto = gestisceConto ? conti.find((c) => !nascosti.has(c.id)) : undefined;
   if (!conto) return null;
 
   const gestita = async () => {
@@ -80,12 +80,7 @@ export function NotificheSala({ localeId, localeNome }: { localeId: string; loca
             await gestita();
           }}>🖨️ Stampa conto</button>
           <button className="btn" onClick={() => void gestita()}>Segna come gestita</button>
-          <button className="btn btn-pericolo" onClick={async () => {
-            if (!confirm(`Chiudere il tavolo ${conto.tavoli?.nome}?`)) return;
-            const { error } = await sb().rpc("chiudi_tavolo", { p_tavolo: conto.tavolo_id });
-            if (error) avvisa(messaggioErrore(error), "errore"); else avvisa(`Tavolo ${conto.tavoli?.nome} chiuso`);
-            await caricaConti();
-          }}>Chiudi tavolo</button>
+          <button className="btn" onClick={() => { setNascosti((n) => new Set(n).add(conto.id)); vai("/sala"); }}>Vai al tavolo per incassare e chiudere</button>
         </div>
         <button className="popup-dopo" onClick={() => { setNascosti((n) => new Set(n).add(conto.id)); vai("/sala"); }}>Più tardi</button>
       </div>

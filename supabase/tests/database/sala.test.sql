@@ -42,7 +42,7 @@ select throws_ok($$ insert into public.sessioni_tavolo (locale_id, tavolo_id, co
                  '42501', null, 'Le sessioni non si creano a mano');
 select is_empty($$ update public.tavoli set x = 900 returning id $$, 'Il cameriere non sposta i tavoli');
 select is((select count(*) from public.wifi_ospiti), 0::bigint, 'Il cameriere non vede la password del Wi-Fi');
-select lives_ok($$ select public.chiudi_tavolo('ad000000-0000-0000-0000-000000000005') $$, 'Il cameriere chiude il tavolo');
+select throws_ok($$ select public.chiudi_tavolo('ad000000-0000-0000-0000-000000000005') $$, '42501', null, 'Il cameriere non chiude il tavolo (serve il caposala)');
 
 -- Cucina ed estraneo: niente apertura
 select pg_temp.come('ab444444-4444-4444-4444-444444444444');

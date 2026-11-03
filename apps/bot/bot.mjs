@@ -812,7 +812,7 @@ export async function controllaSala() {
   const [richieste, ordini, conti] = await Promise.all([
     db(`richieste_tavolo?select=id,righe,nota,tavoli(nome)&locale_id=eq.${C.locale}&stato=eq.in_attesa&creato_at=gte.${quindici}&order=creato_at`),
     // Ordini dal telefono: da confermare (casi particolari) oppure già in cucina, solo come aggiornamento
-    db(`ordini?select=id,stato,nota,tavoli(nome),righe_ordine(nome,quantita,prezzo_cent,nota)&locale_id=eq.${C.locale}&origine=eq.cliente&or=(stato.eq.da_confermare,creato_at.gte.${dall})&order=creato_at`),
+    db(`ordini?select=id,stato,nota,tavoli(nome),righe_ordine(nome,quantita,prezzo_cent,nota,opzioni)&locale_id=eq.${C.locale}&origine=eq.cliente&or=(stato.eq.da_confermare,creato_at.gte.${dall})&order=creato_at`),
     db(`richieste_conto?select=id,nota,sessione_id,tavoli(nome)&locale_id=eq.${C.locale}&stato=eq.in_attesa&order=creato_at`),
   ]);
   const nuove = richieste.filter((r) => !notificati.has(r.id)), nuovi = ordini.filter((o) => !notificati.has(o.id)), nuoviConti = conti.filter((c) => !notificati.has(c.id));
@@ -824,17 +824,23 @@ export async function controllaSala() {
     totali.set(c.id, ord.reduce((n, o) => n + o.righe_ordine.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0));
   }
   const prodotti = nuove.length ? new Map((await db(`prodotti?select=id,nome,prezzo_cent&locale_id=eq.${C.locale}`)).map((p) => [p.id, p])) : new Map();
-  const righeTesto = (righe) => righe.map((r) => `• ${r.quantita}× ${r.nome}${r.nota ? ` (${r.nota})` : ""}`).join("\n");
+  const voci = nuove.length ? new Map((await db(`opzioni?select=id,nome,sovrapprezzo_cent&locale_id=eq.${C.locale}`)).map((v) => [v.id, v])) : new Map();
+  const conScelte = (righe) => righe.map((r) => ({ ...r, scelte: (Array.isArray(r.opzioni) ? r.opzioni : []).map((o) => o.nome) }));
+  const righeTesto = (righe) => righe.map((r) => `• ${r.quantita}× ${r.nome}${r.scelte?.length ? ` (${r.scelte.join(", ")})` : ""}${r.nota ? ` — ${r.nota}` : ""}`).join("\n");
   const messaggi = [
     ...nuove.map((r) => {
-      const righe = r.righe.map((x) => ({ ...x, nome: prodotti.get(x.prodotto_id)?.nome ?? "?", prezzo_cent: prodotti.get(x.prodotto_id)?.prezzo_cent ?? 0 }));
+      const righe = r.righe.map((x) => {
+        const scelte = (Array.isArray(x.opzioni) ? x.opzioni : []).map((id) => voci.get(id)).filter(Boolean);
+        return { ...x, nome: prodotti.get(x.prodotto_id)?.nome ?? "?", scelte: scelte.map((v) => v.nome),
+                 prezzo_cent: (prodotti.get(x.prodotto_id)?.prezzo_cent ?? 0) + scelte.reduce((n, v) => n + v.sovrapprezzo_cent, 0) };
+      });
       return { id: r.id, testo: `🔔 Tavolo ${r.tavoli?.nome ?? "?"} vuole ordinare\n${righeTesto(righe)}\nTotale ${euro(righe.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${r.nota ? `\n📝 ${r.nota}` : ""}`,
                pulsanti: [{ text: "✅ Apri tavolo e conferma", callback_data: `sa:${r.id}` }, { text: "❌ Rifiuta", callback_data: `sr:${r.id}` }] };
     }),
     ...nuovi.map((o) => o.stato === "da_confermare"
-      ? { id: o.id, testo: `⏳ Tavolo ${o.tavoli?.nome ?? "?"}: ordine da confermare\n${righeTesto(o.righe_ordine)}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}`,
+      ? { id: o.id, testo: `⏳ Tavolo ${o.tavoli?.nome ?? "?"}: ordine da confermare\n${righeTesto(conScelte(o.righe_ordine))}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}`,
           pulsanti: [{ text: "✅ Conferma", callback_data: `so:${o.id}` }, { text: "❌ Rifiuta", callback_data: `sx:${o.id}` }] }
-      : { id: o.id, testo: `🍽️ Tavolo ${o.tavoli?.nome ?? "?"} ha ordinato (in cucina)\n${righeTesto(o.righe_ordine)}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}` }),
+      : { id: o.id, testo: `🍽️ Tavolo ${o.tavoli?.nome ?? "?"} ha ordinato (in cucina)\n${righeTesto(conScelte(o.righe_ordine))}\nTotale ${euro(o.righe_ordine.reduce((n, x) => n + x.quantita * x.prezzo_cent, 0))}${o.nota ? `\n📝 ${o.nota}` : ""}` }),
     ...nuoviConti.map((c) => ({ id: c.id, testo: `🧾 Tavolo ${c.tavoli?.nome ?? "?"} chiede il conto · ${euro(totali.get(c.id) ?? 0)}${c.nota ? `\n📝 ${c.nota}` : ""}\nStampalo dal gestionale.`,
                                pulsanti: [{ text: "✅ Gestita", callback_data: `sc:${c.id}` }] })),
   ];

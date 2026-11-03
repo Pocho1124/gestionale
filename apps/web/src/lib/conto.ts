@@ -24,15 +24,17 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
   if (!finestra) return "Il browser ha bloccato la finestra di stampa: consenti i popup per questo indirizzo.";
   const [s, o] = await Promise.all([
     sb().from("sessioni_tavolo").select("coperti, aperta_at, tavoli(nome)").eq("id", sessioneId).single(),
-    sb().from("ordini").select("stato, righe_ordine(nome, quantita, prezzo_cent)").eq("sessione_id", sessioneId).neq("stato", "rifiutato"),
+    sb().from("ordini").select("stato, righe_ordine(nome, quantita, prezzo_cent, opzioni)").eq("sessione_id", sessioneId).neq("stato", "rifiutato"),
   ]);
   if (s.error || o.error) { finestra.close(); return (s.error ?? o.error)!.message; }
 
   const righe = new Map<string, { nome: string; quantita: number; prezzo_cent: number }>();
-  for (const ord of o.data as unknown as { righe_ordine: { nome: string; quantita: number; prezzo_cent: number }[] }[]) {
+  for (const ord of o.data as unknown as { righe_ordine: { nome: string; quantita: number; prezzo_cent: number; opzioni?: { nome: string }[] }[] }[]) {
     for (const r of ord.righe_ordine) {
-      const k = `${r.nome}|${r.prezzo_cent}`;
-      const v = righe.get(k) ?? { nome: String(r.nome), quantita: 0, prezzo_cent: Number(r.prezzo_cent) };
+      const scelte = (r.opzioni ?? []).map((x) => String(x.nome));
+      const nome = `${String(r.nome)}${scelte.length ? ` (${scelte.join(", ")})` : ""}`;
+      const k = `${nome}|${r.prezzo_cent}`;
+      const v = righe.get(k) ?? { nome, quantita: 0, prezzo_cent: Number(r.prezzo_cent) };
       v.quantita += Number(r.quantita); righe.set(k, v);
     }
   }

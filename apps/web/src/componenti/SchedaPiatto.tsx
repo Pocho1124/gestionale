@@ -52,6 +52,14 @@ export function SchedaPiatto({ piatto, onChiudi, perId, onApri }: {
             </div>
           )}
           {piatto.etichette.length > 0 && <ul className="menu-etichette">{piatto.etichette.map((e) => <li key={e}>{e}</li>)}</ul>}
+          {piatto.opzioni?.map((g) => (
+            <div key={g.id ?? g.nome} className="scheda-abbinamenti">
+              <p className="quiz-passo">{g.nome} · {g.min === g.max ? `scegli ${g.max}` : g.min > 0 ? `da ${g.min} a ${g.max}` : `fino a ${g.max}`}</p>
+              {g.scelte.map((c) => (
+                <p key={c.id ?? c.nome} className="riga-cassa"><span>{c.nome}</span><span className="menu-prezzo">{c.sovrapprezzo_cent ? `+ ${formatta(centesimi(c.sovrapprezzo_cent))}` : "incluso"}</span></p>
+              ))}
+            </div>
+          ))}
           {piatto.allergeni.length > 0 && <p className="menu-allergeni">Allergeni: {piatto.allergeni.join(", ")}</p>}
         </div>
       </div>
