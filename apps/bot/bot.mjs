@@ -3,6 +3,19 @@
 // e applica la modifica solo dopo conferma, con l'account dedicato del bot (permessi RLS, audit).
 // Nessuna dipendenza esterna: Node 22 (fetch nativo). Configurazione da variabili d'ambiente.
 
+// Ogni identificativo inserito nei percorsi del database deve essere un UUID: niente filtri iniettati nell'URL
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function uuid(v) {
+  if (typeof v !== "string" || !UUID.test(v)) throw new Error("identificativo non valido");
+  return v;
+}
+const TABELLE_ANNULLA = new Set(["prodotti", "categorie", "vini", "abbinamenti", "foto_prodotti"]);
+function uuidConfigurazione(nome) {
+  const v = (process.env[nome] ?? "").trim();
+  if (!UUID.test(v)) { console.error(`${nome} mancante o non valido: deve essere l'UUID del locale`); process.exit(1); }
+  return v;
+}
+
 const C = {
   token: obbligatoria("TELEGRAM_TOKEN"),
   utenti: new Set(obbligatoria("TELEGRAM_UTENTI").split(",").map((s) => s.trim()).filter(Boolean)),
@@ -10,7 +23,7 @@ const C = {
   anon: obbligatoria("SUPABASE_ANON_KEY"),
   email: obbligatoria("BOT_EMAIL"),
   password: obbligatoria("BOT_PASSWORD"),
-  locale: obbligatoria("LOCALE_ID"),
+  locale: uuidConfigurazione("LOCALE_ID"),
   ollama: (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, ""),
   modello: process.env.OLLAMA_MODELLO || "qwen2.5:3b",
   trascrizione: (process.env.TRASCRIZIONE_URL || "http://trascrizione:9000").replace(/\/$/, ""),
@@ -485,66 +498,66 @@ async function esegui(a, cat) {
       return { esito: `${n} prezzi aggiornati.`, annulla: prima.map((x) => ({ tabella: "prodotti", id: x.id, patch: { prezzo_cent: x.prezzo_cent } })) };
     }
     case "imposta_prezzo":
-      await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { prezzo_cent: Math.round(a.euro * 100) } });
+      await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "PATCH", corpo: { prezzo_cent: Math.round(a.euro * 100) } });
       return { esito: "Prezzo aggiornato.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { prezzo_cent: a.prodotto.prezzo_cent } }] };
     case "disponibilita":
       await db("rpc/imposta_disponibilita", { metodo: "POST", corpo: { p_prodotto: a.prodotto.id, p_disponibile: a.valore } });
       return { esito: "Disponibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { disponibile: a.prodotto.disponibile } }] };
     case "visibilita":
-      await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
+      await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
       return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
     case "imposta_vino": {
-      const [prima] = await db(`vini?prodotto_id=eq.${a.prodotto.id}&select=*`);
+      const [prima] = await db(`vini?prodotto_id=eq.${uuid(a.prodotto.id)}&select=*`);
       await db("vini", { metodo: "POST", unisci: true, corpo: { ...(prima ?? { corpo: "medio" }), ...a.campi, prodotto_id: a.prodotto.id, locale_id: C.locale } });
       return { esito: "Scheda del vino salvata.", annulla: [prima ? { tabella: "vini", inserisci: [prima], unisci: true }
-                                                          : { tabella: "vini", filtro: `prodotto_id=eq.${a.prodotto.id}`, elimina: true }] };
+                                                          : { tabella: "vini", filtro: `prodotto_id=eq.${uuid(a.prodotto.id)}`, elimina: true }] };
     }
     case "abbina": {
       const nuove = a.coppie.filter((c) => !cat.abbinamenti.some((x) => x.piatto_id === c.piatto.id && x.vino_id === c.vino.id));
       await db("abbinamenti", { metodo: "POST", unisci: true, corpo: a.coppie.map((c) => ({ locale_id: C.locale, piatto_id: c.piatto.id, vino_id: c.vino.id, motivo: c.motivo || "" })) });
       return { esito: `${a.coppie.length === 1 ? "Abbinamento salvato" : `${a.coppie.length} abbinamenti salvati`}.`,
-               annulla: nuove.map((c) => ({ tabella: "abbinamenti", filtro: `piatto_id=eq.${c.piatto.id}&vino_id=eq.${c.vino.id}`, elimina: true })) };
+               annulla: nuove.map((c) => ({ tabella: "abbinamenti", filtro: `piatto_id=eq.${uuid(c.piatto.id)}&vino_id=eq.${uuid(c.vino.id)}`, elimina: true })) };
     }
     case "togli_abbinamento": {
       const riga = cat.abbinamenti.find((x) => x.piatto_id === a.piatto.id && x.vino_id === a.vino.id);
       if (!riga) throw new Error("questo abbinamento non esiste");
-      await db(`abbinamenti?piatto_id=eq.${a.piatto.id}&vino_id=eq.${a.vino.id}`, { metodo: "DELETE" });
+      await db(`abbinamenti?piatto_id=eq.${uuid(a.piatto.id)}&vino_id=eq.${uuid(a.vino.id)}`, { metodo: "DELETE" });
       return { esito: "Abbinamento tolto.", annulla: [{ tabella: "abbinamenti", inserisci: [{ ...riga, locale_id: C.locale }], unisci: true }] };
     }
     case "imposta_foto": {
-      const [prima] = await db(`foto_prodotti?prodotto_id=eq.${a.prodotto.id}&select=*`);
+      const [prima] = await db(`foto_prodotti?prodotto_id=eq.${uuid(a.prodotto.id)}&select=*`);
       await db("foto_prodotti", { metodo: "POST", unisci: true, corpo: { prodotto_id: a.prodotto.id, locale_id: C.locale, dati: a.dati } });
       const annulla = [prima ? { tabella: "foto_prodotti", inserisci: [prima], unisci: true }
-                             : { tabella: "foto_prodotti", filtro: `prodotto_id=eq.${a.prodotto.id}`, elimina: true }];
+                             : { tabella: "foto_prodotti", filtro: `prodotto_id=eq.${uuid(a.prodotto.id)}`, elimina: true }];
       if (a.descrizione) {
-        const [riga] = await db(`prodotti?id=eq.${a.prodotto.id}&select=descrizione`);
-        await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { descrizione: a.descrizione } });
+        const [riga] = await db(`prodotti?id=eq.${uuid(a.prodotto.id)}&select=descrizione`);
+        await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "PATCH", corpo: { descrizione: a.descrizione } });
         annulla.push({ tabella: "prodotti", id: a.prodotto.id, patch: { descrizione: riga?.descrizione ?? "" } });
       }
       return { esito: "Foto salvata.", annulla };
     }
     case "imposta_descrizione": {
-      const [riga] = await db(`prodotti?id=eq.${a.prodotto.id}&select=descrizione`);
-      await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "PATCH", corpo: { descrizione: a.testo } });
+      const [riga] = await db(`prodotti?id=eq.${uuid(a.prodotto.id)}&select=descrizione`);
+      await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "PATCH", corpo: { descrizione: a.testo } });
       return { esito: "Descrizione aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { descrizione: riga?.descrizione ?? "" } }] };
     }
     case "rimuovi_foto": {
-      const [prima] = await db(`foto_prodotti?prodotto_id=eq.${a.prodotto.id}&select=*`);
+      const [prima] = await db(`foto_prodotti?prodotto_id=eq.${uuid(a.prodotto.id)}&select=*`);
       if (!prima) throw new Error("questo piatto non ha una foto");
-      await db(`foto_prodotti?prodotto_id=eq.${a.prodotto.id}`, { metodo: "DELETE" });
+      await db(`foto_prodotti?prodotto_id=eq.${uuid(a.prodotto.id)}`, { metodo: "DELETE" });
       return { esito: "Foto rimossa.", annulla: [{ tabella: "foto_prodotti", inserisci: [prima], unisci: true }] };
     }
     case "elimina_piatto": {
-      const [riga] = await db(`prodotti?id=eq.${a.prodotto.id}&select=*`);
+      const [riga] = await db(`prodotti?id=eq.${uuid(a.prodotto.id)}&select=*`);
       if (!riga) throw new Error("Il piatto non esiste più");
-      await db(`prodotti?id=eq.${a.prodotto.id}`, { metodo: "DELETE" });
+      await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "DELETE" });
       return { esito: `«${a.prodotto.nome}» eliminato.`, annulla: [{ tabella: "prodotti", inserisci: [riga] }] };
     }
     case "elimina_categoria": {
-      const [riga] = await db(`categorie?id=eq.${a.categoria.id}&select=*`);
+      const [riga] = await db(`categorie?id=eq.${uuid(a.categoria.id)}&select=*`);
       if (!riga) throw new Error("La categoria non esiste più");
-      const piatti = await db(`prodotti?categoria_id=eq.${a.categoria.id}&select=*`);
-      await db(`categorie?id=eq.${a.categoria.id}`, { metodo: "DELETE" });
+      const piatti = await db(`prodotti?categoria_id=eq.${uuid(a.categoria.id)}&select=*`);
+      await db(`categorie?id=eq.${uuid(a.categoria.id)}`, { metodo: "DELETE" });
       const annulla = [{ tabella: "categorie", inserisci: [riga] }];
       if (piatti.length) annulla.push({ tabella: "prodotti", inserisci: piatti });
       return { esito: `Categoria «${a.categoria.nome}» eliminata${piatti.length ? ` con ${piatti.length} piatti` : ""}.`, annulla };
@@ -705,8 +718,10 @@ async function gestisciMessaggio(m) {
   if (testo === "/annulla") {
     if (!ultimaModifica) return invia(chat, "Non c'è nessuna modifica da annullare.");
     for (const op of ultimaModifica) {
+      // Solo le tabelle che il bot modifica; i filtri sono costruiti dal bot con UUID già validati
+      if (!TABELLE_ANNULLA.has(op.tabella)) throw new Error("operazione di annullamento non valida");
       if (op.inserisci) await db(op.tabella, { metodo: "POST", corpo: op.inserisci, unisci: !!op.unisci });
-      else await db(`${op.tabella}?${op.filtro ?? `id=eq.${op.id}`}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
+      else await db(`${op.tabella}?${op.filtro ?? `id=eq.${uuid(op.id)}`}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
     }
     ultimaModifica = null;
     aggiornaMenuPubblico();
@@ -786,7 +801,7 @@ export async function controllaSala() {
   // Totale del tavolo per le richieste di conto
   const totali = new Map();
   for (const c of nuoviConti) {
-    const ord = await db(`ordini?select=righe_ordine(quantita,prezzo_cent)&sessione_id=eq.${c.sessione_id}&stato=neq.rifiutato`);
+    const ord = await db(`ordini?select=righe_ordine(quantita,prezzo_cent)&sessione_id=eq.${uuid(c.sessione_id)}&stato=neq.rifiutato`);
     totali.set(c.id, ord.reduce((n, o) => n + o.righe_ordine.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0));
   }
   const prodotti = nuove.length ? new Map((await db(`prodotti?select=id,nome,prezzo_cent&locale_id=eq.${C.locale}`)).map((p) => [p.id, p])) : new Map();
