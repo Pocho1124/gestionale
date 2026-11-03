@@ -3,6 +3,7 @@ import { centesimi, formatta } from "@gest/core";
 import type { Aspetto, MenuPubblico } from "../lib/tipi";
 import { caricaFont, pilaFont } from "../lib/font";
 import { SchedaPiatto } from "./SchedaPiatto";
+import { sorgenteImmagine } from "../lib/archivio";
 import { TrovaVino } from "./TrovaVino";
 import { TIPI_VINO } from "../lib/tipi";
 
@@ -19,7 +20,8 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); },
     [aspetto.font_titoli, aspetto.font_testo]);
 
-  const logo = aspetto.logo_dati || aspetto.logo_url || null;
+  const logo = sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url);
+  const sfondo = sorgenteImmagine(aspetto.sfondo_path, aspetto.sfondo_dati);
   const stile = {
     "--m-primario": aspetto.colore_primario,
     "--m-accento": aspetto.colore_accento,
@@ -29,9 +31,9 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
     "--m-font-testo": pilaFont(aspetto.font_testo, SERIF.has(aspetto.font_testo)),
   } as CSSProperties;
 
-  const foto = aspetto.sfondo_dati ? (
+  const foto = sfondo ? (
     <div className="menu-foto" aria-hidden="true" style={{
-      backgroundImage: `url("${aspetto.sfondo_dati}")`,
+      backgroundImage: `url("${sfondo}")`,
       opacity: Math.min(100, Math.max(0, aspetto.sfondo_opacita)) / 100,
       filter: `blur(${aspetto.sfondo_sfocatura}px)${aspetto.sfondo_bn ? " grayscale(1)" : ""}`,
     }} />

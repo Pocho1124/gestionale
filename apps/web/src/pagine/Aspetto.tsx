@@ -6,6 +6,8 @@ import { messaggioErrore } from "../lib/errori";
 import { FONT_TESTO, FONT_TITOLI, type Aspetto as TAspetto, type MenuPubblico } from "../lib/tipi";
 import { MenuVista } from "../componenti/MenuVista";
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
+import { preparaImmagine } from "../lib/immagini";
+import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
 
 type Tema = Pick<TAspetto, "colore_primario" | "colore_accento" | "colore_sfondo" | "colore_testo" | "font_titoli" | "font_testo" | "layout">;
 
@@ -29,36 +31,6 @@ const TEMI: { nome: string; descrizione: string; tema: Tema }[] = [
 ];
 
 /** Riduce il logo a max 800 px e lo incorpora (PNG, o WebP se troppo pesante): nessun file esterno da gestire. */
-async function preparaLogo(file: File): Promise<string> {
-  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Formato non supportato: usa PNG, JPG o WebP.");
-  const img = await createImageBitmap(file);
-  const scala = Math.min(1, 800 / Math.max(img.width, img.height));
-  const tela = document.createElement("canvas");
-  tela.width = Math.max(1, Math.round(img.width * scala));
-  tela.height = Math.max(1, Math.round(img.height * scala));
-  tela.getContext("2d")!.drawImage(img, 0, 0, tela.width, tela.height);
-  let dati = tela.toDataURL("image/png");
-  if (dati.length > 680_000) dati = tela.toDataURL("image/webp", 0.9);
-  if (!/^data:image\/(png|webp);base64,/.test(dati) || dati.length > 680_000)
-    throw new Error("Logo troppo pesante anche dopo la riduzione: usa un'immagine più semplice.");
-  return dati;
-}
-
-/** Foto di sfondo: max 1600 px in JPEG (le foto non hanno trasparenza), compressione crescente se serve. */
-async function preparaSfondo(file: File): Promise<string> {
-  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Formato non supportato: usa JPG, PNG o WebP.");
-  const img = await createImageBitmap(file);
-  for (const [lato, qualita] of [[1600, 0.8], [1280, 0.7], [1024, 0.6]] as const) {
-    const scala = Math.min(1, lato / Math.max(img.width, img.height));
-    const tela = document.createElement("canvas");
-    tela.width = Math.max(1, Math.round(img.width * scala));
-    tela.height = Math.max(1, Math.round(img.height * scala));
-    tela.getContext("2d")!.drawImage(img, 0, 0, tela.width, tela.height);
-    const dati = tela.toDataURL("image/jpeg", qualita);
-    if (dati.startsWith("data:image/jpeg;base64,") && dati.length <= 1_350_000) return dati;
-  }
-  throw new Error("Foto troppo pesante anche dopo la riduzione: prova con un'altra immagine.");
-}
 
 const COLORI: { campo: keyof TAspetto; etichetta: string }[] = [
   { campo: "colore_primario", etichetta: "Colore principale" },
@@ -93,13 +65,15 @@ export function Aspetto() {
   if (!bozza || !salvato || !locale) return <p className="muto">Caricamento…</p>;
 
   const modificato = JSON.stringify(bozza) !== JSON.stringify(salvato);
-  const logoAttuale = bozza.logo_dati || bozza.logo_url || null;
+  const logoAttuale = sorgenteImmagine(bozza.logo_path, bozza.logo_dati, bozza.logo_url);
+  const sfondoAttuale = sorgenteImmagine(bozza.sfondo_path, bozza.sfondo_dati);
 
   async function caricaSfondo(file: File | undefined) {
     if (!file || !bozza) return;
     try {
-      const dati = await preparaSfondo(file);
-      setBozza({ ...bozza, sfondo_dati: dati });
+      const blob = await preparaImmagine(file, { lato: 1600, limite: 1_000_000 });
+      const percorso = await caricaImmagine(locale!.id, "sfondo", blob);
+      setBozza({ ...bozza, sfondo_path: percorso, sfondo_dati: null });
       avvisa("Foto caricata: regola visibilità e sfocatura, poi pubblica");
     } catch (e) { avvisa(e instanceof Error ? e.message : "Foto non valida", "errore"); }
   }
@@ -107,8 +81,9 @@ export function Aspetto() {
   async function caricaLogo(file: File | undefined) {
     if (!file || !bozza) return;
     try {
-      const dati = await preparaLogo(file);
-      setBozza({ ...bozza, logo_dati: dati, logo_url: null, mostra_nome: false });
+      const blob = await preparaImmagine(file, { lato: 800, limite: 500_000, trasparenza: true });
+      const percorso = await caricaImmagine(locale!.id, "logo", blob);
+      setBozza({ ...bozza, logo_path: percorso, logo_dati: null, logo_url: null, mostra_nome: false });
       avvisa("Logo caricato: controlla l'anteprima e poi pubblica");
     } catch (e) { avvisa(e instanceof Error ? e.message : "Logo non valido", "errore"); }
   }
@@ -118,9 +93,16 @@ export function Aspetto() {
     if (!bozza || !locale) return;
     setAttesa(true);
     const { locale_id: _ignora, ...campi } = bozza;
-    const { error } = await sb().from("aspetto").update({ ...campi, logo_url: campi.logo_url?.trim() || null, logo_dati: campi.logo_dati || null, sfondo_dati: campi.sfondo_dati || null }).eq("locale_id", locale.id);
+    const { error } = await sb().from("aspetto").update({
+      ...campi, logo_url: campi.logo_url?.trim() || null,
+      logo_path: campi.logo_path || null, logo_dati: campi.logo_path ? null : campi.logo_dati || null,
+      sfondo_path: campi.sfondo_path || null, sfondo_dati: campi.sfondo_path ? null : campi.sfondo_dati || null,
+    }).eq("locale_id", locale.id);
     setAttesa(false);
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
+    // Le immagini sostituite o tolte escono dall'archivio
+    if (salvato?.logo_path && salvato.logo_path !== bozza.logo_path) void eliminaImmagine(salvato.logo_path);
+    if (salvato?.sfondo_path && salvato.sfondo_path !== bozza.sfondo_path) void eliminaImmagine(salvato.sfondo_path);
     setSalvato(bozza); avvisa("Aspetto pubblicato: il menu dei clienti è aggiornato");
   }
 
@@ -162,7 +144,7 @@ export function Aspetto() {
               {logoAttuale ? "Sostituisci logo" : "Carica logo"}
               <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => void caricaLogo(e.target.files?.[0])} />
             </label>
-            {logoAttuale && <button type="button" className="btn btn-pericolo" onClick={() => setBozza({ ...bozza, logo_dati: null, logo_url: null })}>Rimuovi</button>}
+            {logoAttuale && <button type="button" className="btn btn-pericolo" onClick={() => setBozza({ ...bozza, logo_path: null, logo_dati: null, logo_url: null })}>Rimuovi</button>}
           </div>
           <label className="interruttore"><input type="checkbox" checked={bozza.mostra_nome} disabled={!logoAttuale}
             onChange={(e) => imposta("mostra_nome", e.target.checked)} />Mostra anche il nome sotto il logo</label>
@@ -170,13 +152,13 @@ export function Aspetto() {
         </fieldset>
 
         <fieldset className="gruppo"><legend>Foto di sfondo</legend>
-          {bozza.sfondo_dati ? (
+          {sfondoAttuale ? (
             <>
               <div className="riga-form">
                 <label className="btn">Sostituisci foto
                   <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void caricaSfondo(e.target.files?.[0])} />
                 </label>
-                <button type="button" className="btn btn-pericolo" onClick={() => setBozza({ ...bozza, sfondo_dati: null })}>Rimuovi</button>
+                <button type="button" className="btn btn-pericolo" onClick={() => setBozza({ ...bozza, sfondo_path: null, sfondo_dati: null })}>Rimuovi</button>
               </div>
               <label className="campo">Visibilità della foto: {bozza.sfondo_opacita}%
                 <input type="range" min={5} max={70} value={bozza.sfondo_opacita} onChange={(e) => imposta("sfondo_opacita", Number(e.target.value))} />

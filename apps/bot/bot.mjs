@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 // Bot Telegram privato del gestionale.
 // Interpreta le richieste (prima con regole, poi con il modello locale Ollama), mostra un'anteprima
 // e applica la modifica solo dopo conferma, con l'account dedicato del bot (permessi RLS, audit).
@@ -28,6 +29,7 @@ const C = {
   modello: process.env.OLLAMA_MODELLO || "qwen2.5:3b",
   trascrizione: (process.env.TRASCRIZIONE_URL || "http://trascrizione:9000").replace(/\/$/, ""),
   pubblicatore: (process.env.PUBBLICATORE_URL || "http://pubblicatore:8090").replace(/\/$/, ""),
+  archivio: (process.env.ARCHIVIO_URL || "http://immagini:5000").replace(/\/$/, ""),
 };
 
 /** Chiede al pubblicatore di aggiornare subito il menu pubblico (se non è installato, nessun problema). */
@@ -526,7 +528,11 @@ async function esegui(a, cat) {
     }
     case "imposta_foto": {
       const [prima] = await db(`foto_prodotti?prodotto_id=eq.${uuid(a.prodotto.id)}&select=*`);
-      await db("foto_prodotti", { metodo: "POST", unisci: true, corpo: { prodotto_id: a.prodotto.id, locale_id: C.locale, dati: a.dati } });
+      // Prima scelta: archivio immagini; se non è installato, la foto resta nel database come prima
+      const percorso = await inArchivio(a.dati).catch((e) => { log(`Archivio non disponibile, foto nel database: ${e.message}`); return null; });
+      await db("foto_prodotti", { metodo: "POST", unisci: true, corpo: percorso
+        ? { prodotto_id: a.prodotto.id, locale_id: C.locale, path: percorso, dati: null, aggiornata_at: new Date().toISOString() }
+        : { prodotto_id: a.prodotto.id, locale_id: C.locale, dati: a.dati, path: null, aggiornata_at: new Date().toISOString() } });
       const annulla = [prima ? { tabella: "foto_prodotti", inserisci: [prima], unisci: true }
                              : { tabella: "foto_prodotti", filtro: `prodotto_id=eq.${uuid(a.prodotto.id)}`, elimina: true }];
       if (a.descrizione) {
@@ -624,6 +630,19 @@ const AIUTO =
 const fotoInAttesa = new Map();   // chat -> { dati, descrizione, scade }: foto ricevuta senza il nome del piatto
 
 /** Scarica la foto più grande che sta nel limite (Telegram invia sempre JPEG). */
+/** Carica una foto JPEG (data URI) nell'archivio del locale con l'account del bot; restituisce il percorso. */
+async function inArchivio(datiUri) {
+  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(datiUri);
+  if (!m) throw new Error("formato non valido");
+  const percorso = `${C.locale}/piatti/${randomUUID()}.jpg`;
+  const r = await fetch(`${C.archivio}/object/immagini/${percorso}`, {
+    method: "POST", body: Buffer.from(m[1], "base64"), signal: AbortSignal.timeout(20_000),
+    headers: { apikey: C.anon, Authorization: `Bearer ${await jwt()}`, "Content-Type": "image/jpeg", "cache-control": "max-age=31536000", "x-upsert": "false" },
+  });
+  if (!r.ok) throw new Error(`risposta ${r.status}`);
+  return percorso;
+}
+
 async function scaricaFoto(formati) {
   const ordinati = [...formati].sort((a, b) => (b.file_size ?? 0) - (a.file_size ?? 0));
   const scelto = ordinati.find((f) => (f.file_size ?? 0) <= 640_000) ?? ordinati[ordinati.length - 1];

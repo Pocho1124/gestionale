@@ -15,10 +15,10 @@ export interface Prodotto {
 export interface Aspetto {
   locale_id?: string;
   colore_primario: string; colore_accento: string; colore_sfondo: string; colore_testo: string;
-  font_titoli: string; font_testo: string; logo_url: string | null; logo_dati: string | null; mostra_nome: boolean;
+  font_titoli: string; font_testo: string; logo_url: string | null; logo_dati: string | null; logo_path?: string | null; mostra_nome: boolean;
   layout: "lista" | "griglia" | "compatto" | "elegante";
   mostra_allergeni: boolean; mostra_descrizioni: boolean; testo_piede: string;
-  sfondo_dati: string | null; sfondo_opacita: number; sfondo_sfocatura: number; sfondo_bn: boolean;
+  sfondo_dati: string | null; sfondo_path?: string | null; sfondo_opacita: number; sfondo_sfocatura: number; sfondo_bn: boolean;
 }
 
 export interface MenuPubblico {
@@ -29,7 +29,7 @@ export interface MenuPubblico {
     prodotti: {
       id: string; nome: string; descrizione: string; prezzo_cent: number; disponibile: boolean;
       allergeni: string[]; etichette: string[]; immagine_url: string | null; foto?: number | null;
-      vino?: SchedaVino | null; abbinamenti?: { id: string; motivo: string }[];
+      vino?: SchedaVino | null; abbinamenti?: { id: string; motivo: string }[]; foto_path?: string | null;
       opzioni: { nome: string; min: number; max: number; scelte: { nome: string; sovrapprezzo_cent: number }[] }[];
     }[];
   }[];

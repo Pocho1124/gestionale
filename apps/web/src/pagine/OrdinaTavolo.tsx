@@ -5,6 +5,7 @@ import { sb } from "../lib/supabase";
 import { caricaFont, pilaFont } from "../lib/font";
 import type { MenuPubblico, PiattoMenu } from "../lib/tipi";
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
+import { sorgenteImmagine } from "../lib/archivio";
 
 interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean }
 interface RigaCarrello { piatto: PiattoMenu; quantita: number; nota: string }
@@ -146,7 +147,8 @@ export function OrdinaTavolo() {
   return (
     <div className="menu ordina" style={stile}>
       <header className="menu-testata">
-        {aspetto.logo_dati || aspetto.logo_url ? <img className="menu-logo" src={(aspetto.logo_dati || aspetto.logo_url)!} alt={info.locale} /> : <h1>{info.locale}</h1>}
+        {sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url)
+          ? <img className="menu-logo" src={sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url)!} alt={info.locale} /> : <h1>{info.locale}</h1>}
         <p className="ordina-tavolo">Tavolo {info.tavolo}</p>
       </header>
       {richiesta && <p className="ordina-avviso" role="status">⏳ Richiesta inviata: il personale sta arrivando a confermare il tuo ordine…</p>}

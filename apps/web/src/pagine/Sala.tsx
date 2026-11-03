@@ -5,10 +5,11 @@ import { useSessione } from "../lib/sessione";
 import { useAvviso } from "../componenti/Avviso";
 import { messaggioErrore } from "../lib/errori";
 import type { Aspetto } from "../lib/tipi";
-import { comprimiFoto } from "../lib/immagini";
+import { preparaImmagine } from "../lib/immagini";
+import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
 import { CodaRichieste, PannelloTavolo, suona, type CategoriaBreve, type OrdineSala, type ProdottoBreve, type RichiestaSala } from "../componenti/ServizioSala";
 
-interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_opacita: number; pavimento: Pavimento }
+interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_path: string | null; sfondo_opacita: number; pavimento: Pavimento }
 type Pavimento = "parquet" | "cotto" | "marmo" | "cemento" | "nessuno";
 interface Tavolo { id: string; locale_id: string; sala_id: string; nome: string; posti: number; forma: "tondo" | "quadrato" | "rettangolo"; x: number; y: number; rotazione: number; qr_token: string; attivo: boolean }
 type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pianta" | "zona" | "testo" | "cassa" | "bagni";
@@ -266,7 +267,7 @@ export function Piantina(props: {
         <filter id="ombra" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000" floodOpacity=".28" /></filter>
       </defs>
       <rect width={W} height={H} fill={props.sala && props.sala.pavimento !== "nessuno" ? `url(#pav-${props.sala.pavimento})` : "transparent"} />
-      {props.sala?.sfondo_dati && <image href={props.sala.sfondo_dati} width={W} height={H} preserveAspectRatio="xMidYMid meet" opacity={props.sala.sfondo_opacita / 100} />}
+      {props.sala && sorgenteImmagine(props.sala.sfondo_path, props.sala.sfondo_dati) && <image href={sorgenteImmagine(props.sala.sfondo_path, props.sala.sfondo_dati)!} width={W} height={H} preserveAspectRatio="xMidYMid meet" opacity={props.sala.sfondo_opacita / 100} />}
       {props.modificabile && <rect width={W} height={H} fill="url(#griglia)" pointerEvents="none" />}
 
       {[...props.elementi].sort((a, b) => Number(b.tipo === "zona") - Number(a.tipo === "zona")).map((el) => {
@@ -391,8 +392,11 @@ function PannelloPiantina(props: {
   async function caricaPlanimetria(file: File | undefined) {
     if (!file) return;
     try {
-      const dati = await comprimiFoto(file, 1_350_000, [[1600, 0.8], [1280, 0.7], [1024, 0.6]]);
-      aggiornaSala({ sfondo_dati: dati });
+      const blob = await preparaImmagine(file, { lato: 1600, limite: 1_000_000 });
+      const percorso = await caricaImmagine(props.locale, "sale", blob);
+      const precedente = sala.sfondo_path;
+      aggiornaSala({ sfondo_path: percorso, sfondo_dati: null });
+      void eliminaImmagine(precedente);
     } catch (e) { avvisa(e instanceof Error ? e.message : "Immagine non valida", "errore"); }
   }
 
@@ -484,12 +488,12 @@ function PannelloPiantina(props: {
           <fieldset className="gruppo"><legend>Planimetria di sfondo</legend>
             <p className="muto piccolo">Carica una foto o una piantina del locale e ricalca sopra muri e tavoli.</p>
             <div className="riga-form">
-              <label className="btn btn-piccolo">{sala.sfondo_dati ? "Sostituisci" : "Carica immagine"}
+              <label className="btn btn-piccolo">{sala.sfondo_path || sala.sfondo_dati ? "Sostituisci" : "Carica immagine"}
                 <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void caricaPlanimetria(e.target.files?.[0])} />
               </label>
-              {sala.sfondo_dati && <button className="btn btn-pericolo" onClick={() => aggiornaSala({ sfondo_dati: null })}>Rimuovi</button>}
+              {(sala.sfondo_path || sala.sfondo_dati) && <button className="btn btn-pericolo" onClick={() => { const v = sala.sfondo_path; aggiornaSala({ sfondo_path: null, sfondo_dati: null }); void eliminaImmagine(v); }}>Rimuovi</button>}
             </div>
-            {sala.sfondo_dati && (
+            {(sala.sfondo_path || sala.sfondo_dati) && (
               <label className="campo">Visibilità: {sala.sfondo_opacita}%
                 <input type="range" min={5} max={100} defaultValue={sala.sfondo_opacita} onPointerUp={(e) => aggiornaSala({ sfondo_opacita: Number((e.target as HTMLInputElement).value) })} />
               </label>
@@ -563,7 +567,7 @@ function Cartoncini({ locale, tavoli, sale }: { locale: { id: string; nome: stri
   }
 
   const stile = aspetto ? { ["--c-primario" as string]: aspetto.colore_primario, ["--c-sfondo" as string]: aspetto.colore_sfondo, ["--c-testo" as string]: aspetto.colore_testo } : {};
-  const logo = aspetto?.logo_dati || aspetto?.logo_url || null;
+  const logo = sorgenteImmagine(aspetto?.logo_path, aspetto?.logo_dati, aspetto?.logo_url);
 
   return (
     <div className="pagina">

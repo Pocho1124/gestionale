@@ -8,7 +8,8 @@ import { ALLERGENI, CORPI_VINO, ETICHETTE, TIPI_VINO, type Categoria, type Prodo
 
 type RigaVino = SchedaVino & { prodotto_id: string; locale_id: string };
 interface Abbinamento { piatto_id: string; vino_id: string; locale_id: string; motivo: string }
-import { comprimiFoto } from "../lib/immagini";
+import { preparaImmagine } from "../lib/immagini";
+import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
 
 const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
@@ -232,21 +233,24 @@ function RigaProdotto(props: {
   const [aperto, setAperto] = useState(false);
   const [prezzo, setPrezzo] = useState(euroTesto(p.prezzo_cent));
   const [foto, setFoto] = useState<string | null | undefined>(undefined);   // undefined = non ancora caricata
+  const [fotoPath, setFotoPath] = useState<string | null>(null);
   const avvisa = useAvviso();
 
   useEffect(() => {
     if (!aperto || foto !== undefined) return;
-    void sb().from("foto_prodotti").select("dati").eq("prodotto_id", p.id).maybeSingle()
-      .then(({ data }) => setFoto((data?.dati as string | undefined) ?? null));
+    void sb().from("foto_prodotti").select("dati, path").eq("prodotto_id", p.id).maybeSingle()
+      .then(({ data }) => { setFotoPath((data?.path as string | null) ?? null); setFoto(sorgenteImmagine(data?.path as string | null, data?.dati as string | null)); });
   }, [aperto, foto, p.id]);
 
   async function caricaFoto(file: File | undefined) {
     if (!file) return;
     try {
-      const dati = await comprimiFoto(file, 880_000, [[1280, 0.8], [1024, 0.72], [800, 0.65]]);
-      const { error } = await sb().from("foto_prodotti").upsert({ prodotto_id: p.id, locale_id: p.locale_id, dati });
-      if (error) throw error;
-      setFoto(dati); avvisa("Foto salvata");
+      const blob = await preparaImmagine(file, { lato: 1280, limite: 700_000 });
+      const percorso = await caricaImmagine(p.locale_id, "piatti", blob);
+      const { error } = await sb().from("foto_prodotti").upsert({ prodotto_id: p.id, locale_id: p.locale_id, path: percorso, dati: null, aggiornata_at: new Date().toISOString() });
+      if (error) { void eliminaImmagine(percorso); throw error; }
+      void eliminaImmagine(fotoPath);
+      setFotoPath(percorso); setFoto(sorgenteImmagine(percorso)); avvisa("Foto salvata");
     } catch (e) { avvisa(e instanceof Error ? e.message : messaggioErrore(e), "errore"); }
   }
 
@@ -254,7 +258,8 @@ function RigaProdotto(props: {
     if (!confirm(`Rimuovere la foto di «${p.nome}»?`)) return;
     const { error } = await sb().from("foto_prodotti").delete().eq("prodotto_id", p.id);
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
-    setFoto(null); avvisa("Foto rimossa");
+    void eliminaImmagine(fotoPath);
+    setFoto(null); setFotoPath(null); avvisa("Foto rimossa");
   }
   useEffect(() => { setPrezzo(euroTesto(p.prezzo_cent)); }, [p.prezzo_cent]);
 

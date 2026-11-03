@@ -8,6 +8,8 @@ import { createServer } from "node:http";
 const C = {
   url: obbligatoria("SUPABASE_URL").replace(/\/$/, ""),
   anon: obbligatoria("SUPABASE_ANON_KEY"),
+  // Archivio delle immagini (Supabase Storage), raggiunto sulla rete interna dei servizi
+  archivio: (process.env.ARCHIVIO_URL || "http://immagini:5000").replace(/\/$/, ""),
   token: obbligatoria("GITHUB_TOKEN"),
   repo: obbligatoria("GITHUB_REPO"),                 // es. Pocho1124/menu
   slugs: obbligatoria("SLUGS").split(",").map((s) => s.trim()).filter(Boolean),
@@ -335,7 +337,32 @@ const ultimo = new Map();      // slug -> impronta dell'ultimo menu pubblicato
 const ultimeImmagini = new Map();  // "slug/nome" -> impronta dell'ultima immagine pubblicata
 
 /** Pubblica un'immagine incorporata come file accanto alla pagina (solo se cambiata). */
-async function immagine(slug, nome, dati) {
+const PERCORSO_ARCHIVIO = /^[0-9a-f-]{36}\/(logo|sfondo|sale|piatti)\/([0-9a-f-]{36})\.(jpg|png|webp)$/;
+
+/** Scarica un'immagine dall'archivio come base64 (solo percorsi nel formato previsto). */
+export async function daArchivio(percorso) {
+  if (!PERCORSO_ARCHIVIO.test(percorso)) throw new Error("percorso immagine non valido");
+  const r = await fetch(`${C.archivio}/object/public/immagini/${percorso}`, { signal: AbortSignal.timeout(20_000) });
+  if (!r.ok) throw new Error(`immagine non disponibile nell'archivio (${r.status})`);
+  const dati = Buffer.from(await r.arrayBuffer());
+  if (dati.length > 2 * 1024 * 1024) throw new Error("immagine oltre il limite");
+  return dati.toString("base64");
+}
+
+/** Immagine nell'archivio: il nome è unico e non cambia mai, quindi si scarica e pubblica solo quando cambia il percorso. */
+export async function immagineArchivio(slug, nome, percorso) {
+  const m = PERCORSO_ARCHIVIO.exec(percorso);
+  if (!m) return null;
+  const est = m[3], impronta = m[2].slice(0, 10), chiave = `${slug}/${nome}`;
+  if (ultimeImmagini.get(chiave) !== impronta) {
+    await pubblicaBinario(`${slug}/${nome}.${est}`, await daArchivio(percorso), `${nome} ${slug} aggiornato`);
+    ultimeImmagini.set(chiave, impronta);
+  }
+  return `${nome}.${est}?v=${impronta}`;
+}
+
+async function immagine(slug, nome, dati, percorso) {
+  if (percorso) return immagineArchivio(slug, nome, percorso);
   const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(dati ?? "");
   if (!m) return null;
   const est = m[1] === "jpeg" ? "jpg" : m[1];
@@ -355,6 +382,18 @@ async function fotoDeiPiatti(slug, menu) {
     for (const p of c.prodotti) {
       if (!p.foto) continue;
       const chiave = `${slug}/foto/${p.id}`;
+      if (p.foto_path) {
+        // Foto nell'archivio: il percorso fa da versione
+        const m = PERCORSO_ARCHIVIO.exec(p.foto_path);
+        if (!m) continue;
+        const versione = m[2].slice(0, 10);
+        if (ultimeImmagini.get(chiave) !== versione) {
+          await pubblicaBinario(`${chiave}.jpg`, await daArchivio(p.foto_path), `Foto ${p.nome} aggiornata`);
+          ultimeImmagini.set(chiave, versione);
+        }
+        percorsi[p.id] = `foto/${p.id}.jpg?v=${versione}`;
+        continue;
+      }
       if (ultimeImmagini.get(chiave) !== String(p.foto)) {
         const r = await fetch(`${C.url}/rest/v1/rpc/foto_prodotto`, {
           method: "POST",
@@ -391,11 +430,11 @@ async function giro() {
       const impronta = createHash("sha256").update(JSON.stringify(menu)).digest("hex");
       if (ultimo.get(slug) === impronta) continue;
       const ora = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Rome" }).format(new Date());
-      const logoFile = await immagine(slug, "logo", menu.aspetto?.logo_dati);
-      const sfondoFile = await immagine(slug, "sfondo", menu.aspetto?.sfondo_dati);
+      const logoFile = await immagine(slug, "logo", menu.aspetto?.logo_dati, menu.aspetto?.logo_path);
+      const sfondoFile = await immagine(slug, "sfondo", menu.aspetto?.sfondo_dati, menu.aspetto?.sfondo_path);
       const fotoPiatti = await fotoDeiPiatti(slug, menu);
       const { aspetto, ...resto } = menu;
-      const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null } : aspetto };
+      const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null, logo_path: null, sfondo_path: null } : aspetto };
       const versione = impronta.slice(0, 12);
       await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti, versione), `Menu ${slug} aggiornato`);
       // Dopo la pagina: chi ha il menu aperto vede la nuova versione e ricarica scavalcando la cache

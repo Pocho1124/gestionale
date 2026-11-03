@@ -110,6 +110,13 @@ if ! grep -q '# BACKOFFICE' /opt/supabase/Caddyfile; then
 				header_up Host {upstream_hostport}
 			}
 		}
+		# ARCHIVIO: immagini (Supabase Storage, installato da archivio-installa.sh)
+		handle_path /storage/v1/* {
+			request_body {
+				max_size 3MB
+			}
+			reverse_proxy immagini:5000
+		}
 		handle /config.json {
 			header Cache-Control "no-store"
 			root * /srv/conf

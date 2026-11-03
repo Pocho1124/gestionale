@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
+import { urlImmagine } from "../lib/archivio";
 import { CORPI_VINO, TIPI_VINO, type PiattoMenu } from "../lib/tipi";
 
 type Piatto = PiattoMenu;
@@ -16,7 +17,8 @@ export function SchedaPiatto({ piatto, onChiudi, perId, onApri }: {
 
   useEffect(() => {
     let attivo = true;
-    if (piatto.foto) {
+    if (piatto.foto_path) setFoto(urlImmagine(piatto.foto_path));
+    else if (piatto.foto) {
       void sb().rpc("foto_prodotto", { p_prodotto: piatto.id }).then(({ data }) => { if (attivo) setFoto((data as string | null) ?? null); });
     }
     chiudi.current?.focus();
