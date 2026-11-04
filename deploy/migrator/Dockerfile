@@ -16,6 +16,7 @@ COPY deploy/migrator/applica.sh deploy/migrator/test.sh /app/
 COPY supabase/migrations /migrations
 COPY supabase/tests/database /tests
 COPY deploy/pi /deploy
+COPY deploy/cloudflare /deploy/cloudflare
 COPY --from=web /src/apps/web/dist /web
 COPY apps/bot /bot
 ENTRYPOINT ["sh", "/app/applica.sh", "/migrations"]

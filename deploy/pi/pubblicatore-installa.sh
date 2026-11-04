@@ -1,7 +1,7 @@
 #!/bin/bash
-# Menu pubblico dei clienti sul dominio del locale tramite Cloudflare (Worker + archivio KV).
+# Menu pubblico dei clienti sul dominio del locale tramite Cloudflare (Worker + database D1 per le pagine + archivio KV per le immagini).
 # Il server non apre porte: è lui a inviare pagine e immagini a Cloudflare quando il menu cambia.
-# Due token Cloudflare: CONFIGURAZIONE (usato solo ora, non salvato) e PUBBLICAZIONE (solo archivio KV, salvato sul server).
+# Due token Cloudflare: CONFIGURAZIONE (usato solo ora, non salvato) e PUBBLICAZIONE (solo KV e D1, salvato sul server).
 # Uso (terminale di Cockpit):
 #   sudo docker run --rm --entrypoint cat ghcr.io/pocho1124/gestionale-migrator:latest /deploy/pubblicatore-installa.sh > /tmp/pubblicatore-installa.sh && sudo bash /tmp/pubblicatore-installa.sh
 set -euo pipefail
@@ -32,7 +32,7 @@ read -rp "Dominio [enotechiasantalucia.it]: " DOMINIO; DOMINIO=${DOMINIO:-enotec
 read -rp "Indirizzo del menu [menu.$DOMINIO]: " HOST; HOST=${HOST:-menu.$DOMINIO}
 [[ "$HOST" =~ ^[a-z0-9.-]+$ ]] || { echo "Indirizzo non valido"; exit 1; }
 read -rsp "Token di CONFIGURAZIONE (non viene salvato): " TCONF; echo
-read -rsp "Token di PUBBLICAZIONE (solo archivio KV): " TPUB; echo
+read -rsp "Token di PUBBLICAZIONE (solo KV e D1): " TPUB; echo
 cf() { local metodo=$1 percorso=$2; shift 2; curl -sS --max-time 30 -X "$metodo" "$API$percorso" -H "Authorization: Bearer $TCONF" "$@"; }
 
 echo "== 1/6 Verifica dei token"
@@ -48,9 +48,18 @@ KV=$(cf GET "/accounts/$ACCOUNT/storage/kv/namespaces?per_page=100" | json "next
 [[ -n "$KV" ]] || KV=$(cf POST "/accounts/$ACCOUNT/storage/kv/namespaces" -H "Content-Type: application/json" --data '{"title":"menu-gestionale"}' | json "d['result']['id']")
 echo "Archivio: $KV"
 
+echo "== 3b/6 Database delle pagine (D1): aggiornamenti visibili subito"
+D1=$(cf GET "/accounts/$ACCOUNT/d1/database?name=menu-gestionale" | json "next((x['uuid'] for x in d.get('result') or [] if x['name']=='menu-gestionale'), '')")
+[[ -n "$D1" ]] || D1=$(cf POST "/accounts/$ACCOUNT/d1/database" -H "Content-Type: application/json" --data '{"name":"menu-gestionale"}' | json "d['result']['uuid']")
+[[ -n "$D1" ]] || { echo "Creazione del database D1 non riuscita (permesso Account: D1 - Edit sul token di configurazione?)"; exit 1; }
+cf POST "/accounts/$ACCOUNT/d1/database/$D1/query" -H "Content-Type: application/json" \
+  --data '{"sql":"create table if not exists pagine (chiave text primary key, contenuto text not null, tipo text not null, aggiornato text not null default current_timestamp)"}' | ok \
+  || { echo "Creazione della tabella delle pagine non riuscita"; exit 1; }
+echo "Database: $D1"
+
 echo "== 4/6 Worker del menu"
-META=$(printf '{"main_module":"menu-worker.js","compatibility_date":"2025-01-01","bindings":[{"type":"kv_namespace","name":"MENU","namespace_id":"%s"},{"type":"plain_text","name":"PREDEFINITO","text":"%s"}]}' "$KV" "$SLUG")
-cf PUT "/accounts/$ACCOUNT/workers/scripts/menu" -F "metadata=$META;type=application/json" -F "menu-worker.js=@$WORKER;type=application/javascript+module" | ok \
+META=$(printf '{"main_module":"menu-worker.js","compatibility_date":"2025-01-01","bindings":[{"type":"kv_namespace","name":"MENU","namespace_id":"%s"},{"type":"d1","name":"DB","id":"%s"},{"type":"plain_text","name":"PREDEFINITO","text":"%s"}]}' "$KV" "$D1" "$SLUG")
+cf PUT "/accounts/$ACCOUNT/workers/scripts/menu" -F "metadata=$META;type=application/json" -F "menu-worker.js=@$WORKER;filename=menu-worker.js;type=application/javascript+module" | ok \
   || { echo "Caricamento del Worker non riuscito"; exit 1; }
 
 echo "== 5/6 Indirizzo $HOST"
@@ -61,15 +70,19 @@ cf PUT "/accounts/$ACCOUNT/workers/domains" -H "Content-Type: application/json" 
 echo "== 6/6 Pubblicatore"
 curl -sS -X PUT "$API/accounts/$ACCOUNT/storage/kv/namespaces/$KV/values/prova-scrittura" -H "Authorization: Bearer $TPUB" \
   -F value=ok -F 'metadata={"tipo":"text/plain"}' | ok || { echo "Il token di pubblicazione non può scrivere nell'archivio KV"; exit 1; }
+curl -sS -X DELETE "$API/accounts/$ACCOUNT/storage/kv/namespaces/$KV/values/prova-scrittura" -H "Authorization: Bearer $TPUB" >/dev/null
+curl -sS -X POST "$API/accounts/$ACCOUNT/d1/database/$D1/query" -H "Authorization: Bearer $TPUB" -H "Content-Type: application/json" \
+  --data '{"sql":"select count(*) from pagine"}' | ok || { echo "Il token di pubblicazione non può usare il database D1 (permesso Account: D1 - Edit)"; exit 1; }
 [[ -f "$ENVF" ]] && cp "$ENVF" "$ENVF.precedente"
 umask 077
 cat > "$ENVF" <<ENV
 SUPABASE_URL=http://gateway:8000
 SUPABASE_ANON_KEY=$ANON
 SLUGS=$SLUGS
-INTERVALLO_SECONDI=15
+INTERVALLO_SECONDI=5
 CLOUDFLARE_ACCOUNT_ID=$ACCOUNT
 CLOUDFLARE_KV_ID=$KV
+CLOUDFLARE_D1_ID=$D1
 CLOUDFLARE_TOKEN=$TPUB
 MENU_URL=https://$HOST
 ENV

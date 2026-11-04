@@ -1,5 +1,7 @@
-// Menu pubblico su Cloudflare: legge le pagine e le immagini pubblicate dal server del locale (archivio KV «MENU»)
-// e le serve sul dominio del locale. Solo lettura: niente moduli, niente segreti, nessun accesso ad altro.
+// Menu pubblico su Cloudflare: serve sul dominio del locale ciò che pubblica il server del locale.
+// Pagine e versione (cambiano spesso) nel database D1 «DB», letto sempre aggiornato: le modifiche si vedono subito.
+// Immagini nell'archivio KV «MENU», con un nome nuovo a ogni modifica (mai contenuti vecchi in cache).
+// Solo lettura: nessun segreto, nessun accesso ad altro.
 const SICUREZZA = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
@@ -21,16 +23,24 @@ export default {
     if (chiave.endsWith("/")) chiave += "index.html";
     else if (!/\.[a-z0-9]+$/i.test(chiave)) return Response.redirect(new URL(`/${chiave}/`, url).toString(), 301);
 
-    const { value, metadata } = await env.MENU.getWithMetadata(chiave, { type: "arrayBuffer", cacheTtl: 60 });
-    if (value === null) return nonTrovato();
     const pagina = /\.(html|json)$/.test(chiave);
+    let corpo, tipo;
+    if (pagina) {
+      const riga = await env.DB.prepare("select contenuto, tipo from pagine where chiave = ?").bind(chiave).first();
+      if (!riga) return nonTrovato();
+      corpo = riga.contenuto; tipo = riga.tipo;
+    } else {
+      const { value, metadata } = await env.MENU.getWithMetadata(chiave, { type: "arrayBuffer", cacheTtl: 3600 });
+      if (value === null) return nonTrovato();
+      corpo = value; tipo = metadata?.tipo;
+    }
     const intestazioni = new Headers({
       ...SICUREZZA,
-      "content-type": metadata?.tipo || "application/octet-stream",
-      // Pagine e versione: sempre ricontrollate; immagini con versione nel nome: in cache a lungo
-      "cache-control": pagina ? "no-cache" : url.searchParams.has("v") ? "public, max-age=31536000, immutable" : "public, max-age=300",
+      "content-type": tipo || "application/octet-stream",
+      // Pagine e versione: sempre ricontrollate; immagini: il nome cambia a ogni modifica, quindi in cache a lungo
+      "cache-control": pagina ? "no-cache" : "public, max-age=31536000, immutable",
     });
-    return new Response(richiesta.method === "HEAD" ? null : value, { headers: intestazioni });
+    return new Response(richiesta.method === "HEAD" ? null : corpo, { headers: intestazioni });
   },
 };
 
