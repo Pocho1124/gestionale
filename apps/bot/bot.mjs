@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { riconosciVino } from "./vitigni.mjs";
+import { descriviVino } from "./descrizioni.mjs";
 // Bot Telegram privato del gestionale.
 // Interpreta le richieste (prima con regole, poi con il modello locale Ollama), mostra un'anteprima
 // e applica la modifica solo dopo conferma, con l'account dedicato del bot (permessi RLS, audit).
@@ -239,6 +240,10 @@ export function interpretaConRegole(testo, cat) {
   // --- Sommelier: scheda vino, abbinamenti, suggerimenti dell'IA
   if (/^\s*(suggerisci|proponi|consigliami|trova|fammi|dammi)\b.*\babbinament/i.test(testo)) return { azione: "suggerisci_abbinamenti" };
   if (/^\s*(completa|compila|genera|crea|prepara|riempi|aggiorna)\b.*\bsched[ae]\b.*\bvin[oi]\b/i.test(testo)) return { azione: "completa_schede_vini" };
+  // «descrizioni … vini» in qualsiasi forma (anche dai vocali: «riscrimi», «rescrivi», «puoi rifare…»), ma non «descrizione Nome: …»
+  if ((/\bdescrizion\w*\b.*\bvin[oi]\b/i.test(testo) && !testo.includes(":")) || /^\s*descrivi\s+(i\s+|tutti\s+i\s+)?vini\b/i.test(testo)) {
+    return { azione: "descrivi_vini", tutti: /\b(tutt[ei]|r[ie]scri\w*|rifa\w*|miglior\w*|aggiorn\w*|sistem\w*)\b/i.test(testo) };
+  }
   const enc = testo.match(/^\s*(?:enciclopedia|aggiungi\s+all'?\s*enciclopedia)\s+(.+?)\s*:\s*(.+)$/is);
   if (enc) {
     const campi = leggiSchedaVino(enc[2]);
@@ -374,7 +379,7 @@ async function interpretaConModello(testo, cat) {
     type: "object",
     properties: {
       azione: { type: "string", enum: ["varia_prezzi", "imposta_prezzo", "disponibilita", "visibilita", "aggiungi_piatto", "aggiungi_categoria",
-        "imposta_descrizione", "abbina", "togli_abbinamento", "completa_schede_vini", "suggerisci_abbinamenti",
+        "imposta_descrizione", "abbina", "togli_abbinamento", "completa_schede_vini", "descrivi_vini", "suggerisci_abbinamenti",
         "mostra_menu", "mostra_esauriti", "aiuto", "nessuna"] },
       vino: { type: "string", enum: nomiVini.length ? nomiVini : [""] },
       nome: { type: "string" },
@@ -396,6 +401,7 @@ async function interpretaConModello(testo, cat) {
       "aggiungi_piatto: nome, euro, categoria, descrizione facoltativa. aggiungi_categoria: nome. imposta_descrizione: prodotto e descrizione. " +
       "abbina: prodotto (il piatto) e vino. togli_abbinamento: prodotto e vino. " +
       "completa_schede_vini: compilare o completare le schede dei vini (tipo, corpo, regione) per il quiz. " +
+      "descrivi_vini: scrivere o migliorare le descrizioni dei vini del menu (valore true se vanno rifatte anche quelle esistenti). " +
       "suggerisci_abbinamenti: proporre abbinamenti tra piatti e vini. mostra_menu: vedere il menu con i prezzi. " +
       "mostra_esauriti: vedere cosa è esaurito. aiuto: sapere cosa può fare il bot. Se non corrisponde a nessuna funzione: 'nessuna'.",
     utente: `Categorie: ${nomiCat.join(", ") || "nessuna"}\nPiatti: ${nomiPiatti.join(", ") || "nessuno"}\nVini con scheda: ${nomiVini.join(", ") || "nessuno"}\nRichiesta: ${testo}`,
@@ -426,6 +432,7 @@ async function interpretaConModello(testo, cat) {
       return out.azione === "abbina" ? { azione: "abbina", coppie: [{ piatto: p, vino: v, motivo: "" }] } : { azione: "togli_abbinamento", piatto: p, vino: v };
     }
     case "completa_schede_vini": return { azione: "completa_schede_vini" };
+    case "descrivi_vini": return { azione: "descrivi_vini", tutti: out.valore === true };
     case "suggerisci_abbinamenti": return { azione: "suggerisci_abbinamenti" };
     case "mostra_menu": return { azione: "comando", comando: "/menu" };
     case "mostra_esauriti": return { azione: "comando", comando: "/esauriti" };
@@ -479,6 +486,25 @@ async function schedaDaEnciclopedia(prodotto) {
   return null;
 }
 
+/** Nuove descrizioni dei vini dai dati dell'enciclopedia e della scheda (solo i vini senza descrizione, o tutti). */
+async function descriviVini(cat, tutti) {
+  const categorieVini = new Set(cat.categorie.filter((c) => CATEGORIE_VINI.test(c.nome)).map((c) => c.id));
+  const vini = cat.prodotti.filter((p) => categorieVini.has(p.categoria_id) && (tutti || !p.descrizione?.trim())).slice(0, 25);
+  if (!vini.length) return { azione: "chiarisci", testo: "Tutti i vini hanno già una descrizione. Per rifarle tutte: «riscrivi le descrizioni dei vini»." };
+  const proposte = [], senzaDati = [];
+  for (const p of vini) {
+    let e = null;
+    try { e = await schedaDaEnciclopedia({ ...p, descrizione: "" }); } catch (err) { log(`Enciclopedia non disponibile: ${err.message}`); }
+    const scheda = cat.vini.get(p.id);   // la scheda del locale, già verificata, prevale
+    const dati = { ...(e ?? {}), ...(scheda ? { tipo: scheda.tipo, corpo: scheda.corpo, regione: scheda.regione || e?.regione, vitigno: scheda.vitigno || e?.vitigno } : {}) };
+    const nuova = dati.tipo ? descriviVino(dati) : null;
+    if (nuova && nuova !== p.descrizione) proposte.push({ prodotto: p, vecchia: p.descrizione ?? "", nuova });
+    else if (!nuova) senzaDati.push(p.nome);
+  }
+  if (!proposte.length) return { azione: "chiarisci", testo: `Non ho dati sufficienti per descrivere: ${senzaDati.join(", ")}. Completa prima le schede: «completa le schede dei vini».` };
+  return { azione: "descrizioni_vini", proposte, senzaDati };
+}
+
 async function completaSchedeVini(cat) {
   const categorieVini = new Set(cat.categorie.filter((c) => CATEGORIE_VINI.test(c.nome)).map((c) => c.id));
   const senza = cat.prodotti.filter((p) => categorieVini.has(p.categoria_id) && !cat.vini.has(p.id));
@@ -525,6 +551,10 @@ export function anteprima(a, cat) {
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "DI NUOVO DISPONIBILE" : "ESAURITO"}` };
     case "visibilita":
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "VISIBILE nel menu" : "NASCOSTO dal menu"}` };
+    case "descrizioni_vini":
+      return { testo: `✍️ Nuove descrizioni dei vini (dai dati dell'enciclopedia):\n${a.proposte.map((x) => `• ${x.prodotto.nome}\n  ${x.nuova}`).join("\n")}`
+        + (a.senzaDati?.length ? `\n\n❔ Senza dati, lasciati com'erano: ${a.senzaDati.join(", ")}` : "")
+        + "\n\nPuoi sempre ritoccarle dal backoffice o con «descrizione Nome: …»." };
     case "aggiungi_enciclopedia": {
       const c = a.campi;
       return { testo: `📚 Nuovo vino nell'enciclopedia del locale:\n• ${a.nome}: ${[c.tipo, c.corpo, c.regione, c.vitigno && `vitigno ${c.vitigno}`, c.cantina && `cantina ${c.cantina}`].filter(Boolean).join(", ")}` +
@@ -608,6 +638,11 @@ async function esegui(a, cat) {
     case "visibilita":
       await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
       return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+    case "descrizioni_vini": {
+      for (const x of a.proposte) await db(`prodotti?id=eq.${uuid(x.prodotto.id)}`, { metodo: "PATCH", corpo: { descrizione: x.nuova } });
+      return { esito: `${a.proposte.length === 1 ? "1 descrizione aggiornata" : `${a.proposte.length} descrizioni aggiornate`}.`,
+               annulla: a.proposte.map((x) => ({ tabella: "prodotti", id: x.prodotto.id, patch: { descrizione: x.vecchia } })) };
+    }
     case "aggiungi_enciclopedia": {
       const c = a.campi;
       const [voce] = await db("enciclopedia_vini", { metodo: "POST", corpo: { nome: a.nome, tipo: c.tipo, corpo: c.corpo, regione: c.regione ?? "",
@@ -752,6 +787,7 @@ const AIUTO =
   "• togli abbinamento aglianico e genovese\n• suggerisci abbinamenti (li propone l'IA, tu confermi)\n" +
   "• completa le schede dei vini (cerca i vini senza scheda nell'enciclopedia, per il quiz «Trova il tuo vino»)\n" +
   "• enciclopedia Rubrato: rosso, strutturato, Campania, vitigno Aglianico, cantina Feudi di San Gregorio (aggiunge un vino mancante)\n" +
+  "• descrivi i vini (scrive le descrizioni mancanti dai dati dell'enciclopedia) · riscrivi le descrizioni dei vini (le rifà tutte)\n" +
   "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
@@ -908,6 +944,7 @@ export async function gestisciMessaggio(m) {
   if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze». /aiuto per l'elenco dei comandi.");
   if (azione.azione === "comando") return gestisciMessaggio({ ...m, text: azione.comando });
 
+  if (azione.azione === "descrivi_vini") azione = await descriviVini(cat, azione.tutti);
   if (azione.azione === "completa_schede_vini") {
     azione = await completaSchedeVini(cat);
   }
