@@ -12,6 +12,7 @@ PAESI = {"Italy": "Italia", "France": "Francia", "Spain": "Spagna", "Portugal": 
          "South Africa": "Sudafrica", "Brazil": "Brasile", "Greece": "Grecia", "Hungary": "Ungheria", "Uruguay": "Uruguay", "Switzerland": "Svizzera",
          "Slovenia": "Slovenia", "Croatia": "Croazia", "Romania": "Romania", "Georgia": "Georgia", "Israel": "Israele", "Lebanon": "Libano",
          "Canada": "Canada", "Mexico": "Messico", "Moldova": "Moldavia", "Bulgaria": "Bulgaria", "Czech Republic": "Repubblica Ceca"}
+ACIDITA = {"low": "bassa", "medium": "media", "high": "alta"}
 CIBI = {"Beef": "manzo", "Lamb": "agnello", "Veal": "vitello", "Pork": "maiale", "Poultry": "pollame", "Game Meat": "selvaggina",
         "Fish": "pesce", "Lean Fish": "pesce magro", "Rich Fish": "pesce grasso", "Shellfish": "crostacei", "Seafood": "frutti di mare",
         "Pasta": "pasta", "Pizza": "pizza", "Cured Meat": "salumi", "Mild Cheese": "formaggi freschi", "Maturated Cheese": "formaggi stagionati",
@@ -47,13 +48,18 @@ def main(percorso):
             vitigni = ", ".join(lista(c(r, "Grapes")))[:200]
             cibi = ", ".join(dict.fromkeys(CIBI[x] for x in lista(c(r, "Harmonize")) if x in CIBI))[:300]
             paese = c(r, "Country")
+            try:
+                gradi = float(c(r, "ABV").replace(",", "."))
+                gradi = f"{gradi:.1f}" if 0 < gradi <= 25 else ""
+            except ValueError:
+                gradi = ""
             scrittore.writerow([nome, c(r, "WineryName")[:160], tipo, corpo, c(r, "RegionName")[:120], PAESI.get(paese, paese)[:60],
-                                vitigni, cibi, "xwines", c(r, "WineID")[:40]])
+                                vitigni, cibi, "xwines", c(r, "WineID")[:40], ACIDITA.get(c(r, "Acidity").lower(), ""), gradi])
             n += 1
     print("\\set ON_ERROR_STOP on")
     print("begin;")
     print("delete from public.enciclopedia_vini where fonte = 'xwines';")
-    print("copy public.enciclopedia_vini (nome, cantina, tipo, corpo, regione, paese, vitigno, abbinamenti, fonte, riferimento) from stdin with (format csv);")
+    print("copy public.enciclopedia_vini (nome, cantina, tipo, corpo, regione, paese, vitigno, abbinamenti, fonte, riferimento, acidita, gradazione) from stdin with (format csv, null '');")
     sys.stdout.write(uscita.getvalue())
     print("\\.")
     print("analyze public.enciclopedia_vini;")
