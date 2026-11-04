@@ -21,18 +21,24 @@ export function TrovaVino({ menu, onApri, onChiudi }: { menu: MenuPubblico; onAp
 
   const risultati = useMemo(() => {
     if (passo < 3) return [];
-    return vini.map((v) => {
+    // Il colore scelto è vincolante: un cliente che chiede un rosso non riceve mai un bianco
+    const candidati = vini.filter((v) => tipo === "sorpresa" || v.vino!.tipo === tipo);
+    const valutati = candidati.map((v) => {
       let punti = 0;
       const perche: string[] = [];
-      if (tipo !== "sorpresa" && v.vino!.tipo === tipo) { punti += 3; perche.push(`${TIPI_VINO[v.vino!.tipo]}, come preferisci`); }
+      if (tipo !== "sorpresa") perche.push(`${TIPI_VINO[v.vino!.tipo]}, come preferisci`);
+      let distanza = 0;
       if (corpo !== "indifferente") {
-        const distanza = Math.abs(ORDINE_CORPO.indexOf(v.vino!.corpo) - ORDINE_CORPO.indexOf(corpo));
-        if (distanza === 0) { punti += 2; perche.push(CORPI_VINO[v.vino!.corpo]); } else if (distanza === 1) punti += 1;
+        distanza = Math.abs(ORDINE_CORPO.indexOf(v.vino!.corpo) - ORDINE_CORPO.indexOf(corpo));
+        if (distanza === 0) { punti += 3; perche.push(CORPI_VINO[v.vino!.corpo]); } else if (distanza === 1) punti += 1;
       }
       const piatti = (v.abbinamenti ?? []).map((a) => perId.get(a.id)).filter((p) => p && (!cibo || p.categoria === cibo));
       if (piatti.length) { punti += Math.min(4, piatti.length * 2); perche.push(`Si abbina a ${piatti.slice(0, 2).map((p) => p!.nome).join(" e ")}`); }
-      return { v, punti, perche };
-    }).filter((r) => r.punti > 0 || tipo === "sorpresa").sort((a, b) => b.punti - a.punti).slice(0, 3);
+      return { v, punti, perche, distanza };
+    });
+    // Corpo opposto (leggero ↔ strutturato) solo se non c'è nient'altro del colore scelto
+    const vicini = valutati.filter((r) => r.distanza < 2);
+    return (vicini.length ? vicini : valutati).sort((a, b) => b.punti - a.punti || a.v.prezzo_cent - b.v.prezzo_cent).slice(0, 3);
   }, [passo, vini, tipo, corpo, cibo, perId]);
 
   const scelta = (etichetta: string, attiva: boolean, azione: () => void) => (
@@ -69,7 +75,7 @@ export function TrovaVino({ menu, onApri, onChiudi }: { menu: MenuPubblico; onAp
             </div>
           </>}
           {passo === 3 && <>
-            {risultati.length === 0 && <p>Nessun vino corrisponde esattamente: chiedi al personale, saprà consigliarti.</p>}
+            {risultati.length === 0 && <p>{tipo !== "sorpresa" ? `In questo momento non abbiamo un ${TIPI_VINO[tipo].toLowerCase()} disponibile in carta` : "Nessun vino disponibile in carta"}: chiedi al personale, saprà consigliarti.</p>}
             <div className="quiz-risultati">
               {risultati.map(({ v, perche }, i) => (
                 <button key={v.id} className="quiz-vino" onClick={() => onApri(v)}>
