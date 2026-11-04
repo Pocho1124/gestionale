@@ -167,7 +167,16 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 
 /* Foto di sfondo «vedo non vedo»: livello fisso dietro al contenuto (nell'anteprima resta dentro il telefono) */
 .menu.con-foto { position: relative; isolation: isolate; }
-.menu-foto { position: fixed; inset: -20px; z-index: -1; background-size: cover; background-position: center; pointer-events: none; }
+/* Foto di sfondo: su tutto il menu resta ferma mentre si scorre; il velo ne regola la visibilità */
+.menu-foto { pointer-events: none; overflow: hidden; z-index: -1; }
+.menu-foto-pagina { position: fixed; inset: 0; }
+.menu-foto-testata { position: absolute; inset: 0; border-radius: 0 0 18px 18px; }
+.menu-foto-immagine { position: absolute; inset: 0; background-size: cover; background-position: center; transform: scale(1.08); }
+.menu-foto-velo { position: absolute; inset: 0; background: var(--m-sfondo); }
+.con-foto-testata .menu-testata { position: relative; isolation: isolate; padding-left: 12px; padding-right: 12px; }
+/* Foto del piatto nella scheda: intera, mai tagliata */
+.scheda-foto { width: 100%; height: auto; max-height: min(62vh, 560px); aspect-ratio: auto; object-fit: contain; display: block;
+  background: color-mix(in srgb, var(--m-testo, #000) 6%, transparent); border-radius: 18px 18px 0 0; }
 .con-foto .menu-nav { background: color-mix(in srgb, var(--m-sfondo) 88%, transparent); backdrop-filter: blur(6px); }
 
 /* Scheda del piatto (foto e dettagli) */
@@ -178,7 +187,7 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 @media (min-width: 640px) { .scheda-sfondo { place-items: center; } }
 .scheda-piatto { position: relative; width: min(520px, 100%); max-height: 90vh; overflow: auto; background: var(--m-sfondo); color: var(--m-testo);
   border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); font-family: var(--m-font-testo); }
-.scheda-foto { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; border-radius: 18px 18px 0 0; }
+
 .scheda-attesa { background: color-mix(in srgb, var(--m-testo) 10%, transparent); }
 .scheda-corpo { padding: 16px 20px 22px; display: grid; gap: 8px; }
 .scheda-corpo h3 { font-family: var(--m-font-titoli); font-weight: 400; font-size: 1.5rem; margin: 0; }

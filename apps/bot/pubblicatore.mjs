@@ -14,11 +14,13 @@ const C = {
   // Destinazione: archivio KV di Cloudflare letto dal Worker del menu sul dominio del locale
   cloudflare: {
     account: obbligatoria("CLOUDFLARE_ACCOUNT_ID"), kv: obbligatoria("CLOUDFLARE_KV_ID"), token: obbligatoria("CLOUDFLARE_TOKEN"),
+    d1: obbligatoria("CLOUDFLARE_D1_ID"),   // pagine e versione: lette sempre aggiornate dal Worker
     indirizzo: obbligatoria("MENU_URL").replace(/\/$/, ""),     // es. https://menu.enotechiasantalucia.it
   },
   slugs: obbligatoria("SLUGS").split(",").map((s) => s.trim()).filter(Boolean),
   // Al massimo 15 s tra un controllo e l'altro; il bot chiede comunque una pubblicazione immediata dopo ogni modifica
-  intervallo: Math.min(Number(process.env.INTERVALLO_SECONDI || 15), 15) * 1000,
+  // Controllo frequente delle modifiche fatte dal gestionale (il bot chiede comunque la pubblicazione immediata)
+  intervallo: Math.max(3, Math.min(Number(process.env.INTERVALLO_SECONDI || 5), 15)) * 1000,
 };
 
 function obbligatoria(nome) {
@@ -63,8 +65,10 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
   const logo = logoFile ?? (typeof a.logo_url === "string" && /^https:\/\//.test(a.logo_url) ? a.logo_url : null);
   const mostraNome = !logo || a.mostra_nome !== false;
   const entro = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
+  const modo = a.sfondo_modo === "testata" ? "testata" : "pagina";
   const foto = sfondoFile
-    ? `<div class="foto" aria-hidden="true" style="background-image:url('${esc(sfondoFile)}');opacity:${entro(a.sfondo_opacita, 0, 100, 22) / 100};filter:blur(${entro(a.sfondo_sfocatura, 0, 20, 3)}px)${a.sfondo_bn ? " grayscale(1)" : ""}"></div>`
+    ? `<div class="foto foto-${modo}" aria-hidden="true"><div class="foto-img" style="background-image:url('${esc(sfondoFile)}');filter:blur(${entro(a.sfondo_sfocatura, 0, 20, 3)}px)${a.sfondo_bn ? " grayscale(1)" : ""}"></div>`
+      + `<div class="foto-velo" style="opacity:${1 - entro(a.sfondo_opacita, 0, 100, 22) / 100}"></div></div>`
     : "";
 
   const categorie = menu.categorie.map((c) => `
@@ -99,7 +103,12 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
 html{scroll-padding-top:56px}
 body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit-font-smoothing:antialiased}
 .menu{max-width:720px;margin:0 auto;padding:0 18px calc(30px + env(safe-area-inset-bottom,0px));position:relative;isolation:isolate}
-.foto{position:fixed;inset:-20px;z-index:-1;background-size:cover;background-position:center;pointer-events:none}
+.foto{pointer-events:none;overflow:hidden;z-index:-1}
+.foto-pagina{position:fixed;inset:0}
+.foto-testata{position:absolute;inset:0;border-radius:0 0 18px 18px}
+.foto-img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.08)}
+.foto-velo{position:absolute;inset:0;background:var(--s)}
+.testata-foto header{position:relative;isolation:isolate;padding-left:12px;padding-right:12px}
 header{text-align:center;padding:calc(28px + env(safe-area-inset-top,0px)) 0 16px;border-bottom:6px double var(--p)}
 header h1{font-family:var(--ft);font-weight:400;font-size:clamp(1.9rem,7vw,2.8rem);line-height:1.1;margin:0}
 header p{margin:6px 0 0;opacity:.75}
@@ -154,7 +163,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .scheda-sfondo[hidden]{display:none}
 @media (min-width:640px){.scheda-sfondo{place-items:center}}
 .scheda{position:relative;width:min(520px,100%);max-height:90vh;overflow:auto;background:var(--s);color:var(--t);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.scheda-foto{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;border-radius:18px 18px 0 0}
+.scheda-foto{width:100%;height:auto;max-height:min(62vh,560px);object-fit:contain;display:block;background:color-mix(in srgb,var(--t) 6%,transparent);border-radius:18px 18px 0 0}
 .scheda-corpo{padding:16px 20px 22px;display:grid;gap:8px}
 .scheda-corpo h3{font-family:var(--ft);font-weight:400;font-size:1.5rem;margin:0}
 .scheda-corpo .riga{justify-content:space-between}
@@ -179,9 +188,10 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 </style>
 </head>
 <body>
-<div class="menu ${layout}">
-  ${foto}
+<div class="menu ${layout}${modo === "testata" && foto ? " testata-foto" : ""}">
+  ${modo === "pagina" ? foto : ""}
   <header>
+    ${modo === "testata" ? foto : ""}
     ${logo ? `<img class="logo" src="${esc(logo)}" alt="${mostraNome ? "" : esc(menu.locale.nome)}">` : ""}
     ${mostraNome ? `<h1>${esc(menu.locale.nome)}</h1>` : ""}
     ${menu.locale.indirizzo ? `<p>${esc(menu.locale.indirizzo)}</p>` : ""}
@@ -296,7 +306,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     location.replace(location.pathname + "?v=" + encodeURIComponent(j.versione));
   }).catch(() => {});
   controlla();
-  setInterval(() => { if (document.visibilityState === "visible" && sfondo.hidden) controlla(); }, 30000);
+  setInterval(() => { if (document.visibilityState === "visible" && sfondo.hidden) controlla(); }, 10000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") controlla(); });
 })();
 </script>
@@ -321,7 +331,25 @@ const TIPI = { html: "text/html; charset=utf-8", json: "application/json; charse
 const giaInviati = new Map();   // chiave -> impronta dell'ultimo contenuto inviato a Cloudflare
 
 /** Scrive un file nell'archivio KV del menu (Cloudflare): il Worker lo serve sul dominio. */
-async function suCloudflare(percorso, base64) {
+/** Pagine e file di versione nel database D1: il Worker li legge sempre aggiornati (niente attese di cache). */
+async function suD1(percorso, base64) {
+  const impronta = createHash("sha256").update(base64).digest("hex");
+  if (giaInviati.get(percorso) === impronta) return;
+  const est = percorso.split(".").pop().toLowerCase();
+  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${C.cloudflare.account}/d1/database/${C.cloudflare.d1}/query`, {
+    method: "POST", signal: AbortSignal.timeout(30_000),
+    headers: { Authorization: `Bearer ${C.cloudflare.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sql: "insert into pagine (chiave, contenuto, tipo) values (?1, ?2, ?3) on conflict (chiave) do update set contenuto = excluded.contenuto, tipo = excluded.tipo, aggiornato = current_timestamp",
+      params: [percorso, Buffer.from(base64, "base64").toString("utf8"), TIPI[est]],
+    }),
+  });
+  if (!r.ok) throw new Error(`Cloudflare D1 ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  giaInviati.set(percorso, impronta);
+}
+
+export async function suCloudflare(percorso, base64) {
+  if (/\.(html|json)$/.test(percorso)) return suD1(percorso, base64);
   if (!/^[a-z0-9][a-z0-9._/-]*$/i.test(percorso) || percorso.includes("..")) throw new Error(`percorso non valido: ${percorso}`);
   const impronta = createHash("sha256").update(base64).digest("hex");
   if (giaInviati.get(percorso) === impronta) return;
@@ -363,7 +391,7 @@ async function eliminaCloudflare(chiave) {
 const pubblica = (percorso, testo) => pubblicaBinario(percorso, Buffer.from(testo).toString("base64"));
 
 const ultimo = new Map();      // slug -> impronta dell'ultimo menu pubblicato
-const ultimeImmagini = new Map();  // "slug/nome" -> impronta dell'ultima immagine pubblicata
+const ultimeImmagini = new Set();   // immagini già pubblicate (chiavi con versione nel nome)
 
 /** Pubblica un'immagine incorporata come file accanto alla pagina (solo se cambiata). */
 const PERCORSO_ARCHIVIO = /^[0-9a-f-]{36}\/(logo|sfondo|sale|piatti)\/([0-9a-f-]{36})\.(jpg|png|webp)$/;
@@ -379,51 +407,60 @@ export async function daArchivio(percorso) {
 }
 
 /** Immagine nell'archivio: il nome è unico e non cambia mai, quindi si scarica e pubblica solo quando cambia il percorso. */
+// Le immagini hanno un nome nuovo a ogni modifica (nome.versione.est): nessuna copia vecchia in cache, mai
 export async function immagineArchivio(slug, nome, percorso) {
   const m = PERCORSO_ARCHIVIO.exec(percorso);
   if (!m) return null;
-  const est = m[3], impronta = m[2].slice(0, 10), chiave = `${slug}/${nome}`;
-  if (ultimeImmagini.get(chiave) !== impronta) {
-    await pubblicaBinario(`${slug}/${nome}.${est}`, await daArchivio(percorso), `${nome} ${slug} aggiornato`);
-    ultimeImmagini.set(chiave, impronta);
+  const file = `${nome}.${m[2].slice(0, 10)}.${m[3]}`;
+  if (!ultimeImmagini.has(`${slug}/${file}`)) {
+    await pubblicaBinario(`${slug}/${file}`, await daArchivio(percorso));
+    ultimeImmagini.add(`${slug}/${file}`);
   }
-  return `${nome}.${est}?v=${impronta}`;
+  return file;
 }
 
 async function immagine(slug, nome, dati, percorso) {
   if (percorso) return immagineArchivio(slug, nome, percorso);
   const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(dati ?? "");
   if (!m) return null;
-  const est = m[1] === "jpeg" ? "jpg" : m[1];
-  const impronta = createHash("sha256").update(m[2]).digest("hex").slice(0, 10);
-  const chiave = `${slug}/${nome}`;
-  if (ultimeImmagini.get(chiave) !== impronta) {
-    await pubblicaBinario(`${slug}/${nome}.${est}`, m[2], `${nome} ${slug} aggiornato`);
-    ultimeImmagini.set(chiave, impronta);
+  const file = `${nome}.${createHash("sha256").update(m[2]).digest("hex").slice(0, 10)}.${m[1] === "jpeg" ? "jpg" : m[1]}`;
+  if (!ultimeImmagini.has(`${slug}/${file}`)) {
+    await pubblicaBinario(`${slug}/${file}`, m[2]);
+    ultimeImmagini.add(`${slug}/${file}`);
   }
-  return `${nome}.${est}?v=${impronta}`;   // il parametro forza il browser a ricaricare l'immagine nuova
+  return file;
 }
 
-/** Pubblica le foto dei piatti cambiate e rimuove dal sito quelle non più usate. Restituisce id -> percorso relativo. */
+/** Toglie dall'archivio le immagini del locale non più usate dalla pagina appena pubblicata. */
+export async function pulisciArchivio(slug, usate) {
+  const presenti = await chiaviCloudflare(`${slug}/`).catch(() => null);
+  if (!Array.isArray(presenti)) return;
+  for (const chiave of presenti) {
+    if (/\.(html|json)$/.test(chiave) || usate.has(chiave)) continue;
+    await eliminaCloudflare(chiave).catch((e) => log(`Immagine non rimossa (${chiave}): ${e.message}`));
+    ultimeImmagini.delete(chiave);
+  }
+}
+
+/** Pubblica le foto dei piatti (nome nuovo a ogni modifica). Restituisce id -> percorso relativo. */
 export async function fotoDeiPiatti(slug, menu) {
   const percorsi = {};
   for (const c of menu.categorie) {
     for (const p of c.prodotti) {
       if (!p.foto) continue;
-      const chiave = `${slug}/foto/${p.id}`;
       if (p.foto_path) {
-        // Foto nell'archivio: il percorso fa da versione
         const m = PERCORSO_ARCHIVIO.exec(p.foto_path);
         if (!m) continue;
-        const versione = m[2].slice(0, 10);
-        if (ultimeImmagini.get(chiave) !== versione) {
-          await pubblicaBinario(`${chiave}.jpg`, await daArchivio(p.foto_path), `Foto ${p.nome} aggiornata`);
-          ultimeImmagini.set(chiave, versione);
+        const file = `foto/${p.id}.${m[2].slice(0, 10)}.jpg`;
+        if (!ultimeImmagini.has(`${slug}/${file}`)) {
+          await pubblicaBinario(`${slug}/${file}`, await daArchivio(p.foto_path));
+          ultimeImmagini.add(`${slug}/${file}`);
         }
-        percorsi[p.id] = `foto/${p.id}.jpg?v=${versione}`;
+        percorsi[p.id] = file;
         continue;
       }
-      if (ultimeImmagini.get(chiave) !== String(p.foto)) {
+      const file = `foto/${p.id}.${p.foto}.jpg`;
+      if (!ultimeImmagini.has(`${slug}/${file}`)) {
         const r = await fetch(`${C.url}/rest/v1/rpc/foto_prodotto`, {
           method: "POST",
           headers: { apikey: C.anon, Authorization: `Bearer ${C.anon}`, "Content-Type": "application/json" },
@@ -432,20 +469,10 @@ export async function fotoDeiPiatti(slug, menu) {
         const dati = r.ok ? await r.json() : null;
         const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(dati ?? "");
         if (!m) continue;
-        await pubblicaBinario(`${chiave}.jpg`, m[2], `Foto ${p.nome} aggiornata`);
-        ultimeImmagini.set(chiave, String(p.foto));
+        await pubblicaBinario(`${slug}/${file}`, m[2]);
+        ultimeImmagini.add(`${slug}/${file}`);
       }
-      percorsi[p.id] = `foto/${p.id}.jpg?v=${p.foto}`;
-    }
-  }
-  // Le foto di piatti rimossi o nascosti non devono restare raggiungibili sul sito pubblico
-  const presenti = await chiaviCloudflare(`${slug}/foto/`).catch(() => null);
-  if (Array.isArray(presenti)) {
-    for (const chiave of presenti) {
-      const id = chiave.slice(`${slug}/foto/`.length).replace(/\.jpg$/, "");
-      if (percorsi[id]) continue;
-      await eliminaCloudflare(chiave);
-      ultimeImmagini.delete(`${slug}/foto/${id}`);
+      percorsi[p.id] = file;
     }
   }
   return percorsi;
@@ -470,6 +497,9 @@ async function giro() {
       await pubblica(`${slug}/versione.json`, JSON.stringify({ versione, aggiornato: ora }), `Versione ${slug}`);
       ultimo.set(slug, impronta);
       log(`Pubblicato il menu «${slug}»`);
+      // Dopo la pubblicazione: via le immagini non più usate (vecchie versioni, piatti tolti)
+      const usate = new Set([logoFile, sfondoFile, ...Object.values(fotoPiatti)].filter(Boolean).map((f) => `${slug}/${f}`));
+      await pulisciArchivio(slug, usate);
     } catch (e) {
       // Offline o Cloudflare irraggiungibile: online resta l'ultima versione, si riprova al giro successivo
       log(`Pubblicazione di «${slug}» non riuscita:`, e.message);

@@ -31,18 +31,24 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
     "--m-font-testo": pilaFont(aspetto.font_testo, SERIF.has(aspetto.font_testo)),
   } as CSSProperties;
 
+  const modo = aspetto.sfondo_modo === "testata" ? "testata" : "pagina";
+  const visibile = Math.min(100, Math.max(0, aspetto.sfondo_opacita)) / 100;
   const foto = sfondo ? (
-    <div className="menu-foto" aria-hidden="true" style={{
-      backgroundImage: `url("${sfondo}")`,
-      opacity: Math.min(100, Math.max(0, aspetto.sfondo_opacita)) / 100,
-      filter: `blur(${aspetto.sfondo_sfocatura}px)${aspetto.sfondo_bn ? " grayscale(1)" : ""}`,
-    }} />
+    <div className={`menu-foto menu-foto-${modo}`} aria-hidden="true">
+      <div className="menu-foto-immagine" style={{
+        backgroundImage: `url("${sfondo}")`,
+        filter: `blur(${aspetto.sfondo_sfocatura}px)${aspetto.sfondo_bn ? " grayscale(1)" : ""}`,
+      }} />
+      {/* Velo del colore di sfondo: più la foto è «visibile», più il velo è trasparente */}
+      <div className="menu-foto-velo" style={{ opacity: 1 - visibile }} />
+    </div>
   ) : null;
 
   return (
-    <div className={`menu menu-${aspetto.layout}${foto ? " con-foto" : ""}`} style={stile}>
-      {foto}
+    <div className={`menu menu-${aspetto.layout}${foto ? ` con-foto con-foto-${modo}` : ""}`} style={stile}>
+      {modo === "pagina" && foto}
       <header className="menu-testata">
+        {modo === "testata" && foto}
         {logo && <img className="menu-logo" src={logo} alt={aspetto.mostra_nome ? "" : menu.locale.nome} />}
         {(!logo || aspetto.mostra_nome) && <h1>{menu.locale.nome}</h1>}
         {menu.locale.indirizzo && <p>{menu.locale.indirizzo}</p>}

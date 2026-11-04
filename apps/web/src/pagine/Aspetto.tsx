@@ -166,6 +166,11 @@ export function Aspetto() {
               <label className="campo">Sfocatura: {bozza.sfondo_sfocatura === 0 ? "nessuna" : `${bozza.sfondo_sfocatura} px`}
                 <input type="range" min={0} max={12} value={bozza.sfondo_sfocatura} onChange={(e) => imposta("sfondo_sfocatura", Number(e.target.value))} />
               </label>
+              <div className="scelte" role="radiogroup" aria-label="Dove mostrare la foto">
+                {([["pagina", "Su tutto il menu"], ["testata", "Solo dietro il nome"]] as const).map(([v, t]) => (
+                  <button key={v} type="button" className={`chip${(bozza.sfondo_modo ?? "pagina") === v ? " attivo" : ""}`} onClick={() => imposta("sfondo_modo", v)}>{t}</button>
+                ))}
+              </div>
               <label className="interruttore"><input type="checkbox" checked={bozza.sfondo_bn}
                 onChange={(e) => imposta("sfondo_bn", e.target.checked)} />Bianco e nero</label>
               <p className="muto piccolo">Per l'effetto «vedo non vedo»: visibilità 15-30% e un po' di sfocatura. Controlla che i prezzi restino ben leggibili.</p>
