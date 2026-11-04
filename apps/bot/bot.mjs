@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { riconosciVino } from "./vitigni.mjs";
 // Bot Telegram privato del gestionale.
 // Interpreta le richieste (prima con regole, poi con il modello locale Ollama), mostra un'anteprima
 // e applica la modifica solo dopo conferma, con l'account dedicato del bot (permessi RLS, audit).
@@ -10,7 +11,7 @@ export function uuid(v) {
   if (typeof v !== "string" || !UUID.test(v)) throw new Error("identificativo non valido");
   return v;
 }
-const TABELLE_ANNULLA = new Set(["prodotti", "categorie", "vini", "abbinamenti", "foto_prodotti"]);
+const TABELLE_ANNULLA = new Set(["prodotti", "categorie", "vini", "abbinamenti", "foto_prodotti", "enciclopedia_vini"]);
 function uuidConfigurazione(nome) {
   const v = (process.env[nome] ?? "").trim();
   if (!UUID.test(v)) { console.error(`${nome} mancante o non valido: deve essere l'UUID del locale`); process.exit(1); }
@@ -25,8 +26,10 @@ const C = {
   email: obbligatoria("BOT_EMAIL"),
   password: obbligatoria("BOT_PASSWORD"),
   locale: uuidConfigurazione("LOCALE_ID"),
-  ollama: (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, ""),
-  modello: process.env.OLLAMA_MODELLO || "qwen2.5:3b",
+  // Motore dell'IA locale: «ollama» (predefinito) oppure «llamacpp» (llama-server, API compatibile OpenAI)
+  llm: (process.env.LLM_TIPO || "ollama").toLowerCase(),
+  ollama: (process.env.LLM_URL || process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, ""),
+  modello: process.env.LLM_MODELLO || process.env.OLLAMA_MODELLO || "qwen2.5:3b",
   trascrizione: (process.env.TRASCRIZIONE_URL || "http://trascrizione:9000").replace(/\/$/, ""),
   pubblicatore: (process.env.PUBBLICATORE_URL || "http://pubblicatore:8090").replace(/\/$/, ""),
   archivio: (process.env.ARCHIVIO_URL || "http://immagini:5000").replace(/\/$/, ""),
@@ -234,8 +237,15 @@ export function interpretaConRegole(testo, cat) {
   }
 
   // --- Sommelier: scheda vino, abbinamenti, suggerimenti dell'IA
-  if (/^\s*(suggerisci|proponi|consigliami|trova)\s+(gli\s+|degli\s+)?abbinament/i.test(testo)) return { azione: "suggerisci_abbinamenti" };
-  if (/^\s*(completa|compila|genera|crea|prepara)\s+(le\s+)?schede?\s+(dei\s+|del\s+)?vin[oi]/i.test(testo)) return { azione: "completa_schede_vini" };
+  if (/^\s*(suggerisci|proponi|consigliami|trova|fammi|dammi)\b.*\babbinament/i.test(testo)) return { azione: "suggerisci_abbinamenti" };
+  if (/^\s*(completa|compila|genera|crea|prepara|riempi|aggiorna)\b.*\bsched[ae]\b.*\bvin[oi]\b/i.test(testo)) return { azione: "completa_schede_vini" };
+  const enc = testo.match(/^\s*(?:enciclopedia|aggiungi\s+all'?\s*enciclopedia)\s+(.+?)\s*:\s*(.+)$/is);
+  if (enc) {
+    const campi = leggiSchedaVino(enc[2]);
+    if (!campi.tipo) return { azione: "chiarisci", testo: "Indica almeno il tipo: rosso, bianco, rosato, bollicine o dolce. Esempio: «enciclopedia Rubrato: rosso, strutturato, Campania, vitigno Aglianico, cantina Feudi di San Gregorio»." };
+    const nome = maiuscola(pulisci(enc[1])).slice(0, 160);
+    return { azione: "aggiungi_enciclopedia", nome, campi: { corpo: "medio", ...campi }, prodotto: trova(nome, cat.prodotti) && !cat.vini?.has(trova(nome, cat.prodotti).id) ? trova(nome, cat.prodotti) : null };
+  }
   const vino = testo.match(/^\s*vino\s+(.+?)\s*:\s*(.+)$/is);
   if (vino) {
     const p = trova(vino[1], cat.prodotti);
@@ -327,6 +337,30 @@ export function interpretaConRegole(testo, cat) {
 }
 
 // ---------------------------------------------------------------- Modello locale (solo se le regole non bastano)
+/**
+ * Chiamata al modello locale con risposta JSON vincolata da uno schema (il modello non può uscire dai valori ammessi).
+ * Funziona sia con Ollama (/api/chat) sia con llama.cpp (llama-server, /v1/chat/completions).
+ */
+export async function chiediModello({ sistema, utente, schema, temperatura = 0, attesa = 90_000 }) {
+  const messaggi = [{ role: "system", content: sistema }, { role: "user", content: utente }];
+  if (C.llm === "llamacpp") {
+    const r = await fetch(`${C.ollama}/v1/chat/completions`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(attesa),
+      body: JSON.stringify({ model: C.modello, messages: messaggi, temperature: temperatura, stream: false,
+        response_format: { type: "json_schema", json_schema: { name: "risposta", strict: true, schema } } }),
+    });
+    if (!r.ok) throw new Error(`Modello non disponibile (${r.status})`);
+    return JSON.parse((await r.json()).choices[0].message.content);
+  }
+  const r = await fetch(`${C.ollama}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(attesa),
+    body: JSON.stringify({ model: C.modello, stream: false, format: schema, options: { temperature: temperatura }, messages: messaggi }),
+  });
+  if (!r.ok) throw new Error(`Modello non disponibile (${r.status})`);
+  return JSON.parse((await r.json()).message.content);
+}
+
+export async function interpretaConModelloPerTest(testo, cat) { return interpretaConModello(testo, cat); }
 async function interpretaConModello(testo, cat) {
   // Prompt corto = risposta rapida: solo i piatti che somigliano alla richiesta
   const parole = new Set(radici(testo));
@@ -334,11 +368,15 @@ async function interpretaConModello(testo, cat) {
   const piatti = (simili.length ? simili : cat.prodotti).slice(0, 40);
   const nomiCat = cat.categorie.map((c) => c.nome);
   const nomiPiatti = piatti.map((p) => p.nome);
+  const nomiVini = cat.prodotti.filter((p) => cat.vini?.has(p.id)).map((p) => p.nome).slice(0, 40);
 
   const schema = {
     type: "object",
     properties: {
-      azione: { type: "string", enum: ["varia_prezzi", "imposta_prezzo", "disponibilita", "visibilita", "aggiungi_piatto", "aggiungi_categoria", "nessuna"] },
+      azione: { type: "string", enum: ["varia_prezzi", "imposta_prezzo", "disponibilita", "visibilita", "aggiungi_piatto", "aggiungi_categoria",
+        "imposta_descrizione", "abbina", "togli_abbinamento", "completa_schede_vini", "suggerisci_abbinamenti",
+        "mostra_menu", "mostra_esauriti", "aiuto", "nessuna"] },
+      vino: { type: "string", enum: nomiVini.length ? nomiVini : [""] },
       nome: { type: "string" },
       descrizione: { type: "string" },
       percentuale: { type: "number" },
@@ -349,24 +387,19 @@ async function interpretaConModello(testo, cat) {
     },
     required: ["azione"],
   };
-  const r = await fetch(`${C.ollama}/api/chat`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(90_000),
-    body: JSON.stringify({
-      model: C.modello, stream: false, format: schema, options: { temperature: 0 },
-      messages: [
-        { role: "system", content:
-          "Converti la richiesta del ristoratore in UNA azione JSON. " +
-          "varia_prezzi: percentuale (negativa per ridurre) e categoria ('tutte' per tutto il menu). " +
-          "imposta_prezzo: prodotto ed euro. disponibilita: prodotto e valore (false = esaurito). " +
-          "visibilita: prodotto e valore (false = nascosto dal menu). " +
-          "aggiungi_piatto: nome del nuovo piatto, euro, categoria, descrizione facoltativa. aggiungi_categoria: nome. " +
-          "Se non è una modifica, azione 'nessuna'." },
-        { role: "user", content: `Categorie: ${nomiCat.join(", ") || "nessuna"}\nPiatti: ${nomiPiatti.join(", ") || "nessuno"}\nRichiesta: ${testo}` },
-      ],
-    }),
+  const out = await chiediModello({
+    schema, temperatura: 0,
+    sistema:
+      "Sei l'assistente del gestionale di un ristorante. Scegli la funzione che corrisponde alla richiesta e compila i campi. " +
+      "varia_prezzi: percentuale (negativa per ridurre) e categoria ('tutte' per tutto il menu). imposta_prezzo: prodotto ed euro. " +
+      "disponibilita: prodotto e valore (false = esaurito). visibilita: prodotto e valore (false = nascosto dal menu). " +
+      "aggiungi_piatto: nome, euro, categoria, descrizione facoltativa. aggiungi_categoria: nome. imposta_descrizione: prodotto e descrizione. " +
+      "abbina: prodotto (il piatto) e vino. togli_abbinamento: prodotto e vino. " +
+      "completa_schede_vini: compilare o completare le schede dei vini (tipo, corpo, regione) per il quiz. " +
+      "suggerisci_abbinamenti: proporre abbinamenti tra piatti e vini. mostra_menu: vedere il menu con i prezzi. " +
+      "mostra_esauriti: vedere cosa è esaurito. aiuto: sapere cosa può fare il bot. Se non corrisponde a nessuna funzione: 'nessuna'.",
+    utente: `Categorie: ${nomiCat.join(", ") || "nessuna"}\nPiatti: ${nomiPiatti.join(", ") || "nessuno"}\nVini con scheda: ${nomiVini.join(", ") || "nessuno"}\nRichiesta: ${testo}`,
   });
-  if (!r.ok) throw new Error(`Modello non disponibile (${r.status})`);
-  const out = JSON.parse((await r.json()).message.content);
   const p = cat.prodotti.find((x) => x.nome === out.prodotto);
   const c = cat.categorie.find((x) => x.nome === out.categoria) ?? null;
   switch (out.azione) {
@@ -385,6 +418,18 @@ async function interpretaConModello(testo, cat) {
       const piatto = { nome: maiuscola(pulisci(out.nome)).slice(0, 120), euro: out.euro, descrizione: (out.descrizione ?? "").slice(0, 500) };
       return c ? { azione: "aggiungi_piatto", ...piatto, categoria: c } : { azione: "chiedi_categoria", per: "aggiungi_piatto", ...piatto };
     }
+    case "imposta_descrizione":
+      return p && out.descrizione?.trim() ? { azione: "imposta_descrizione", prodotto: p, descrizione: pulisci(out.descrizione).slice(0, 500) } : null;
+    case "abbina": case "togli_abbinamento": {
+      const v = cat.prodotti.find((x) => x.nome === out.vino && cat.vini?.has(x.id));
+      if (!p || !v) return { azione: "chiarisci", testo: "Dimmi il piatto e il vino, ad esempio «abbina l'Aglianico al tagliere»." };
+      return out.azione === "abbina" ? { azione: "abbina", coppie: [{ piatto: p, vino: v, motivo: "" }] } : { azione: "togli_abbinamento", piatto: p, vino: v };
+    }
+    case "completa_schede_vini": return { azione: "completa_schede_vini" };
+    case "suggerisci_abbinamenti": return { azione: "suggerisci_abbinamenti" };
+    case "mostra_menu": return { azione: "comando", comando: "/menu" };
+    case "mostra_esauriti": return { azione: "comando", comando: "/esauriti" };
+    case "aiuto": return { azione: "comando", comando: "/aiuto" };
     default: return null;
   }
 }
@@ -401,16 +446,10 @@ async function suggerisciAbbinamenti(cat) {
     properties: { coppie: { type: "array", items: { type: "object", required: ["piatto", "vino", "motivo"], properties: {
       piatto: { type: "string", enum: piatti.map((p) => p.nome) }, vino: { type: "string", enum: vini.map((v) => v.nome) }, motivo: { type: "string" } } } } },
   };
-  const r = await fetch(`${C.ollama}/api/chat`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(240_000),
-    body: JSON.stringify({ model: C.modello, stream: false, format: schema, options: { temperature: 0.2 },
-      messages: [
-        { role: "system", content: "Sei il sommelier di un'enoteca italiana. Per ogni piatto scegli il vino più adatto tra quelli disponibili e spiega il perché in massimo 8 parole, in italiano." },
-        { role: "user", content: `Vini disponibili: ${vini.map(descriviVino).join("; ")}\nPiatti: ${piatti.map((p) => `${p.nome}${p.descrizione ? ` (${p.descrizione.slice(0, 80)})` : ""}`).join("; ")}` },
-      ] }),
-  });
-  if (!r.ok) throw new Error(`Modello non disponibile (${r.status})`);
-  const proposte = JSON.parse((await r.json()).message.content).coppie ?? [];
+  const proposte = (await chiediModello({ schema, temperatura: 0.2, attesa: 240_000,
+    sistema: "Sei il sommelier di un'enoteca italiana. Per ogni piatto scegli il vino più adatto tra quelli disponibili e spiega il perché in massimo 8 parole, in italiano.",
+    utente: `Vini disponibili: ${vini.map(descriviVino).join("; ")}\nPiatti: ${piatti.map((p) => `${p.nome}${p.descrizione ? ` (${p.descrizione.slice(0, 80)})` : ""}`).join("; ")}`,
+  })).coppie ?? [];
   const usati = new Set();
   const coppie = proposte.map((c) => ({ piatto: piatti.find((p) => p.nome === c.piatto), vino: vini.find((v) => v.nome === c.vino), motivo: String(c.motivo ?? "").slice(0, 200) }))
     .filter((c) => c.piatto && c.vino && !usati.has(c.piatto.id) && usati.add(c.piatto.id));
@@ -419,36 +458,50 @@ async function suggerisciAbbinamenti(cat) {
 
 /** Vini senza scheda: prodotti nelle categorie di vini (Carta dei vini, Vini al calice, Bollicine…) senza tipo e corpo. */
 const CATEGORIE_VINI = /vin[oi]|calic|bottigl|cantin|bollic|spumant|champagne|rossi|bianchi|rosati|cantina/i;
+/** Cerca un vino nell'enciclopedia e decide la scheda: nome intero trovato → quella voce; più cantine → la maggioranza. */
+async function schedaDaEnciclopedia(prodotto) {
+  const testo = `${prodotto.nome} ${prodotto.descrizione ?? ""}`;
+  let righe = await db("rpc/cerca_vino", { metodo: "POST", corpo: { p_testo: prodotto.nome, p_limite: 30 } });
+  if (!righe.some((r) => r.contenuto) && prodotto.descrizione) righe = await db("rpc/cerca_vino", { metodo: "POST", corpo: { p_testo: testo, p_limite: 30 } });
+  const esatti = righe.filter((r) => r.contenuto);
+  if (esatti.length) {
+    // La voce più specifica; tra più cantine con lo stesso nome, quella citata nel testo o la scelta più comune
+    const migliore = norm(esatti[0].nome);
+    const stessi = esatti.filter((r) => norm(r.nome) === migliore);
+    const conCantina = stessi.find((r) => r.cantina && ` ${norm(testo)} `.includes(` ${norm(r.cantina)} `));
+    if (conCantina || stessi.length === 1) return { ...(conCantina ?? stessi[0]), fonte_scheda: (conCantina ?? stessi[0]).fonte };
+    const piuComune = (campo) => Object.entries(stessi.reduce((m, r) => ((m[r[campo]] = (m[r[campo]] ?? 0) + 1), m), {})).sort((a, b) => b[1] - a[1])[0][0];
+    return { ...stessi[0], tipo: piuComune("tipo"), corpo: piuComune("corpo"), cantina: "", fonte_scheda: `${stessi.length} voci` };
+  }
+  // Solo somiglianza (errori di battitura): accettata se nettamente migliore delle altre e coerente
+  const [primo, secondo] = righe;
+  if (primo && primo.punteggio >= 0.75 && (!secondo || secondo.punteggio < primo.punteggio - 0.1 || secondo.tipo === primo.tipo)) return { ...primo, fonte_scheda: "simile" };
+  return null;
+}
+
 async function completaSchedeVini(cat) {
   const categorieVini = new Set(cat.categorie.filter((c) => CATEGORIE_VINI.test(c.nome)).map((c) => c.id));
-  const senza = cat.prodotti.filter((p) => categorieVini.has(p.categoria_id) && !cat.vini.has(p.id)).slice(0, 12);
+  const senza = cat.prodotti.filter((p) => categorieVini.has(p.categoria_id) && !cat.vini.has(p.id));
   if (!senza.length) return { azione: "chiarisci", testo: "Tutti i vini in carta hanno già la scheda. 🍷 Per correggerne una: «vino Aglianico: rosso, strutturato, Campania»." };
-  const schema = {
-    type: "object", required: ["vini"],
-    properties: { vini: { type: "array", items: { type: "object", required: ["nome", "tipo", "corpo", "regione", "vitigno", "note"], properties: {
-      nome: { type: "string", enum: senza.map((p) => p.nome) },
-      tipo: { type: "string", enum: ["rosso", "bianco", "rosato", "bollicine", "dolce"] },
-      corpo: { type: "string", enum: ["leggero", "medio", "strutturato"] },
-      regione: { type: "string" }, vitigno: { type: "string" }, note: { type: "string" } } } } },
-  };
-  const r = await fetch(`${C.ollama}/api/chat`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(240_000),
-    body: JSON.stringify({ model: C.modello, stream: false, format: schema, options: { temperature: 0.1 },
-      messages: [
-        { role: "system", content: "Sei il sommelier di un'enoteca italiana. Per ogni vino indica tipo (rosso, bianco, rosato, bollicine, dolce) e corpo " +
-          "(leggero, medio, strutturato) deducendoli dal nome e dalla descrizione. Regione e vitigno solo se ne sei sicuro, altrimenti stringa vuota. " +
-          "Note: al massimo 12 parole sul profilo del vino, in italiano. Non inventare cantine né annate." },
-        { role: "user", content: senza.map((p) => `${p.nome}${p.descrizione ? ` — ${p.descrizione.slice(0, 160)}` : ""}`).join("\n") },
-      ] }),
-  });
-  if (!r.ok) throw new Error(`Modello non disponibile (${r.status})`);
-  const proposte = JSON.parse((await r.json()).message.content).vini ?? [];
-  const usati = new Set();
-  const schede = proposte.map((v) => ({ prodotto: senza.find((p) => p.nome === v.nome), tipo: v.tipo, corpo: v.corpo,
-      regione: pulisci(String(v.regione ?? "")).slice(0, 60), vitigno: pulisci(String(v.vitigno ?? "")).slice(0, 80), note: pulisci(String(v.note ?? "")).slice(0, 300) }))
-    .filter((v) => v.prodotto && ["rosso", "bianco", "rosato", "bollicine", "dolce"].includes(v.tipo) && ["leggero", "medio", "strutturato"].includes(v.corpo)
-      && !usati.has(v.prodotto.id) && usati.add(v.prodotto.id));
-  return schede.length ? { azione: "schede_vini", schede } : { azione: "chiarisci", testo: "Non sono riuscito a compilare le schede: impostale a mano con «vino Nome: rosso, strutturato»." };
+  const schede = [], ignoti = [];
+  for (const p of senza) {
+    let r = null;
+    try { r = await schedaDaEnciclopedia(p); }
+    catch (e) {
+      // Enciclopedia non ancora disponibile: base di conoscenza interna
+      log(`Enciclopedia non disponibile: ${e.message}`);
+      const b = riconosciVino(p.nome, p.descrizione, norm);
+      if (b) r = { ...b, nome: b.vitigno || p.nome, fonte_scheda: b.fonte };
+    }
+    if (r) schede.push({ prodotto: p, tipo: r.tipo, corpo: r.corpo, regione: r.regione ?? "", vitigno: (r.vitigno ?? "").slice(0, 80), note: "",
+                         trovato: r.cantina ? `${r.nome}, ${r.cantina}` : r.nome, fonte: r.fonte_scheda });
+    else ignoti.push(p.nome);
+  }
+  if (!schede.length) {
+    return { azione: "chiarisci", testo: `Non trovo questi vini nell'enciclopedia: ${ignoti.join(", ")}.\n` +
+      `Aggiungili così (una riga per vino): «enciclopedia ${ignoti[0]}: rosso, strutturato, Campania, vitigno Aglianico»` };
+  }
+  return { azione: "schede_vini", schede, ignoti };
 }
 
 // ---------------------------------------------------------------- Anteprima ed esecuzione
@@ -472,9 +525,17 @@ export function anteprima(a, cat) {
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "DI NUOVO DISPONIBILE" : "ESAURITO"}` };
     case "visibilita":
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "VISIBILE nel menu" : "NASCOSTO dal menu"}` };
+    case "aggiungi_enciclopedia": {
+      const c = a.campi;
+      return { testo: `📚 Nuovo vino nell'enciclopedia del locale:\n• ${a.nome}: ${[c.tipo, c.corpo, c.regione, c.vitigno && `vitigno ${c.vitigno}`, c.cantina && `cantina ${c.cantina}`].filter(Boolean).join(", ")}` +
+        (a.prodotto ? `\n\nE la stessa scheda per «${a.prodotto.nome}» del menu (così entra nel quiz).` : "") };
+    }
     case "schede_vini":
-      return { testo: `🧠 Il sommelier propone le schede (controllale prima di confermare):\n${a.schede.map((v) =>
-        `• ${v.prodotto.nome}: ${[v.tipo, v.corpo, v.regione, v.vitigno].filter(Boolean).join(", ")}${v.note ? `\n  ${v.note}` : ""}`).join("\n")}\n\nServono al quiz «Trova il tuo vino». Per correggerne una: «vino Nome: rosso, strutturato…».` };
+      return { testo: `🍷 Schede dei vini (controllale prima di confermare):\n${a.schede.map((v) =>
+        `• ${v.prodotto.nome}: ${[v.tipo, v.corpo, v.regione, v.vitigno].filter(Boolean).join(", ")}` +
+        (v.trovato && norm(v.trovato) !== norm(v.prodotto.nome) ? `\n  ↳ ${v.trovato}${v.fonte === "simile" ? " (nome simile)" : ""}` : "")).join("\n")}`
+        + (a.ignoti?.length ? `\n\n❔ Non presenti nell'enciclopedia: ${a.ignoti.join(", ")}\n  Aggiungili così: «enciclopedia ${a.ignoti[0]}: rosso, strutturato, Campania, vitigno Aglianico»` : "")
+        + "\n\nServono al quiz «Trova il tuo vino». Per correggerne una: «vino Nome: rosso, strutturato…»." };
     case "imposta_vino": {
       const c = a.campi, prima = cat.vini?.get(a.prodotto.id);
       const tipo = c.tipo ?? prima?.tipo;
@@ -547,6 +608,18 @@ async function esegui(a, cat) {
     case "visibilita":
       await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
       return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+    case "aggiungi_enciclopedia": {
+      const c = a.campi;
+      const [voce] = await db("enciclopedia_vini", { metodo: "POST", corpo: { nome: a.nome, tipo: c.tipo, corpo: c.corpo, regione: c.regione ?? "",
+        vitigno: (c.vitigno ?? "").slice(0, 200), cantina: (c.cantina ?? "").slice(0, 160), paese: "", fonte: "locale", locale_id: C.locale } });
+      const annulla = [{ tabella: "enciclopedia_vini", id: voce.id, elimina: true }];
+      if (a.prodotto) {
+        await db("vini", { metodo: "POST", unisci: true, corpo: { prodotto_id: a.prodotto.id, locale_id: C.locale, tipo: c.tipo, corpo: c.corpo,
+          regione: (c.regione ?? "").slice(0, 60), vitigno: (c.vitigno ?? "").slice(0, 80), cantina: (c.cantina ?? "").slice(0, 80) } });
+        annulla.push({ tabella: "vini", filtro: `prodotto_id=eq.${uuid(a.prodotto.id)}`, elimina: true });
+      }
+      return { esito: `«${a.nome}» aggiunto all'enciclopedia${a.prodotto ? " e alla scheda del menu" : ""}.`, annulla };
+    }
     case "schede_vini": {
       await db("vini", { metodo: "POST", unisci: true, corpo: a.schede.map((v) => ({
         prodotto_id: v.prodotto.id, locale_id: C.locale, tipo: v.tipo, corpo: v.corpo, regione: v.regione, vitigno: v.vitigno, note: v.note })) });
@@ -677,7 +750,8 @@ const AIUTO =
   "Sommelier:\n• vino Aglianico: rosso, strutturato, Campania, cantina X, annata 2020, bottiglia 28 euro, note ciliegia e spezie\n" +
   "• abbina l'aglianico al tagliere e alla genovese perché il tannino pulisce il grasso\n" +
   "• togli abbinamento aglianico e genovese\n• suggerisci abbinamenti (li propone l'IA, tu confermi)\n" +
-  "• completa le schede dei vini (l'IA indica tipo e corpo dei vini che ne sono privi, per il quiz «Trova il tuo vino»)\n" +
+  "• completa le schede dei vini (cerca i vini senza scheda nell'enciclopedia, per il quiz «Trova il tuo vino»)\n" +
+  "• enciclopedia Rubrato: rosso, strutturato, Campania, vitigno Aglianico, cantina Feudi di San Gregorio (aggiunge un vino mancante)\n" +
   "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
@@ -831,11 +905,10 @@ export async function gestisciMessaggio(m) {
     try { azione = await interpretaConModello(testo, cat); }
     catch (e) { log("Modello:", e.message); }
   }
-  if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze».");
+  if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze». /aiuto per l'elenco dei comandi.");
+  if (azione.azione === "comando") return gestisciMessaggio({ ...m, text: azione.comando });
 
   if (azione.azione === "completa_schede_vini") {
-    await invia(chat, "🧠 Il sommelier sta compilando le schede dei vini (può volerci fino a un minuto)…");
-    await tg("sendChatAction", { chat_id: chat, action: "typing" });
     azione = await completaSchedeVini(cat);
   }
   if (azione.azione === "suggerisci_abbinamenti") {

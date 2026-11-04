@@ -48,6 +48,7 @@ export function Guscio() {
           <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>
           <NavLink to="/catalogo">Catalogo</NavLink>
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
+          {puo(ruolo, "catalogo") && <NavLink to="/enciclopedia">Vini</NavLink>}
           {puo(ruolo, "magazzino") && <NavLink to="/magazzino">Magazzino</NavLink>}
           {puo(ruolo, "cassa") && <NavLink to="/cassa">Cassa</NavLink>}
           {puo(ruolo, "utenti") && <NavLink to="/impostazioni">Impostazioni</NavLink>}
