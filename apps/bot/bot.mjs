@@ -170,8 +170,9 @@ function interpretaNuovoPiatto(testo, cat) {
   if (!/^\s*(aggiungi|inserisci|crea|nuovo piatto|metti nel menu)\b/i.test(testo)) return null;
   let resto = testo;
   let descrizione = "";
-  const con = resto.match(/\s(?:con|:)\s+(.+)$/i);
-  if (con) { descrizione = pulisci(con[1]); resto = resto.slice(0, con.index); }
+  // Descrizione: «descrizione: …», «con …» oppure «: …», anche su più righe
+  const con = resto.match(/\s*\bdescrizione\b\s*:?\s*([\s\S]+)$/i) ?? resto.match(/\s(?:con|:)\s+([\s\S]+)$/i);
+  if (con) { descrizione = pulisci(con[1].replace(/\s+/g, " ")); resto = resto.slice(0, con.index); }
   const prezzo = resto.match(/\s(?:a|da|al prezzo di|prezzo)\s+(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?(?![a-z0-9])/i)
     || resto.match(/\s(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)(?![a-z0-9])/i);
   if (!prezzo) return null;
@@ -472,7 +473,7 @@ export function anteprima(a, cat) {
       if (!(c > 0 && c <= 10_000_000)) return { errore: "Prezzo non valido." };
       if (cat.prodotti.some((p) => p.categoria_id === a.categoria.id && norm(p.nome) === norm(a.nome)))
         return { errore: `«${a.nome}» esiste già in «${a.categoria.nome}».` };
-      return { testo: `Nuovo piatto in «${a.categoria.nome}»:\n• ${a.nome} — ${euro(c)}${a.descrizione ? `\n  ${a.descrizione}` : ""}\n\nAllergeni ed etichette si completano dal backoffice.` };
+      return { testo: `Nuovo piatto in «${a.categoria.nome}»:\n• ${a.nome} — ${euro(c)}${a.descrizione ? `\n  ${a.descrizione}` : ""}${a.foto ? "\n📷 con la foto inviata" : ""}\n\nAllergeni ed etichette si completano dal backoffice.` };
     }
     case "importa": {
       const valide = a.voci.filter((v) => v.euro > 0 && v.euro <= 100000);
@@ -576,7 +577,16 @@ async function esegui(a, cat) {
       const [p] = await db("prodotti", { metodo: "POST", corpo: {
         locale_id: C.locale, categoria_id: a.categoria.id, nome: a.nome, descrizione: a.descrizione || "",
         prezzo_cent: Math.round(a.euro * 100), posizione: prossima(cat.prodotti.filter((x) => x.categoria_id === a.categoria.id)) } });
-      return { esito: `«${a.nome}» aggiunto al menu.`, annulla: [{ tabella: "prodotti", id: p.id, elimina: true }] };
+      if (a.foto) {
+        // La foto va nell'archivio (o nel database se l'archivio non c'è); se fallisce, il piatto resta senza foto
+        try {
+          const percorso = await inArchivio(a.foto).catch(() => null);
+          await db("foto_prodotti", { metodo: "POST", unisci: true, corpo: percorso
+            ? { prodotto_id: p.id, locale_id: C.locale, path: percorso, dati: null }
+            : { prodotto_id: p.id, locale_id: C.locale, dati: a.foto } });
+        } catch (e) { log(`Foto del nuovo piatto non salvata: ${e.message}`); return { esito: `«${a.nome}» aggiunto al menu, ma la foto non è stata salvata: rimandala con il nome nella didascalia.`, annulla: [{ tabella: "prodotti", id: p.id, elimina: true }] }; }
+      }
+      return { esito: `«${a.nome}» aggiunto al menu${a.foto ? " con la foto" : ""}.`, annulla: [{ tabella: "prodotti", id: p.id, elimina: true }] };
     }
     case "importa": {
       const valide = a.voci.filter((v) => v.euro > 0 && v.euro <= 100000);
@@ -660,12 +670,25 @@ async function riceviFoto(m, cat) {
   const dati = await scaricaFoto(m.photo);
   // Didascalia: «Margherita» oppure «Margherita: pomodoro, fior di latte e basilico»
   const didascalia = (m.caption || "").trim();
+  // «Aggiungi Cabernet alla carta dei vini a 34 euro descrizione: …» con la foto: nuovo piatto con foto
+  const nuovo = conFoto(interpretaConRegole(didascalia, cat), dati);
+  if (nuovo) return gestisciAzioneConFoto(chat, nuovo, cat);
   const [nome, ...resto] = didascalia.split(":");
   const descrizione = resto.join(":").trim().slice(0, 500);
   const p = nome ? trova(nome.replace(/\bfoto\b/i, ""), cat.prodotti) : null;
   if (p) return chiediConferma(chat, { azione: "imposta_foto", prodotto: p, dati, descrizione }, cat);
   fotoInAttesa.set(chat, { dati, descrizione, scade: Date.now() + 10 * 60_000 });
   return invia(chat, didascalia ? `Non trovo «${nome.trim()}» nel menu. Scrivimi il nome del piatto per questa foto.` : "A quale piatto associo questa foto? Scrivimi il nome.");
+}
+
+/** Collega la foto a una richiesta di nuovo piatto (anche quando manca ancora la categoria). */
+function conFoto(azione, dati) {
+  if (azione?.azione === "aggiungi_piatto" || (azione?.azione === "chiedi_categoria" && azione.per === "aggiungi_piatto")) return { ...azione, foto: dati };
+  return null;
+}
+async function gestisciAzioneConFoto(chat, azione, cat) {
+  if (azione.azione === "chiedi_categoria") return chiediCategoria(chat, azione, cat);
+  return chiediConferma(chat, azione, cat);
 }
 
 /** Vocale: trascritto sul server (nessun audio esce dal locale), poi trattato come un messaggio scritto. */
@@ -699,7 +722,7 @@ async function riceviVocale(m) {
   return gestisciMessaggio({ ...m, voice: undefined, audio: undefined, text: esito.testo });
 }
 
-async function gestisciMessaggio(m) {
+export async function gestisciMessaggio(m) {
   const chat = m.chat.id;
   if (m.voice || m.audio) return riceviVocale(m);
   if (m.photo?.length) return riceviFoto(m, await catalogo());
@@ -711,13 +734,18 @@ async function gestisciMessaggio(m) {
 
   const attesa = fotoInAttesa.get(chat);
   if (attesa && !testo.startsWith("/")) {
-    fotoInAttesa.delete(chat);
     if (attesa.scade > Date.now()) {
       const cat = await catalogo();
+      const nuovo = conFoto(interpretaConRegole(testo, cat), attesa.dati);
+      if (nuovo) { fotoInAttesa.delete(chat); return gestisciAzioneConFoto(chat, nuovo, cat); }
       const p = trova(testo, cat.prodotti);
-      if (!p) return invia(chat, `Non trovo «${testo}» nel menu: invia di nuovo la foto con il nome del piatto nella didascalia.`);
-      return chiediConferma(chat, { azione: "imposta_foto", prodotto: p, dati: attesa.dati, descrizione: attesa.descrizione }, cat);
+      if (p) { fotoInAttesa.delete(chat); return chiediConferma(chat, { azione: "imposta_foto", prodotto: p, dati: attesa.dati, descrizione: attesa.descrizione }, cat); }
+      if (!/^\s*(aggiungi|inserisci|crea)\b/i.test(testo)) {
+        return invia(chat, `Non trovo «${testo}» nel menu. Scrivimi il nome esatto del piatto, oppure per crearlo con questa foto: «aggiungi ${testo} in <categoria> a <prezzo> euro». /annulla per lasciar perdere.`);
+      }
+      return invia(chat, "Per creare il piatto con questa foto mi serve anche il prezzo, es. «aggiungi Cabernet Sauvignon alla carta dei vini a 34 euro».");
     }
+    fotoInAttesa.delete(chat);
   }
 
   if (testo === "/start" || testo === "/aiuto") return invia(chat, AIUTO);
@@ -734,6 +762,10 @@ async function gestisciMessaggio(m) {
     return invia(chat, righe.length ? righe.join("\n").trim().slice(0, 4000) : testo === "/esauriti" ? "Nessun piatto esaurito." : "Il menu è vuoto.");
   }
 
+  if (testo === "/annulla" && fotoInAttesa.has(chat)) {
+    fotoInAttesa.delete(chat);
+    return invia(chat, "Foto scartata: non ho modificato nulla.");
+  }
   if (testo === "/annulla") {
     if (!ultimaModifica) return invia(chat, "Non c'è nessuna modifica da annullare.");
     for (const op of ultimaModifica) {
@@ -765,19 +797,22 @@ async function gestisciMessaggio(m) {
   if (azione.azione === "non_trovato") {
     return invia(chat, `Non trovo «${azione.cosa.trim()}» nel menu, quindi non ho modificato nulla. Controlla il nome con /menu.`);
   }
-  if (azione.azione === "chiedi_categoria") {
-    const prezzi = (azione.per ?? "varia_prezzi") === "varia_prezzi";
-    if (!prezzi && !cat.categorie.length) return invia(chat, "Non ci sono ancora categorie: creane una, ad esempio «crea la categoria Pizze».");
-    const id = Math.random().toString(36).slice(2, 10);
-    inAttesa.set(id, { azione, catalogo: cat, chat, scade: Date.now() + 10 * 60_000 });
-    const pulsanti = cat.categorie.slice(0, 30).map((c, i) => [{ text: c.nome, callback_data: `cat:${id}:${i}` }]);
-    if (prezzi) pulsanti.push([{ text: "Tutto il menu", callback_data: `cat:${id}:tutte` }]);
-    const domanda = prezzi ? `Variazione ${azione.percentuale > 0 ? "+" : ""}${azione.percentuale}%: su quale categoria?`
-      : azione.per === "aggiungi_piatto" ? `In quale categoria aggiungo «${azione.nome}»?`
-      : "In quale categoria metto i piatti che non hanno una categoria nell'elenco?";
-    return invia(chat, domanda, { reply_markup: { inline_keyboard: pulsanti } });
-  }
+  if (azione.azione === "chiedi_categoria") return chiediCategoria(chat, azione, cat);
   return chiediConferma(chat, azione, cat);
+}
+
+/** Pulsanti per scegliere la categoria (variazione prezzi, nuovo piatto, elenco da importare). */
+async function chiediCategoria(chat, azione, cat) {
+  const prezzi = (azione.per ?? "varia_prezzi") === "varia_prezzi";
+  if (!prezzi && !cat.categorie.length) return invia(chat, "Non ci sono ancora categorie: creane una, ad esempio «crea la categoria Pizze».");
+  const id = Math.random().toString(36).slice(2, 10);
+  inAttesa.set(id, { azione, catalogo: cat, chat, scade: Date.now() + 10 * 60_000 });
+  const pulsanti = cat.categorie.slice(0, 30).map((c, i) => [{ text: c.nome, callback_data: `cat:${id}:${i}` }]);
+  if (prezzi) pulsanti.push([{ text: "Tutto il menu", callback_data: `cat:${id}:tutte` }]);
+  const domanda = prezzi ? `Variazione ${azione.percentuale > 0 ? "+" : ""}${azione.percentuale}%: su quale categoria?`
+    : azione.per === "aggiungi_piatto" ? `In quale categoria aggiungo «${azione.nome}»?`
+    : "In quale categoria metto i piatti che non hanno una categoria nell'elenco?";
+  return invia(chat, domanda, { reply_markup: { inline_keyboard: pulsanti } });
 }
 
 async function chiediConferma(chat, azione, cat) {
@@ -879,7 +914,7 @@ export async function gestisciSala(q, tipo, id) {
   }
 }
 
-async function gestisciPulsante(q) {
+export async function gestisciPulsante(q) {
   const [tipo, id, scelta] = String(q.data || "").split(":");
   if (["sa", "sr", "so", "sx", "sc"].includes(tipo)) return gestisciSala(q, tipo, id);
   const pend = inAttesa.get(id);
@@ -893,7 +928,7 @@ async function gestisciPulsante(q) {
     const per = a.per ?? "varia_prezzi";
     if (per !== "varia_prezzi" && !categoria) return invia(pend.chat, "Serve una categoria: richiesta annullata.");
     const azione = per === "varia_prezzi" ? { azione: "varia_prezzi", percentuale: a.percentuale, categoria }
-      : per === "aggiungi_piatto" ? { azione: "aggiungi_piatto", nome: a.nome, euro: a.euro, descrizione: a.descrizione, categoria }
+      : per === "aggiungi_piatto" ? { azione: "aggiungi_piatto", nome: a.nome, euro: a.euro, descrizione: a.descrizione, foto: a.foto, categoria }
       : { azione: "importa", voci: a.voci.map((v) => ({ ...v, categoria: v.categoria ?? categoria })) };
     return chiediConferma(pend.chat, azione, pend.catalogo);
   }
