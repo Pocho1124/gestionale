@@ -276,16 +276,19 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
   }
   function risultati(vini, s) {
     const O = ["leggero", "medio", "strutturato"];
-    const r = vini.map((v) => {
-      let pt = 0; const pq = [];
-      if (s.tipo !== "sorpresa" && v.vino.tipo === s.tipo) { pt += 3; pq.push(TIPI[v.vino.tipo] + ", come preferisci"); }
-      if (s.corpo !== "indifferente") { const d = Math.abs(O.indexOf(v.vino.corpo) - O.indexOf(s.corpo)); if (d === 0) { pt += 2; pq.push(CORPI[v.vino.corpo]); } else if (d === 1) pt += 1; }
+    // Il colore scelto è vincolante; il corpo opposto solo se non c'è altro
+    const valutati = vini.filter((v) => s.tipo === "sorpresa" || v.vino.tipo === s.tipo).map((v) => {
+      let pt = 0, d = 0; const pq = [];
+      if (s.tipo !== "sorpresa") pq.push(TIPI[v.vino.tipo] + ", come preferisci");
+      if (s.corpo !== "indifferente") { d = Math.abs(O.indexOf(v.vino.corpo) - O.indexOf(s.corpo)); if (d === 0) { pt += 3; pq.push(CORPI[v.vino.corpo]); } else if (d === 1) pt += 1; }
       const piatti = (v.abbinamenti || []).map((a) => per.get(a.id)).filter((p) => p && (!s.cibo || p.categoria === s.cibo));
       if (piatti.length) { pt += Math.min(4, piatti.length * 2); pq.push("Si abbina a " + piatti.slice(0, 2).map((p) => p.nome).join(" e ")); }
-      return { v, pt, pq };
-    }).filter((x) => x.pt > 0 || s.tipo === "sorpresa").sort((a, b) => b.pt - a.pt).slice(0, 3);
+      return { v, pt, pq, d };
+    });
+    const vicini = valutati.filter((x) => x.d < 2);
+    const r = (vicini.length ? vicini : valutati).sort((a, b) => b.pt - a.pt || a.v.prezzo_cent - b.v.prezzo_cent).slice(0, 3);
     const n = [el("p", "quiz-passo", "Il sommelier consiglia")];
-    if (!r.length) n.push(el("p", null, "Nessun vino corrisponde esattamente: chiedi al personale, saprà consigliarti."));
+    if (!r.length) n.push(el("p", null, (s.tipo !== "sorpresa" ? "In questo momento non abbiamo un " + TIPI[s.tipo].toLowerCase() + " disponibile in carta" : "Nessun vino disponibile in carta") + ": chiedi al personale, saprà consigliarti."));
     r.forEach((x, i) => n.push(riga(x.v, x.pq.join(" · "), i + 1)));
     const b = el("button", "quiz-scelta", "Ricomincia"); b.addEventListener("click", quiz); n.push(b);
     mostra(n, null, "");

@@ -235,6 +235,7 @@ export function interpretaConRegole(testo, cat) {
 
   // --- Sommelier: scheda vino, abbinamenti, suggerimenti dell'IA
   if (/^\s*(suggerisci|proponi|consigliami|trova)\s+(gli\s+|degli\s+)?abbinament/i.test(testo)) return { azione: "suggerisci_abbinamenti" };
+  if (/^\s*(completa|compila|genera|crea|prepara)\s+(le\s+)?schede?\s+(dei\s+|del\s+)?vin[oi]/i.test(testo)) return { azione: "completa_schede_vini" };
   const vino = testo.match(/^\s*vino\s+(.+?)\s*:\s*(.+)$/is);
   if (vino) {
     const p = trova(vino[1], cat.prodotti);
@@ -416,6 +417,40 @@ async function suggerisciAbbinamenti(cat) {
   return coppie.length ? { azione: "abbina", coppie, daIA: true } : { azione: "chiarisci", testo: "Non sono riuscito a proporre abbinamenti sensati: impostali a mano con «abbina Aglianico al tagliere»." };
 }
 
+/** Vini senza scheda: prodotti nelle categorie di vini (Carta dei vini, Vini al calice, Bollicine…) senza tipo e corpo. */
+const CATEGORIE_VINI = /vin[oi]|calic|bottigl|cantin|bollic|spumant|champagne|rossi|bianchi|rosati|cantina/i;
+async function completaSchedeVini(cat) {
+  const categorieVini = new Set(cat.categorie.filter((c) => CATEGORIE_VINI.test(c.nome)).map((c) => c.id));
+  const senza = cat.prodotti.filter((p) => categorieVini.has(p.categoria_id) && !cat.vini.has(p.id)).slice(0, 12);
+  if (!senza.length) return { azione: "chiarisci", testo: "Tutti i vini in carta hanno già la scheda. 🍷 Per correggerne una: «vino Aglianico: rosso, strutturato, Campania»." };
+  const schema = {
+    type: "object", required: ["vini"],
+    properties: { vini: { type: "array", items: { type: "object", required: ["nome", "tipo", "corpo", "regione", "vitigno", "note"], properties: {
+      nome: { type: "string", enum: senza.map((p) => p.nome) },
+      tipo: { type: "string", enum: ["rosso", "bianco", "rosato", "bollicine", "dolce"] },
+      corpo: { type: "string", enum: ["leggero", "medio", "strutturato"] },
+      regione: { type: "string" }, vitigno: { type: "string" }, note: { type: "string" } } } } },
+  };
+  const r = await fetch(`${C.ollama}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(240_000),
+    body: JSON.stringify({ model: C.modello, stream: false, format: schema, options: { temperature: 0.1 },
+      messages: [
+        { role: "system", content: "Sei il sommelier di un'enoteca italiana. Per ogni vino indica tipo (rosso, bianco, rosato, bollicine, dolce) e corpo " +
+          "(leggero, medio, strutturato) deducendoli dal nome e dalla descrizione. Regione e vitigno solo se ne sei sicuro, altrimenti stringa vuota. " +
+          "Note: al massimo 12 parole sul profilo del vino, in italiano. Non inventare cantine né annate." },
+        { role: "user", content: senza.map((p) => `${p.nome}${p.descrizione ? ` — ${p.descrizione.slice(0, 160)}` : ""}`).join("\n") },
+      ] }),
+  });
+  if (!r.ok) throw new Error(`Modello non disponibile (${r.status})`);
+  const proposte = JSON.parse((await r.json()).message.content).vini ?? [];
+  const usati = new Set();
+  const schede = proposte.map((v) => ({ prodotto: senza.find((p) => p.nome === v.nome), tipo: v.tipo, corpo: v.corpo,
+      regione: pulisci(String(v.regione ?? "")).slice(0, 60), vitigno: pulisci(String(v.vitigno ?? "")).slice(0, 80), note: pulisci(String(v.note ?? "")).slice(0, 300) }))
+    .filter((v) => v.prodotto && ["rosso", "bianco", "rosato", "bollicine", "dolce"].includes(v.tipo) && ["leggero", "medio", "strutturato"].includes(v.corpo)
+      && !usati.has(v.prodotto.id) && usati.add(v.prodotto.id));
+  return schede.length ? { azione: "schede_vini", schede } : { azione: "chiarisci", testo: "Non sono riuscito a compilare le schede: impostale a mano con «vino Nome: rosso, strutturato»." };
+}
+
 // ---------------------------------------------------------------- Anteprima ed esecuzione
 export function anteprima(a, cat) {
   switch (a.azione) {
@@ -437,6 +472,9 @@ export function anteprima(a, cat) {
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "DI NUOVO DISPONIBILE" : "ESAURITO"}` };
     case "visibilita":
       return { testo: `«${a.prodotto.nome}» → ${a.valore ? "VISIBILE nel menu" : "NASCOSTO dal menu"}` };
+    case "schede_vini":
+      return { testo: `🧠 Il sommelier propone le schede (controllale prima di confermare):\n${a.schede.map((v) =>
+        `• ${v.prodotto.nome}: ${[v.tipo, v.corpo, v.regione, v.vitigno].filter(Boolean).join(", ")}${v.note ? `\n  ${v.note}` : ""}`).join("\n")}\n\nServono al quiz «Trova il tuo vino». Per correggerne una: «vino Nome: rosso, strutturato…».` };
     case "imposta_vino": {
       const c = a.campi, prima = cat.vini?.get(a.prodotto.id);
       const tipo = c.tipo ?? prima?.tipo;
@@ -509,6 +547,12 @@ async function esegui(a, cat) {
     case "visibilita":
       await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "PATCH", corpo: { visibile: a.valore } });
       return { esito: "Visibilità aggiornata.", annulla: [{ tabella: "prodotti", id: a.prodotto.id, patch: { visibile: a.prodotto.visibile } }] };
+    case "schede_vini": {
+      await db("vini", { metodo: "POST", unisci: true, corpo: a.schede.map((v) => ({
+        prodotto_id: v.prodotto.id, locale_id: C.locale, tipo: v.tipo, corpo: v.corpo, regione: v.regione, vitigno: v.vitigno, note: v.note })) });
+      return { esito: `${a.schede.length === 1 ? "1 scheda salvata" : `${a.schede.length} schede salvate`}: ora il quiz li propone.`,
+               annulla: a.schede.map((v) => ({ tabella: "vini", filtro: `prodotto_id=eq.${uuid(v.prodotto.id)}`, elimina: true })) };
+    }
     case "imposta_vino": {
       const [prima] = await db(`vini?prodotto_id=eq.${uuid(a.prodotto.id)}&select=*`);
       await db("vini", { metodo: "POST", unisci: true, corpo: { ...(prima ?? { corpo: "medio" }), ...a.campi, prodotto_id: a.prodotto.id, locale_id: C.locale } });
@@ -633,6 +677,7 @@ const AIUTO =
   "Sommelier:\n• vino Aglianico: rosso, strutturato, Campania, cantina X, annata 2020, bottiglia 28 euro, note ciliegia e spezie\n" +
   "• abbina l'aglianico al tagliere e alla genovese perché il tannino pulisce il grasso\n" +
   "• togli abbinamento aglianico e genovese\n• suggerisci abbinamenti (li propone l'IA, tu confermi)\n" +
+  "• completa le schede dei vini (l'IA indica tipo e corpo dei vini che ne sono privi, per il quiz «Trova il tuo vino»)\n" +
   "• oppure incolla un elenco, una riga per piatto:\n   Pizze rosse\n   Margherita - 6,50\n   Diavola - 8 | salame piccante\n\n" +
   "Comandi: /menu (prezzi), /esauriti, /annulla (annulla l'ultima modifica).\n" +
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
@@ -788,6 +833,11 @@ export async function gestisciMessaggio(m) {
   }
   if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze».");
 
+  if (azione.azione === "completa_schede_vini") {
+    await invia(chat, "🧠 Il sommelier sta compilando le schede dei vini (può volerci fino a un minuto)…");
+    await tg("sendChatAction", { chat_id: chat, action: "typing" });
+    azione = await completaSchedeVini(cat);
+  }
   if (azione.azione === "suggerisci_abbinamenti") {
     await invia(chat, "🧠 Il sommelier ci pensa un momento (può volerci fino a un minuto)…");
     await tg("sendChatAction", { chat_id: chat, action: "typing" });
