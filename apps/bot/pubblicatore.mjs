@@ -147,6 +147,7 @@ body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit
 .filtro-regioni .apri-mappa{border-style:dashed}
 .scheda-indietro{background:none;border:0;padding:0;color:var(--p);font:600 .85rem var(--fc);cursor:pointer;text-align:left}
 .mappa-sfondo{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.7);display:grid;place-items:center;padding:16px}
+.mappa-sfondo[hidden]{display:none !important}
 .mappa{position:relative;width:min(460px,100%);max-height:92vh;overflow:auto;background:var(--s);color:var(--t);border-radius:18px;padding:18px 16px 10px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .mappa svg{width:100%;height:auto;max-height:68vh;display:block;margin:6px auto}
 .mappa path{fill:color-mix(in srgb,var(--t) 10%,transparent);stroke:color-mix(in srgb,var(--t) 45%,transparent);stroke-width:.8;transition:fill .15s}
