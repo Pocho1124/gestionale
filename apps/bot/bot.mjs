@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { riconosciVino } from "./vitigni.mjs";
 import { descriviVino } from "./descrizioni.mjs";
+import { regioneDi } from "./regioni.mjs";
 // Bot Telegram privato del gestionale.
 // Interpreta le richieste (prima con regole, poi con il modello locale Ollama), mostra un'anteprima
 // e applica la modifica solo dopo conferma, con l'account dedicato del bot (permessi RLS, audit).
@@ -519,7 +520,8 @@ async function completaSchedeVini(cat) {
       const b = riconosciVino(p.nome, p.descrizione, norm);
       if (b) r = { ...b, nome: b.vitigno || p.nome, fonte_scheda: b.fonte };
     }
-    if (r) schede.push({ prodotto: p, tipo: r.tipo, corpo: r.corpo, regione: r.regione ?? "", vitigno: (r.vitigno ?? "").slice(0, 80), note: "",
+    // Nella scheda la regione (es. «Campania»), per raggruppare e filtrare il menu; la zona precisa resta nell'enciclopedia
+    if (r) schede.push({ prodotto: p, tipo: r.tipo, corpo: r.corpo, regione: regioneDi(r.regione ?? "").slice(0, 60), vitigno: (r.vitigno ?? "").slice(0, 80), note: "",
                          trovato: r.cantina ? `${r.nome}, ${r.cantina}` : r.nome, fonte: r.fonte_scheda });
     else ignoti.push(p.nome);
   }
@@ -650,7 +652,7 @@ async function esegui(a, cat) {
       const annulla = [{ tabella: "enciclopedia_vini", id: voce.id, elimina: true }];
       if (a.prodotto) {
         await db("vini", { metodo: "POST", unisci: true, corpo: { prodotto_id: a.prodotto.id, locale_id: C.locale, tipo: c.tipo, corpo: c.corpo,
-          regione: (c.regione ?? "").slice(0, 60), vitigno: (c.vitigno ?? "").slice(0, 80), cantina: (c.cantina ?? "").slice(0, 80) } });
+          regione: regioneDi(c.regione ?? "").slice(0, 60), vitigno: (c.vitigno ?? "").slice(0, 80), cantina: (c.cantina ?? "").slice(0, 80) } });
         annulla.push({ tabella: "vini", filtro: `prodotto_id=eq.${uuid(a.prodotto.id)}`, elimina: true });
       }
       return { esito: `«${a.nome}» aggiunto all'enciclopedia${a.prodotto ? " e alla scheda del menu" : ""}.`, annulla };
