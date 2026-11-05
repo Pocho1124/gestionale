@@ -168,11 +168,12 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 /* Foto di sfondo «vedo non vedo»: livello fisso dietro al contenuto (nell'anteprima resta dentro il telefono) */
 .menu.con-foto { position: relative; isolation: isolate; }
 /* Foto di sfondo: su tutto il menu resta ferma mentre si scorre; il velo ne regola la visibilità */
-.menu-foto { pointer-events: none; overflow: hidden; z-index: -1; }
-.menu-foto-pagina { position: fixed; inset: 0; }
-.menu-foto-testata { position: absolute; inset: 0; border-radius: 0 0 18px 18px; }
-.menu-foto-immagine { position: absolute; inset: 0; background-size: cover; background-position: center; transform: scale(1.08); }
-.menu-foto-velo { position: absolute; inset: 0; background: var(--m-sfondo); }
+.menu-sfondo { pointer-events: none; overflow: hidden; z-index: -1; }
+.menu-sfondo-pagina { position: fixed; inset: 0; }
+.menu-sfondo-testata { position: absolute; inset: 0; border-radius: 0 0 18px 18px; }
+.menu-sfondo-immagine { position: absolute; inset: 0; background-size: cover; background-position: center; transform: scale(1.08); }
+.menu-sfondo-velo { position: absolute; inset: 0; background: var(--m-sfondo); }
+.con-foto-pagina .menu-nav { background: color-mix(in srgb, var(--m-sfondo) 80%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .con-foto-testata .menu-testata { position: relative; isolation: isolate; padding-left: 12px; padding-right: 12px; }
 /* Foto del piatto nella scheda: intera, mai tagliata */
 .scheda-foto { width: 100%; height: auto; max-height: min(62vh, 560px); aspect-ratio: auto; object-fit: contain; display: block;
@@ -436,3 +437,11 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 
 .gruppo-composizione { display: grid; gap: 6px; border-left: 3px solid var(--primario); padding: 4px 0 4px 10px; }
 .voce-composizione { padding-left: 14px; }
+
+/* Vini per regione */
+.menu-filtro-regioni { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin: 12px 0 0; font-size: .8rem; }
+.menu-filtro-regioni span { width: 100%; text-align: center; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+.menu-filtro-regioni button { border: 1px solid color-mix(in srgb, var(--m-primario) 55%, transparent); background: transparent; color: var(--m-testo);
+  border-radius: 999px; padding: 5px 12px; font: 600 .8rem var(--m-font-testo); cursor: pointer; }
+.menu-filtro-regioni button.attiva { background: var(--m-primario); color: var(--m-sfondo); border-color: var(--m-primario); }
+.menu-regione-titolo { margin: 18px 0 2px; font: 600 .78rem var(--m-font-testo); letter-spacing: .2em; text-transform: uppercase; color: var(--m-primario); }
