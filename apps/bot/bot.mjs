@@ -221,7 +221,68 @@ export function leggiSchedaVino(testo) {
   return campi;
 }
 
+const VERBO_AGGIUNTA = /^(?:\S+\s+){0,3}?(aggiung\w*|inserisc\w*|inserire|metti|mettere|carica|caricare)\b/i;
+const PREZZO_COMUNE = /[.;,]?\s*\b(?:tutt[ei]|ciascun[oa]|cadaun[oa]|ognun[oa]|l\W?un[oa])\b[^\n\d]{0,25}?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?[^\n]*$/im;
+const PREZZO_COMUNE_DOPO = /\s+(?:a\s+)?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?\s+(?:l\W?un[oa]|ciascun[oa]|cadaun[oa]|ognun[oa])\b[^\n]*$/im;
+
+/**
+ * Più prodotti in un messaggio: «aggiungi in birre: Amaranta, Andromeda e Mida a 6 € l'una»,
+ * oppure un elenco su più righe, con prezzo per riga o comune. I prezzi non si inventano mai: se mancano, si chiedono.
+ */
+export function interpretaAggiuntaMultipla(testo, cat) {
+  if (!VERBO_AGGIUNTA.test(testo)) return null;
+  // Categoria: quella il cui nome compare nell'intestazione (prima dei «:» o nella prima riga)
+  const due = testo.indexOf(":");
+  const intestazione = due > 0 ? testo.slice(0, due) : testo.split(/\r?\n/)[0];
+  // Un solo prodotto con prezzo e descrizione («aggiungi X … a 34 euro descrizione: …»): non è un elenco
+  if (due > 0 && (/\d/.test(intestazione) || /\bdescrizion\w*\s*$/i.test(intestazione.trim()))) return null;
+  const ti = ` ${norm(intestazione)} `;
+  const categoria = [...cat.categorie].sort((a, b) => b.nome.length - a.nome.length).find((c) => {
+    const n = norm(c.nome);
+    return ti.includes(` ${n} `) || (!n.includes(" ") && ti.split(" ").some((w) => w.length > 3 && radice(w) === radice(n)));
+  }) ?? null;
+  // Prezzo comune («tutte a 6 €», «6 euro l'una»)
+  let corpo = due > 0 ? testo.slice(due + 1) : testo;
+  let comune = null;
+  const pc = corpo.match(PREZZO_COMUNE) ?? corpo.match(PREZZO_COMUNE_DOPO);
+  if (pc) { comune = numero(pc[1]); corpo = corpo.slice(0, pc.index); }
+  if (due < 0) {
+    // Senza «:»: le voci iniziano dopo il nome della categoria (o dopo il verbo)
+    const nc = categoria ? norm(corpo).indexOf(norm(categoria.nome)) : -1;
+    const parole = corpo.split(/\s+/);
+    let salta = 0, acc = "";
+    if (nc >= 0) { for (const w of parole) { acc = norm(`${acc} ${w}`); salta++; if (acc.length >= nc + norm(categoria.nome).length) break; } }
+    else { const m = corpo.match(VERBO_AGGIUNTA); salta = m ? m[0].split(/\s+/).length : 0; }
+    corpo = parole.slice(salta).join(" ");
+  }
+  const pezzi = (/\r?\n/.test(corpo.trim()) ? corpo.split(/\r?\n/) : corpo.split(/\s*;\s*|\s*,(?!\d)\s*|\s+e\s+/i))   // «6,50» non si spezza
+    .map((x) => x.replace(/^\s*(?:[-•*]\s*)?(?:anche\s+)?(?:(?:le|i|gli|la|il)\s+seguenti\s+\S+\s*)?/i, "").trim()).filter(Boolean);
+  const voci = [];
+  for (const pz of pezzi.slice(0, 40)) {
+    const m = pz.match(RIGA_PREZZO);
+    const conPrezzo = m && m[1] && /[a-zà-ü]/i.test(m[1]);
+    const nome = maiuscola(pulisci((conPrezzo ? m[1] : pz).replace(/\s+a$/i, ""))).slice(0, 120);
+    if (!/[a-zà-ü]/i.test(nome) || nome.length > 60 || VERBO_AGGIUNTA.test(nome)) continue;
+    voci.push({ nome, euro: conPrezzo ? numero(m[2]) : null, descrizione: "", categoria });
+  }
+  if (voci.length < 2) return null;
+  // «Andromeda, Mida a 6 €»: un solo prezzo, sull'ultima voce, vale per tutte
+  const conP = voci.filter((v) => v.euro);
+  if (comune === null && conP.length === 1 && voci.at(-1).euro && /\sa\s+\d/i.test(pezzi.at(-1))) comune = voci.at(-1).euro;
+  for (const v of voci) if (comune !== null && !v.euro) v.euro = comune;
+  if (comune !== null && voci.at(-1).euro === comune) for (const v of voci) v.euro = v.euro ?? comune;
+  // Già presenti nella categoria: non si duplicano
+  const esistenti = categoria ? new Set(cat.prodotti.filter((p) => p.categoria_id === categoria.id).map((p) => norm(p.nome))) : new Set();
+  const nuove = voci.filter((v) => !esistenti.has(norm(v.nome)));
+  const gia = voci.filter((v) => esistenti.has(norm(v.nome))).map((v) => v.nome);
+  if (!nuove.length) return { azione: "chiarisci", testo: `Sono già tutti in «${categoria.nome}»: ${gia.join(", ")}.` };
+  if (nuove.some((v) => !v.euro)) return { azione: "chiedi_prezzi", voci: nuove, categoria, gia };
+  return categoria ? { azione: "importa", voci: nuove, gia } : { azione: "chiedi_categoria", per: "importa", voci: nuove, gia };
+}
+
 export function interpretaConRegole(testo, cat) {
+  const multipla = interpretaAggiuntaMultipla(testo, cat);
+  if (multipla) return multipla;
   const elenco = interpretaElenco(testo, cat);
   if (elenco) return elenco;
   const t = norm(testo);
@@ -407,21 +468,24 @@ async function interpretaConModello(testo, cat) {
       "mostra_esauriti: vedere cosa è esaurito. aiuto: sapere cosa può fare il bot. Se non corrisponde a nessuna funzione: 'nessuna'.",
     utente: `Categorie: ${nomiCat.join(", ") || "nessuna"}\nPiatti: ${nomiPiatti.join(", ") || "nessuno"}\nVini con scheda: ${nomiVini.join(", ") || "nessuno"}\nRichiesta: ${testo}`,
   });
+  // Numeri scritti dall'utente (anche in lettere non contano: solo cifre), per verificare prezzi e percentuali
+  const numeri = (testo.match(/\d{1,5}(?:[.,]\d{1,2})?/g) ?? []).map(numero);
+  const nelTesto = (x) => numeri.some((n) => Math.abs(n - Math.abs(x)) < 0.001);
   const p = cat.prodotti.find((x) => x.nome === out.prodotto);
   const c = cat.categorie.find((x) => x.nome === out.categoria) ?? null;
   switch (out.azione) {
     case "varia_prezzi": {
-      if (!Number.isFinite(out.percentuale) || out.percentuale === 0) return null;
+      if (!Number.isFinite(out.percentuale) || out.percentuale === 0 || !nelTesto(out.percentuale)) return null;
       if (c) return { azione: "varia_prezzi", percentuale: out.percentuale, categoria: c };
       return TUTTO.test(norm(testo)) ? { azione: "varia_prezzi", percentuale: out.percentuale, categoria: null }
                                     : { azione: "chiedi_categoria", percentuale: out.percentuale };
     }
-    case "imposta_prezzo": return p && out.euro > 0 ? { azione: "imposta_prezzo", prodotto: p, euro: out.euro } : null;
+    case "imposta_prezzo": return p && out.euro > 0 && nelTesto(out.euro) ? { azione: "imposta_prezzo", prodotto: p, euro: out.euro } : null;
     case "disponibilita": return p && typeof out.valore === "boolean" ? { azione: "disponibilita", prodotto: p, valore: out.valore } : null;
     case "visibilita": return p && typeof out.valore === "boolean" ? { azione: "visibilita", prodotto: p, valore: out.valore } : null;
     case "aggiungi_categoria": return out.nome?.trim() ? { azione: "aggiungi_categoria", nome: maiuscola(pulisci(out.nome)).slice(0, 80) } : null;
     case "aggiungi_piatto": {
-      if (!out.nome?.trim() || !(out.euro > 0)) return null;
+      if (!out.nome?.trim() || !(out.euro > 0) || !nelTesto(out.euro)) return null;   // mai un prezzo inventato
       const piatto = { nome: maiuscola(pulisci(out.nome)).slice(0, 120), euro: out.euro, descrizione: (out.descrizione ?? "").slice(0, 500) };
       return c ? { azione: "aggiungi_piatto", ...piatto, categoria: c } : { azione: "chiedi_categoria", per: "aggiungi_piatto", ...piatto };
     }
@@ -613,7 +677,8 @@ export function anteprima(a, cat) {
       const righe = valide.slice(0, 25).map((v) => `• [${v.categoria.nome}] ${v.nome} — ${euro(Math.round(v.euro * 100))}`);
       if (valide.length > 25) righe.push(`… e altri ${valide.length - 25}`);
       const scartate = a.voci.length - valide.length;
-      return { testo: `Importo ${valide.length} piatti${nuoveCat.length ? ` e creo ${nuoveCat.length} categorie (${nuoveCat.join(", ")})` : ""}:\n${righe.join("\n")}` +
+      return { testo: `Aggiungo ${valide.length === 1 ? "1 prodotto" : `${valide.length} prodotti`}${nuoveCat.length ? ` e creo ${nuoveCat.length} categorie (${nuoveCat.join(", ")})` : ""}:\n${righe.join("\n")}` +
+        (a.gia?.length ? `\n\nGià presenti, non li duplico: ${a.gia.join(", ")}` : "") +
         (scartate ? `\n\n⚠️ ${scartate} righe ignorate per prezzo non valido.` : "") + "\n\nAllergeni ed etichette si completano dal backoffice." };
     }
     default:
@@ -762,7 +827,7 @@ async function esegui(a, cat) {
       });
       const creati = await db("prodotti", { metodo: "POST", corpo: righe });
       // Prima i piatti, poi le categorie create: l'annullamento li rimuove in quest'ordine
-      return { esito: `${creati.length} piatti importati.`, annulla: [...creati.map((p) => ({ tabella: "prodotti", id: p.id, elimina: true })), ...annulla] };
+      return { esito: `${creati.length === 1 ? "1 prodotto aggiunto" : `${creati.length} prodotti aggiunti`}.`, annulla: [...creati.map((p) => ({ tabella: "prodotti", id: p.id, elimina: true })), ...annulla] };
     }
     default:
       throw new Error("Azione non riconosciuta");
@@ -795,6 +860,7 @@ const AIUTO =
   "Prima di ogni modifica ti mostro un'anteprima da confermare.";
 
 const fotoInAttesa = new Map();   // chat -> { dati, descrizione, scade }: foto ricevuta senza il nome del piatto
+const prezziInAttesa = new Map(); // chat -> { voci, categoria, gia, scade }: prodotti da aggiungere senza prezzo
 
 /** Scarica la foto più grande che sta nel limite (Telegram invia sempre JPEG). */
 /** Carica una foto JPEG (data URI) nell'archivio del locale con l'account del bot; restituisce il percorso. */
@@ -919,6 +985,33 @@ export async function gestisciMessaggio(m) {
     return invia(chat, righe.length ? righe.join("\n").trim().slice(0, 4000) : testo === "/esauriti" ? "Nessun piatto esaurito." : "Il menu è vuoto.");
   }
 
+  if (testo === "/annulla" && prezziInAttesa.has(chat)) {
+    prezziInAttesa.delete(chat);
+    return invia(chat, "Lasciato perdere: non ho aggiunto nulla.");
+  }
+  const attesaPrezzi = prezziInAttesa.get(chat);
+  if (attesaPrezzi && !testo.startsWith("/")) {
+    prezziInAttesa.delete(chat);
+    if (attesaPrezzi.scade > Date.now() && /\d/.test(testo)) {
+      const cat = await catalogo();
+      const mancanti = attesaPrezzi.voci.filter((v) => !v.euro);
+      const solo = testo.trim().match(/^(?:tutt[ei]\s+)?(?:a\s+)?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?(?:\s+(?:l\W?un[oa]|ciascun[oa]|cadaun[oa]))?\s*$/i);
+      if (solo) mancanti.forEach((v) => { v.euro = numero(solo[1]); });
+      else for (const r of testo.split(/\r?\n|,|;/)) {
+        const m = r.trim().match(RIGA_PREZZO);
+        const v = m && m[1] && mancanti.find((x) => norm(x.nome) === norm(pulisci(m[1])) || norm(x.nome).startsWith(norm(pulisci(m[1]))));
+        if (v) v.euro = numero(m[2]);
+      }
+      const ancora = attesaPrezzi.voci.filter((v) => !v.euro);
+      if (ancora.length) {
+        prezziInAttesa.set(chat, { ...attesaPrezzi, scade: Date.now() + 10 * 60_000 });
+        return invia(chat, `Mi manca ancora il prezzo di: ${ancora.map((v) => v.nome).join(", ")}. Scrivi un prezzo per tutti (es. «6») oppure «Nome 6», uno per riga.`);
+      }
+      const azione = attesaPrezzi.categoria ? { azione: "importa", voci: attesaPrezzi.voci, gia: attesaPrezzi.gia }
+                                            : { azione: "chiedi_categoria", per: "importa", voci: attesaPrezzi.voci, gia: attesaPrezzi.gia };
+      return azione.azione === "chiedi_categoria" ? chiediCategoria(chat, azione, cat) : chiediConferma(chat, azione, cat);
+    }
+  }
   if (testo === "/annulla" && fotoInAttesa.has(chat)) {
     fotoInAttesa.delete(chat);
     return invia(chat, "Foto scartata: non ho modificato nulla.");
@@ -945,6 +1038,12 @@ export async function gestisciMessaggio(m) {
   }
   if (!azione) return invia(chat, "Non ho capito quale modifica fare. Prova ad esempio: «la genovese è esaurita» oppure «aumenta del 5% le pizze». /aiuto per l'elenco dei comandi.");
   if (azione.azione === "comando") return gestisciMessaggio({ ...m, text: azione.comando });
+  if (azione.azione === "chiedi_prezzi") {
+    prezziInAttesa.set(chat, { voci: azione.voci, categoria: azione.categoria, gia: azione.gia, scade: Date.now() + 10 * 60_000 });
+    const senza = azione.voci.filter((v) => !v.euro).map((v) => v.nome);
+    return invia(chat, `Aggiungo ${azione.voci.map((v) => v.nome).join(", ")}${azione.categoria ? ` in «${azione.categoria.nome}»` : ""}.\n` +
+      `💶 Mi manca il prezzo di: ${senza.join(", ")}.\nScrivi un prezzo per tutti (es. «6») oppure «Nome 6», uno per riga. /annulla per lasciar perdere.`);
+  }
 
   if (azione.azione === "descrivi_vini") azione = await descriviVini(cat, azione.tutti);
   if (azione.azione === "completa_schede_vini") {
