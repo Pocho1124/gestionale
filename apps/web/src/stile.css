@@ -445,3 +445,16 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
   border-radius: 999px; padding: 5px 12px; font: 600 .8rem var(--m-font-testo); cursor: pointer; }
 .menu-filtro-regioni button.attiva { background: var(--m-primario); color: var(--m-sfondo); border-color: var(--m-primario); }
 .menu-regione-titolo { margin: 18px 0 2px; font: 600 .78rem var(--m-font-testo); letter-spacing: .2em; text-transform: uppercase; color: var(--m-primario); }
+
+/* Mappa delle regioni */
+.menu-filtro-regioni .apri-mappa { border-style: dashed; }
+.mappa-centro { place-items: center; }
+.menu-mappa { text-align: center; }
+.menu-mappa svg { width: 100%; height: auto; max-height: 64vh; display: block; margin: 6px auto; }
+.menu-mappa path { fill: color-mix(in srgb, var(--m-testo) 10%, transparent); stroke: color-mix(in srgb, var(--m-testo) 45%, transparent); stroke-width: .8; transition: fill .15s; }
+.menu-mappa path.con-vini { fill: color-mix(in srgb, var(--m-primario) 45%, transparent); cursor: pointer; }
+.menu-mappa path.con-vini:hover, .menu-mappa path.con-vini:focus-visible, .menu-mappa path.acceso { fill: var(--m-primario); outline: none; }
+.menu-mappa-nome { margin: 2px 0 0; font-weight: 600; color: var(--m-primario); min-height: 1.5em; }
+.menu-mappa-fonte { margin: 0; font-size: .65rem; opacity: .55; }
+
+.scheda-indietro { background: none; border: 0; padding: 0; color: var(--m-primario); font: 600 .85rem var(--m-font-testo); cursor: pointer; text-align: left; }

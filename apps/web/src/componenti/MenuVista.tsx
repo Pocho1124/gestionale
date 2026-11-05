@@ -4,8 +4,11 @@ import type { Aspetto, MenuPubblico } from "../lib/tipi";
 import { caricaFont, pilaFont } from "../lib/font";
 import { SchedaPiatto } from "./SchedaPiatto";
 import { sorgenteImmagine } from "../lib/archivio";
+import { regioneDi } from "../lib/regioni";
+import { MappaRegioni } from "./MappaRegioni";
+import { MAPPA_ITALIA } from "../lib/mappaItalia";
 import { TrovaVino } from "./TrovaVino";
-import { TIPI_VINO } from "../lib/tipi";
+import { TIPI_VINO, type PiattoMenu } from "../lib/tipi";
 
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 
@@ -13,9 +16,18 @@ const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", 
 export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspetto }) {
   type Piatto = MenuPubblico["categorie"][number]["prodotti"][number];
   const [aperto, setAperto] = useState<Piatto | null>(null);
-  const chiudi = useCallback(() => setAperto(null), []);
+  const [storia, setStoria] = useState<PiattoMenu[]>([]);
+  const chiudi = useCallback(() => { setAperto(null); setStoria([]); }, []);
   const [quiz, setQuiz] = useState(false);
   const perId = new Map(menu.categorie.flatMap((c) => c.prodotti.map((p) => [p.id, p] as const)));
+  const [regione, setRegione] = useState("");
+  const regioneVino = (p: PiattoMenu) => (p.vino ? regioneDi(p.vino.regione) || "Altre zone" : "");
+  const ordina = (x: string, y: string) => Number(x === "Altre zone") - Number(y === "Altre zone") || x.localeCompare(y, "it");
+  const [mappa, setMappa] = useState(false);
+  const viniPerRegione = new Map<string, number>();
+  for (const c of menu.categorie) for (const p of c.prodotti) if (p.vino) viniPerRegione.set(regioneVino(p), (viniPerRegione.get(regioneVino(p)) ?? 0) + 1);
+  const conMappa = [...viniPerRegione.keys()].some((r) => MAPPA_ITALIA.regioni[r]);
+  const tutteLeRegioni = [...new Set(menu.categorie.flatMap((c) => c.prodotti.filter((p) => p.vino).map(regioneVino)))].sort(ordina);
   const numeroVini = menu.categorie.reduce((n, c) => n + c.prodotti.filter((p) => p.vino && p.disponibile).length, 0);
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); },
     [aspetto.font_titoli, aspetto.font_testo]);
@@ -34,13 +46,13 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
   const modo = aspetto.sfondo_modo === "testata" ? "testata" : "pagina";
   const visibile = Math.min(100, Math.max(0, aspetto.sfondo_opacita)) / 100;
   const foto = sfondo ? (
-    <div className={`menu-foto menu-foto-${modo}`} aria-hidden="true">
-      <div className="menu-foto-immagine" style={{
+    <div className={`menu-sfondo menu-sfondo-${modo}`} aria-hidden="true">
+      <div className="menu-sfondo-immagine" style={{
         backgroundImage: `url("${sfondo}")`,
         filter: `blur(${aspetto.sfondo_sfocatura}px)${aspetto.sfondo_bn ? " grayscale(1)" : ""}`,
       }} />
       {/* Velo del colore di sfondo: più la foto è «visibile», più il velo è trasparente */}
-      <div className="menu-foto-velo" style={{ opacity: 1 - visibile }} />
+      <div className="menu-sfondo-velo" style={{ opacity: 1 - visibile }} />
     </div>
   ) : null;
 
@@ -58,6 +70,16 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
         <button className="menu-trova-vino" onClick={() => setQuiz(true)}>🍷 Trova il tuo vino</button>
       )}
 
+      {tutteLeRegioni.length >= 2 && (
+        <div className="menu-filtro-regioni" role="group" aria-label="Vini per regione">
+          <span>Vini per regione</span>
+          {conMappa && <button type="button" className="apri-mappa" onClick={() => setMappa(true)}>🗺️ Scegli dalla mappa</button>}
+          {["", ...tutteLeRegioni].map((r) => (
+            <button key={r || "tutte"} type="button" className={regione === r ? "attiva" : ""} aria-pressed={regione === r} onClick={() => setRegione(r)}>{r || "Tutte"}</button>
+          ))}
+        </div>
+      )}
+
       {menu.categorie.length > 0 && (
         <nav className="menu-nav" aria-label="Categorie">
           {menu.categorie.map((c) => <a key={c.id} href={`#cat-${c.id}`}>{c.nome}</a>)}
@@ -66,12 +88,21 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
 
       {menu.categorie.length === 0 && <p className="menu-vuoto">Il menu sarà disponibile a breve.</p>}
 
-      {menu.categorie.map((c) => (
+      {menu.categorie.map((c) => {
+        // Vini della regione scelta (gli altri piatti restano); categorie di soli vini raggruppate per regione
+        const prodotti = c.prodotti.filter((p) => !regione || !p.vino || regioneVino(p) === regione);
+        const soloVini = prodotti.length > 0 && prodotti.every((p) => p.vino);
+        if (regione && c.prodotti.some((p) => p.vino) && !prodotti.some((p) => p.vino)) return null;
+        const regioniCat = soloVini ? [...new Set(prodotti.map(regioneVino))].sort(ordina) : [];
+        const gruppi: [string, PiattoMenu[]][] = regioniCat.length >= 2 ? regioniCat.map((r) => [r, prodotti.filter((p) => regioneVino(p) === r)]) : [["", prodotti]];
+        return (
         <section key={c.id} id={`cat-${c.id}`} className="menu-categoria">
           <h2>{c.nome}</h2>
           {aspetto.mostra_descrizioni && c.descrizione && <p className="menu-cat-desc">{c.descrizione}</p>}
-          <div className="menu-prodotti">
-            {c.prodotti.map((p) => (
+          {gruppi.map(([nomeRegione, lista]) => (
+          <div className="menu-prodotti" key={nomeRegione || "tutti"}>
+            {nomeRegione && <h3 className="menu-regione-titolo">{nomeRegione}</h3>}
+            {lista.map((p) => (
               <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}${p.foto || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length ? " apribile" : ""}`}
                 {...(p.foto || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length ? {
                   role: "button", tabIndex: 0, "aria-label": `${p.nome}: apri la scheda`,
@@ -99,10 +130,15 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
               </article>
             ))}
           </div>
+          ))}
         </section>
-      ))}
+        );
+      })}
 
-      {aperto && <SchedaPiatto key={aperto.id} piatto={aperto} onChiudi={chiudi} perId={perId} onApri={(p) => { setQuiz(false); setAperto(p); }} />}
+      {aperto && <SchedaPiatto key={aperto.id} piatto={aperto} onChiudi={chiudi} perId={perId} storia={storia}
+        onApri={(p) => { setQuiz(false); setStoria((s) => [...s, aperto]); setAperto(p); }}
+        onIndietro={() => { setAperto(storia[storia.length - 1] ?? null); setStoria((s) => s.slice(0, -1)); }} />}
+      {mappa && <MappaRegioni viniPerRegione={viniPerRegione} onChiudi={() => setMappa(false)} onScegli={(r) => { setRegione(r); setMappa(false); }} />}
       {quiz && !aperto && <TrovaVino menu={menu} onApri={(p) => setAperto(p)} onChiudi={() => setQuiz(false)} />}
 
       <footer className="menu-piede">

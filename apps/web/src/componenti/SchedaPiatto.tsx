@@ -7,11 +7,15 @@ import { CORPI_VINO, TIPI_VINO, type PiattoMenu } from "../lib/tipi";
 type Piatto = PiattoMenu;
 
 /** Scheda aperta toccando un piatto: foto (scaricata solo ora), descrizione, allergeni. */
-export function SchedaPiatto({ piatto, onChiudi, perId, onApri }: {
+export function SchedaPiatto({ piatto, onChiudi, perId, onApri, storia = [], onIndietro }: {
   piatto: Piatto; onChiudi: () => void; perId: Map<string, Piatto>; onApri: (p: Piatto) => void;
+  storia?: Piatto[]; onIndietro?: () => void;   // schede aperte prima di questa (es. pinsa → vino): «Torna a …»
 }) {
   const v = piatto.vino;
-  const abbinati = (piatto.abbinamenti ?? []).map((a) => ({ p: perId.get(a.id), motivo: a.motivo })).filter((x) => x.p);
+  // Niente rimandi alle schede già aperte nel percorso: evita il giro infinito piatto → vino → piatto
+  const giaVisti = new Set(storia.map((x) => x.id));
+  const abbinati = (piatto.abbinamenti ?? []).map((a) => ({ p: perId.get(a.id), motivo: a.motivo })).filter((x) => x.p && !giaVisti.has(x.p.id));
+  const precedente = storia[storia.length - 1];
   const [foto, setFoto] = useState<string | null>(null);
   const chiudi = useRef<HTMLButtonElement>(null);
 
@@ -33,6 +37,7 @@ export function SchedaPiatto({ piatto, onChiudi, perId, onApri }: {
         <button ref={chiudi} className="scheda-chiudi" onClick={onChiudi} aria-label="Chiudi">×</button>
         {piatto.foto && (foto ? <img className="scheda-foto" src={foto} alt={piatto.nome} /> : <div className="scheda-foto scheda-attesa" />)}
         <div className="scheda-corpo">
+          {precedente && onIndietro && <button className="scheda-indietro" onClick={onIndietro}>← Torna a {precedente.nome}</button>}
           <div className="menu-riga"><h3>{piatto.nome}</h3><span className="menu-prezzo">{formatta(centesimi(piatto.prezzo_cent))}</span></div>
           {!piatto.disponibile && <p><span className="menu-badge">Esaurito</span></p>}
           {v && <p className="scheda-vino">{[TIPI_VINO[v.tipo], CORPI_VINO[v.corpo], v.regione, v.vitigno].filter(Boolean).join(" · ")}</p>}
