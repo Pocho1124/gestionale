@@ -100,7 +100,7 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
   // La mappa compare solo insieme al filtro (almeno due regioni) e se almeno una regione è italiana
   const conMappa = tutteLeRegioni.length >= 2 && [...viniPerRegione.keys()].some((r) => MAPPA_ITALIA.regioni[r]);
   const mappa = conMappa ? `
-<div class="mappa-sfondo" hidden><div class="mappa" role="dialog" aria-modal="true" aria-label="Scegli la regione dalla mappa">
+<div class="mappa-sfondo" hidden style="display:none"><div class="mappa" role="dialog" aria-modal="true" aria-label="Scegli la regione dalla mappa">
   <button class="scheda-chiudi mappa-chiudi" aria-label="Chiudi">×</button>
   <p class="quiz-passo">Scegli una regione</p><p class="mappa-nome" aria-live="polite">Tocca una regione illuminata</p>
   <svg viewBox="0 0 ${MAPPA_ITALIA.larghezza} ${MAPPA_ITALIA.altezza}" role="group" aria-label="Regioni d'Italia">${Object.entries(MAPPA_ITALIA.regioni).map(([r, d]) =>
@@ -363,11 +363,12 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
   // Mappa delle regioni: passando sopra si illumina e mostra il nome, toccando applica il filtro
   const mappaS = document.querySelector(".mappa-sfondo");
   if (mappaS) {
+    mappaS.style.display = "none";
     const nome = mappaS.querySelector(".mappa-nome");
-    const chiudiMappa = () => { mappaS.hidden = true; };
-    document.querySelector(".apri-mappa")?.addEventListener("click", () => { mappaS.hidden = false; mappaS.querySelector(".mappa-chiudi").focus(); });
+    const chiudiMappa = () => { mappaS.hidden = true; mappaS.style.display = "none"; };
+    document.querySelector(".apri-mappa")?.addEventListener("click", () => { mappaS.hidden = false; mappaS.style.display = "grid"; mappaS.querySelector(".mappa-chiudi").focus(); });
     mappaS.addEventListener("click", (e) => { if (e.target === mappaS) chiudiMappa(); });
-    mappaS.querySelector(".mappa-chiudi").addEventListener("click", chiudiMappa);
+    mappaS.querySelector(".mappa-chiudi")?.addEventListener("click", (e) => { e.stopPropagation(); chiudiMappa(); });
     mappaS.querySelectorAll("path.con-vini").forEach((pt) => {
       const mostra = () => { mappaS.querySelectorAll("path.acceso").forEach((x) => x.classList.remove("acceso")); pt.classList.add("acceso");
         nome.textContent = pt.dataset.regioneMappa + " · " + pt.dataset.quanti + (pt.dataset.quanti === "1" ? " vino" : " vini"); };
