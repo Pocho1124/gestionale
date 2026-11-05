@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { regioneDi } from "./regioni.mjs";
+import { MAPPA_ITALIA } from "./mappa-italia.mjs";
 
 const C = {
   url: obbligatoria("SUPABASE_URL").replace(/\/$/, ""),
@@ -93,8 +94,23 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
   };
   const tutteLeRegioni = [...new Set(menu.categorie.flatMap((c) => c.prodotti.filter((p) => p.vino).map(regioneVino)))]
     .sort((x, y) => (x === "Altre zone") - (y === "Altre zone") || x.localeCompare(y, "it"));
+  // Mappa: le regioni con vini in carta si illuminano e si possono scegliere
+  const viniPerRegione = new Map();
+  for (const c of menu.categorie) for (const p of c.prodotti) if (p.vino) viniPerRegione.set(regioneVino(p), (viniPerRegione.get(regioneVino(p)) ?? 0) + 1);
+  // La mappa compare solo insieme al filtro (almeno due regioni) e se almeno una regione è italiana
+  const conMappa = tutteLeRegioni.length >= 2 && [...viniPerRegione.keys()].some((r) => MAPPA_ITALIA.regioni[r]);
+  const mappa = conMappa ? `
+<div class="mappa-sfondo" hidden><div class="mappa" role="dialog" aria-modal="true" aria-label="Scegli la regione dalla mappa">
+  <button class="scheda-chiudi mappa-chiudi" aria-label="Chiudi">×</button>
+  <p class="quiz-passo">Scegli una regione</p><p class="mappa-nome" aria-live="polite">Tocca una regione illuminata</p>
+  <svg viewBox="0 0 ${MAPPA_ITALIA.larghezza} ${MAPPA_ITALIA.altezza}" role="group" aria-label="Regioni d'Italia">${Object.entries(MAPPA_ITALIA.regioni).map(([r, d]) =>
+    viniPerRegione.has(r)
+      ? `<path d="${d}" class="con-vini" data-regione-mappa="${esc(r)}" data-quanti="${viniPerRegione.get(r)}" tabindex="0" role="button" aria-label="${esc(r)}: ${viniPerRegione.get(r)} vini"><title>${esc(r)}</title></path>`
+      : `<path d="${d}"><title>${esc(r)}</title></path>`).join("")}</svg>
+  <p class="mappa-fonte">Confini: ISTAT (CC BY 4.0)</p>
+</div></div>` : "";
   const filtroRegioni = tutteLeRegioni.length >= 2
-    ? `<div class="filtro-regioni" role="group" aria-label="Vini per regione"><span>Vini per regione</span><button type="button" class="attiva" data-filtro="" aria-pressed="true">Tutte</button>${tutteLeRegioni.map((r) => `<button type="button" data-filtro="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join("")}</div>`
+    ? `<div class="filtro-regioni" role="group" aria-label="Vini per regione"><span>Vini per regione</span>${conMappa ? '<button type="button" class="apri-mappa">🗺️ Scegli dalla mappa</button>' : ""}<button type="button" class="attiva" data-filtro="" aria-pressed="true">Tutte</button>${tutteLeRegioni.map((r) => `<button type="button" data-filtro="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join("")}</div>`
     : "";
   const categorie = menu.categorie.map((c) => `
     <section class="cat${c.prodotti.some((p) => p.vino) ? " cat-vini" : ""}" id="c-${esc(c.id)}">
@@ -128,6 +144,16 @@ body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit
 .filtro-regioni span{width:100%;text-align:center;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
 .filtro-regioni button{border:1px solid color-mix(in srgb,var(--p) 55%,transparent);background:transparent;color:var(--t);border-radius:999px;padding:5px 12px;font:600 .8rem var(--fc);cursor:pointer}
 .filtro-regioni button.attiva{background:var(--p);color:var(--s);border-color:var(--p)}
+.filtro-regioni .apri-mappa{border-style:dashed}
+.scheda-indietro{background:none;border:0;padding:0;color:var(--p);font:600 .85rem var(--fc);cursor:pointer;text-align:left}
+.mappa-sfondo{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.7);display:grid;place-items:center;padding:16px}
+.mappa{position:relative;width:min(460px,100%);max-height:92vh;overflow:auto;background:var(--s);color:var(--t);border-radius:18px;padding:18px 16px 10px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.mappa svg{width:100%;height:auto;max-height:68vh;display:block;margin:6px auto}
+.mappa path{fill:color-mix(in srgb,var(--t) 10%,transparent);stroke:color-mix(in srgb,var(--t) 45%,transparent);stroke-width:.8;transition:fill .15s}
+.mappa path.con-vini{fill:color-mix(in srgb,var(--p) 45%,transparent);cursor:pointer}
+.mappa path.con-vini:hover,.mappa path.con-vini:focus-visible,.mappa path.acceso{fill:var(--p);outline:none}
+.mappa-nome{margin:2px 0 0;font-weight:600;color:var(--p);min-height:1.5em}
+.mappa-fonte{margin:0;font-size:.65rem;opacity:.55}
 .regione-titolo{margin:18px 0 2px;font:600 .78rem var(--fc);letter-spacing:.2em;text-transform:uppercase;color:var(--p);opacity:.9}
 .con-sfondo nav{background:color-mix(in srgb,var(--s) 80%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .testata-foto header{position:relative;isolation:isolate;padding-left:12px;padding-right:12px}
@@ -220,6 +246,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
   </header>
   ${numeroVini >= 2 ? '<button class="trova-vino">🍷 Trova il tuo vino</button>' : ""}
   ${filtroRegioni}
+  ${mappa}
   ${menu.categorie.length ? `<nav aria-label="Categorie">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
   ${categorie || '<p class="vuoto">Il menu sarà disponibile a breve.</p>'}
   <div class="scheda-sfondo" hidden><div class="scheda" role="dialog" aria-modal="true">
@@ -249,7 +276,9 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     if (url) { foto.src = url; foto.alt = alt; foto.hidden = false; } else { foto.hidden = true; foto.removeAttribute("src"); }
     sfondo.hidden = false; sfondo.querySelector(".scheda").scrollTop = 0; sfondo.querySelector(".scheda-chiudi").focus();
   };
-  const riga = (p, motivo, posizione) => {
+  // Percorso tra le schede (piatto → vino → altro piatto): «Torna a …» e niente rimandi a schede già aperte
+  let corrente = null, storia = [];
+  const riga = (p, motivo, posizione, daScheda) => {
     const b = el("button", "quiz-vino");
     if (posizione) b.append(el("span", "quiz-posizione", String(posizione)));
     const d = el("span", "quiz-dati");
@@ -257,12 +286,21 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     if (p.vino) d.append(el("span", "quiz-info", [TIPI[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · ")));
     if (motivo) d.append(el("span", "quiz-perche", motivo));
     b.append(d, el("span", "prezzo", euro(p.prezzo_cent)));
-    b.addEventListener("click", () => apri(p.id));
+    b.addEventListener("click", () => apri(p.id, daScheda ? "avanti" : "nuova"));
     return b;
   };
-  function apri(id) {
+  function apri(id, modo) {
     const p = per.get(id); if (!p) return;
+    if (modo === "avanti" && corrente) storia.push(corrente);
+    else if (modo !== "indietro") storia = [];
+    corrente = id;
     const n = [], r = el("div", "riga"), v = p.vino;
+    if (storia.length) {
+      const prec = per.get(storia[storia.length - 1]);
+      const ind = el("button", "scheda-indietro", "← Torna a " + prec.nome);
+      ind.addEventListener("click", () => apri(storia.pop(), "indietro"));
+      n.push(ind);
+    }
     r.append(el("h3", null, p.nome), el("span", "prezzo", euro(p.prezzo_cent))); n.push(r);
     if (!p.disponibile) n.push(el("p", null, "Esaurito"));
     if (v) {
@@ -278,8 +316,8 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
       g.scelte.forEach((c) => { const r2 = el("div", "riga"); r2.append(el("span", null, c.nome), el("span", "prezzo", c.sovrapprezzo_cent ? "+ " + euro(c.sovrapprezzo_cent) : "incluso")); n.push(r2); });
     });
     if (p.allergeni && p.allergeni.length) n.push(el("p", "allergeni", "Allergeni: " + p.allergeni.join(", ")));
-    const ab = (p.abbinamenti || []).map((a) => ({ q: per.get(a.id), m: a.motivo })).filter((x) => x.q);
-    if (ab.length) { n.push(el("p", "quiz-passo", v ? "Ideale con" : "Il sommelier consiglia")); ab.forEach((x) => n.push(riga(x.q, x.m))); }
+    const ab = (p.abbinamenti || []).map((a) => ({ q: per.get(a.id), m: a.motivo })).filter((x) => x.q && !storia.includes(x.q.id));
+    if (ab.length) { n.push(el("p", "quiz-passo", v ? "Ideale con" : "Il sommelier consiglia")); ab.forEach((x) => n.push(riga(x.q, x.m, 0, true))); }
     mostra(n, D.foto[p.id], p.nome);
   }
   function quiz() {
@@ -321,6 +359,24 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     art.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(art.dataset.id); } });
   });
   const tv = document.querySelector(".trova-vino"); if (tv) tv.addEventListener("click", quiz);
+  // Mappa delle regioni: passando sopra si illumina e mostra il nome, toccando applica il filtro
+  const mappaS = document.querySelector(".mappa-sfondo");
+  if (mappaS) {
+    const nome = mappaS.querySelector(".mappa-nome");
+    const chiudiMappa = () => { mappaS.hidden = true; };
+    document.querySelector(".apri-mappa")?.addEventListener("click", () => { mappaS.hidden = false; mappaS.querySelector(".mappa-chiudi").focus(); });
+    mappaS.addEventListener("click", (e) => { if (e.target === mappaS) chiudiMappa(); });
+    mappaS.querySelector(".mappa-chiudi").addEventListener("click", chiudiMappa);
+    mappaS.querySelectorAll("path.con-vini").forEach((pt) => {
+      const mostra = () => { mappaS.querySelectorAll("path.acceso").forEach((x) => x.classList.remove("acceso")); pt.classList.add("acceso");
+        nome.textContent = pt.dataset.regioneMappa + " · " + pt.dataset.quanti + (pt.dataset.quanti === "1" ? " vino" : " vini"); };
+      const scegli = () => { chiudiMappa(); const b = [...document.querySelectorAll(".filtro-regioni button[data-filtro]")].find((x) => x.dataset.filtro === pt.dataset.regioneMappa); if (b) b.click(); };
+      pt.addEventListener("mouseenter", mostra); pt.addEventListener("focus", mostra);
+      pt.addEventListener("click", scegli);
+      pt.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); scegli(); } });
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") chiudiMappa(); });
+  }
   // Filtro per regione: mostra solo i vini della regione scelta (gli altri piatti restano visibili)
   document.querySelectorAll(".filtro-regioni button").forEach((b) => b.addEventListener("click", () => {
     const scelta = b.dataset.filtro;
@@ -330,7 +386,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     const primo = document.querySelector(".cat-vini:not([hidden])");
     if (scelta && primo) primo.scrollIntoView({ behavior: "smooth", block: "start" });
   }));
-  const chiudi = () => { sfondo.hidden = true; };
+  const chiudi = () => { sfondo.hidden = true; corrente = null; storia = []; };
   sfondo.addEventListener("click", (e) => { if (e.target === sfondo) chiudi(); });
   sfondo.querySelector(".scheda-chiudi").addEventListener("click", chiudi);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") chiudi(); });

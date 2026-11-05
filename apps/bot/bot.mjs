@@ -527,7 +527,7 @@ async function completaSchedeVini(cat) {
   }
   if (!schede.length) {
     return { azione: "chiarisci", testo: `Non trovo questi vini nell'enciclopedia: ${ignoti.join(", ")}.\n` +
-      `Aggiungili così (una riga per vino): «enciclopedia ${ignoti[0]}: rosso, strutturato, Campania, vitigno Aglianico»` };
+      `Aggiungili così, un messaggio per vino: «enciclopedia ${ignoti[0]}: tipo, corpo, regione, vitigno …» (es. «rosso, strutturato, Campania, vitigno Aglianico»).` };
   }
   return { azione: "schede_vini", schede, ignoti };
 }
@@ -566,7 +566,7 @@ export function anteprima(a, cat) {
       return { testo: `🍷 Schede dei vini (controllale prima di confermare):\n${a.schede.map((v) =>
         `• ${v.prodotto.nome}: ${[v.tipo, v.corpo, v.regione, v.vitigno].filter(Boolean).join(", ")}` +
         (v.trovato && norm(v.trovato) !== norm(v.prodotto.nome) ? `\n  ↳ ${v.trovato}${v.fonte === "simile" ? " (nome simile)" : ""}` : "")).join("\n")}`
-        + (a.ignoti?.length ? `\n\n❔ Non presenti nell'enciclopedia: ${a.ignoti.join(", ")}\n  Aggiungili così: «enciclopedia ${a.ignoti[0]}: rosso, strutturato, Campania, vitigno Aglianico»` : "")
+        + (a.ignoti?.length ? `\n\n❔ Non presenti nell'enciclopedia: ${a.ignoti.join(", ")}\n  Aggiungili così: «enciclopedia ${a.ignoti[0]}: tipo, corpo, regione, vitigno …» (es. «rosso, strutturato, Campania, vitigno Aglianico»)` : "")
         + "\n\nServono al quiz «Trova il tuo vino». Per correggerne una: «vino Nome: rosso, strutturato…»." };
     case "imposta_vino": {
       const c = a.campi, prima = cat.vini?.get(a.prodotto.id);
