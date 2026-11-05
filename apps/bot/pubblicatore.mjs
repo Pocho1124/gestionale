@@ -5,6 +5,7 @@
 
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
+import { regioneDi } from "./regioni.mjs";
 
 const C = {
   url: obbligatoria("SUPABASE_URL").replace(/\/$/, ""),
@@ -67,16 +68,13 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
   const entro = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
   const modo = a.sfondo_modo === "testata" ? "testata" : "pagina";
   const foto = sfondoFile
-    ? `<div class="foto foto-${modo}" aria-hidden="true"><div class="foto-img" style="background-image:url('${esc(sfondoFile)}');filter:blur(${entro(a.sfondo_sfocatura, 0, 20, 3)}px)${a.sfondo_bn ? " grayscale(1)" : ""}"></div>`
-      + `<div class="foto-velo" style="opacity:${1 - entro(a.sfondo_opacita, 0, 100, 22) / 100}"></div></div>`
+    ? `<div class="sfondo-menu sfondo-menu-${modo}" aria-hidden="true"><div class="sfondo-menu-img" style="background-image:url('${esc(sfondoFile)}');filter:blur(${entro(a.sfondo_sfocatura, 0, 20, 3)}px)${a.sfondo_bn ? " grayscale(1)" : ""}"></div>`
+      + `<div class="sfondo-menu-velo" style="opacity:${1 - entro(a.sfondo_opacita, 0, 100, 22) / 100}"></div></div>`
     : "";
 
-  const categorie = menu.categorie.map((c) => `
-    <section class="cat" id="c-${esc(c.id)}">
-      <h2>${esc(c.nome)}</h2>
-      ${a.mostra_descrizioni && c.descrizione ? `<p class="cat-desc">${esc(c.descrizione)}</p>` : ""}
-      <div class="piatti">${c.prodotti.map((p) => `
-        <article class="piatto${p.disponibile ? "" : " esaurito"}${apribile(p) ? " apribile" : ""}"${apribile(p) ? ` tabindex="0" role="button" data-id="${esc(p.id)}"` : ""}>
+  const regioneVino = (p) => (p.vino ? regioneDi(p.vino.regione) || "Altre zone" : null);
+  const prodotto = (p) => `
+        <article class="piatto${p.disponibile ? "" : " esaurito"}${apribile(p) ? " apribile" : ""}"${apribile(p) ? ` tabindex="0" role="button" data-id="${esc(p.id)}"` : ""}${p.vino ? ` data-regione="${esc(regioneVino(p))}"` : ""}>
           ${layout === "griglia" && /^https:\/\//.test(p.immagine_url ?? "") ? `<img class="foto" src="${esc(p.immagine_url)}" alt="" loading="lazy">` : ""}
           <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${p.opzioni?.length ? "da " : ""}${esc(euro(p.prezzo_cent))}</span></div>
           ${p.vino ? `<p class="vino-info">${esc([TIPI[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · "))}</p>` : ""}
@@ -84,7 +82,25 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
           ${!p.vino && p.abbinamenti?.length ? `<p class="abbinamento">🍷 Si abbina con ${esc(p.abbinamenti.slice(0, 2).map((x) => perId.get(x.id)?.nome).filter(Boolean).join(" o "))}</p>` : ""}
           ${p.etichette?.length ? `<ul class="etichette">${p.etichette.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
           ${a.mostra_allergeni && p.allergeni?.length ? `<p class="allergeni">Allergeni: ${esc(p.allergeni.join(", "))}</p>` : ""}
-        </article>`).join("")}
+        </article>`;
+  // Nelle categorie di vini con più regioni: vini raggruppati per regione (in ordine alfabetico, «Altre zone» in fondo)
+  const corpoCategoria = (c) => {
+    const vini = c.prodotti.filter((p) => p.vino);
+    const regioni = [...new Set(vini.map(regioneVino))];
+    if (vini.length < 2 || regioni.length < 2 || vini.length !== c.prodotti.length) return c.prodotti.map(prodotto).join("");
+    regioni.sort((x, y) => (x === "Altre zone") - (y === "Altre zone") || x.localeCompare(y, "it"));
+    return regioni.map((r) => `<h3 class="regione-titolo" data-regione="${esc(r)}">${esc(r)}</h3>${vini.filter((p) => regioneVino(p) === r).map(prodotto).join("")}`).join("");
+  };
+  const tutteLeRegioni = [...new Set(menu.categorie.flatMap((c) => c.prodotti.filter((p) => p.vino).map(regioneVino)))]
+    .sort((x, y) => (x === "Altre zone") - (y === "Altre zone") || x.localeCompare(y, "it"));
+  const filtroRegioni = tutteLeRegioni.length >= 2
+    ? `<div class="filtro-regioni" role="group" aria-label="Vini per regione"><span>Vini per regione</span><button type="button" class="attiva" data-filtro="" aria-pressed="true">Tutte</button>${tutteLeRegioni.map((r) => `<button type="button" data-filtro="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join("")}</div>`
+    : "";
+  const categorie = menu.categorie.map((c) => `
+    <section class="cat${c.prodotti.some((p) => p.vino) ? " cat-vini" : ""}" id="c-${esc(c.id)}">
+      <h2>${esc(c.nome)}</h2>
+      ${a.mostra_descrizioni && c.descrizione ? `<p class="cat-desc">${esc(c.descrizione)}</p>` : ""}
+      <div class="piatti">${corpoCategoria(c)}
       </div>
     </section>`).join("");
 
@@ -103,11 +119,17 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
 html{scroll-padding-top:56px}
 body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit-font-smoothing:antialiased}
 .menu{max-width:720px;margin:0 auto;padding:0 18px calc(30px + env(safe-area-inset-bottom,0px));position:relative;isolation:isolate}
-.foto{pointer-events:none;overflow:hidden;z-index:-1}
-.foto-pagina{position:fixed;inset:0}
-.foto-testata{position:absolute;inset:0;border-radius:0 0 18px 18px}
-.foto-img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.08)}
-.foto-velo{position:absolute;inset:0;background:var(--s)}
+.sfondo-menu{pointer-events:none;overflow:hidden;z-index:-1}
+.sfondo-menu-pagina{position:fixed;inset:0}
+.sfondo-menu-testata{position:absolute;inset:0;border-radius:0 0 18px 18px}
+.sfondo-menu-img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.08)}
+.sfondo-menu-velo{position:absolute;inset:0;background:var(--s)}
+.filtro-regioni{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:12px 0 0;font-size:.8rem}
+.filtro-regioni span{width:100%;text-align:center;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
+.filtro-regioni button{border:1px solid color-mix(in srgb,var(--p) 55%,transparent);background:transparent;color:var(--t);border-radius:999px;padding:5px 12px;font:600 .8rem var(--fc);cursor:pointer}
+.filtro-regioni button.attiva{background:var(--p);color:var(--s);border-color:var(--p)}
+.regione-titolo{margin:18px 0 2px;font:600 .78rem var(--fc);letter-spacing:.2em;text-transform:uppercase;color:var(--p);opacity:.9}
+.con-sfondo nav{background:color-mix(in srgb,var(--s) 80%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .testata-foto header{position:relative;isolation:isolate;padding-left:12px;padding-right:12px}
 header{text-align:center;padding:calc(28px + env(safe-area-inset-top,0px)) 0 16px;border-bottom:6px double var(--p)}
 header h1{font-family:var(--ft);font-weight:400;font-size:clamp(1.9rem,7vw,2.8rem);line-height:1.1;margin:0}
@@ -188,7 +210,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 </style>
 </head>
 <body>
-<div class="menu ${layout}${modo === "testata" && foto ? " testata-foto" : ""}">
+<div class="menu ${layout}${modo === "testata" && foto ? " testata-foto" : ""}${modo === "pagina" && foto ? " con-sfondo" : ""}">
   ${modo === "pagina" ? foto : ""}
   <header>
     ${modo === "testata" ? foto : ""}
@@ -197,6 +219,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     ${menu.locale.indirizzo ? `<p>${esc(menu.locale.indirizzo)}</p>` : ""}
   </header>
   ${numeroVini >= 2 ? '<button class="trova-vino">🍷 Trova il tuo vino</button>' : ""}
+  ${filtroRegioni}
   ${menu.categorie.length ? `<nav aria-label="Categorie">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
   ${categorie || '<p class="vuoto">Il menu sarà disponibile a breve.</p>'}
   <div class="scheda-sfondo" hidden><div class="scheda" role="dialog" aria-modal="true">
@@ -298,6 +321,15 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     art.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(art.dataset.id); } });
   });
   const tv = document.querySelector(".trova-vino"); if (tv) tv.addEventListener("click", quiz);
+  // Filtro per regione: mostra solo i vini della regione scelta (gli altri piatti restano visibili)
+  document.querySelectorAll(".filtro-regioni button").forEach((b) => b.addEventListener("click", () => {
+    const scelta = b.dataset.filtro;
+    document.querySelectorAll(".filtro-regioni button").forEach((x) => { const on = x === b; x.classList.toggle("attiva", on); x.setAttribute("aria-pressed", String(on)); });
+    document.querySelectorAll("[data-regione]").forEach((el) => { el.hidden = !!scelta && el.dataset.regione !== scelta; });
+    document.querySelectorAll(".cat-vini").forEach((sez) => { sez.hidden = !!scelta && !sez.querySelector("article[data-regione]:not([hidden])"); });
+    const primo = document.querySelector(".cat-vini:not([hidden])");
+    if (scelta && primo) primo.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
   const chiudi = () => { sfondo.hidden = true; };
   sfondo.addEventListener("click", (e) => { if (e.target === sfondo) chiudi(); });
   sfondo.querySelector(".scheda-chiudi").addEventListener("click", chiudi);
