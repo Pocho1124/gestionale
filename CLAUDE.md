@@ -94,6 +94,7 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   mappa-italia.mjs   confini regioni ISTAT (CC BY 4.0) in SVG (copia in apps/web/src/lib/mappaItalia.ts)
   migra-immagini.mjs migrazione immagini base64 → Storage
   trascrizione/      servizio Whisper (Python)
+  test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, con test vitest)
 supabase/migrations/ 22 migrazioni (vedi sotto)
 supabase/tests/database/  test pgTAP (221 test)
@@ -173,9 +174,16 @@ Vini (enciclopedia), Magazzino, Cassa (solo titolare), Impostazioni (personale, 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
 (su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 221 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite). **Core**: `vitest` in `packages/core`.
-* **Bot/pubblicatore/stampa**: modalità di test con variabili `BOT\_TEST=1`, `PUBBLICATORE\_TEST=1`, `STAMPA\_TEST=1`
-(non avviano i servizi, espongono le funzioni). Le prove fatte finora erano script esterni con `fetch` simulato e
-jsdom: da portare nel repo (es. `apps/bot/test/`) come primo lavoro utile.
+* **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
+jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
+(non avviano i servizi) e `fetch` simulato (`test/simula.mjs`): nessuna chiamata reale a Telegram, Supabase, Ollama, Cloudflare.
+  * `bot.test.mjs`: regole, IA vincolata (numeri solo dal testo, enum), anteprima → conferma → /annulla, notifiche di sala.
+  * `pubblicatore.test.mjs`: D1/KV, immagini versionate e pulizia, percorsi, escape dell'HTML.
+  * `pagina.test.mjs`: pagina pubblica in jsdom (scheda, percorso «Torna a», quiz, filtro, mappa, aggiornamento).
+  * `worker.test.mjs`: Worker con D1/KV simulati.
+  * **Visibilità**: jsdom ignora specificità e `!important` in `getComputedStyle`; usare sempre `visibile()` di
+  `test/visibilita.mjs`, che risolve la cascata di `display` come un browser.
+* **Stampa**: `STAMPA\_TEST=1` espone `codifica`, `biglietto`, `IP`, `porta` (test non ancora scritti).
 
 ## Da fare
 
@@ -185,7 +193,7 @@ jsdom: da portare nel repo (es. `apps/bot/test/`) come primo lavoro utile.
 4. Verifiche sul posto: accesso di un utente creato dal pannello, stampa di prova su stampante reale.
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
 6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; report incassi avanzati; menu multilingua.
-7. Portare nel repo i test automatici di bot e pagina pubblica.
+7. Test automatici del servizio di stampa (`stampa.mjs`).
 
 ## Note pratiche
 

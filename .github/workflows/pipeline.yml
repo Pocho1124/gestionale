@@ -38,6 +38,19 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+  servizi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test di bot, pubblicatore, pagina pubblica e Worker
+        working-directory: apps/bot
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
   database:
     runs-on: ubuntu-latest
     services:
@@ -64,7 +77,7 @@ jobs:
         run: sh deploy/migrator/test.sh supabase/tests/database
 
   rilascio:
-    needs: [core, web, database]
+    needs: [core, web, servizi, database]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,12 @@
+{
+  "name": "bot",
+  "private": true,
+  "description": "Servizi del locale (bot Telegram, pubblicatore del menu, stampa): nessuna dipendenza a runtime, jsdom solo per i test",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test --test-reporter=spec \"test/**/*.test.mjs\""
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

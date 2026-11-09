@@ -490,7 +490,7 @@ async function interpretaConModello(testo, cat) {
       return c ? { azione: "aggiungi_piatto", ...piatto, categoria: c } : { azione: "chiedi_categoria", per: "aggiungi_piatto", ...piatto };
     }
     case "imposta_descrizione":
-      return p && out.descrizione?.trim() ? { azione: "imposta_descrizione", prodotto: p, descrizione: pulisci(out.descrizione).slice(0, 500) } : null;
+      return p && out.descrizione?.trim() ? { azione: "imposta_descrizione", prodotto: p, testo: pulisci(out.descrizione).slice(0, 500) } : null;
     case "abbina": case "togli_abbinamento": {
       const v = cat.prodotti.find((x) => x.nome === out.vino && cat.vini?.has(x.id));
       if (!p || !v) return { azione: "chiarisci", testo: "Dimmi il piatto e il vino, ad esempio «abbina l'Aglianico al tagliere»." };

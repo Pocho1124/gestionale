@@ -573,7 +573,7 @@ export async function fotoDeiPiatti(slug, menu) {
   return percorsi;
 }
 
-async function giro() {
+export async function giro() {
   for (const slug of C.slugs) {
     try {
       const menu = await menuPubblico(slug);
