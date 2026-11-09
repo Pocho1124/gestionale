@@ -458,3 +458,37 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu-mappa-fonte { margin: 0; font-size: .65rem; opacity: .55; }
 
 .scheda-indietro { background: none; border: 0; padding: 0; color: var(--m-primario); font: 600 .85rem var(--m-font-testo); cursor: pointer; text-align: left; }
+
+/* Aggiunte: tasto sui piatti, gruppo nella composizione, gestione nel catalogo */
+.ordina-quantita .ordina-aggiunte { padding: 0 12px; border-style: dashed; font-weight: 600; }
+.btn-aggiunte { border-style: dashed; }
+.componi-aggiunte { border-style: dashed; background: color-mix(in srgb, currentColor 4%, transparent); }
+.aggiunte-gestione { display: grid; gap: 10px; margin-top: 6px; }
+.aggiunta-riga { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--linea); }
+.aggiunta-riga.esaurita input[aria-label="Nome dell'aggiunta"] { text-decoration: line-through; opacity: .7; }
+.input-prezzo { width: 90px; text-align: right; }
+
+/* Sala: piantina più grande sui monitor, cruscotto e modalità monitor */
+.contenuto:has(> .pagina-sala) { max-width: 1680px; }
+@media (min-width: 1280px) { .pagina-sala .sala-layout { grid-template-columns: minmax(0, 1fr) 320px; } }
+.sala-monitor { display: grid; gap: 16px; }
+.sala-monitor:fullscreen { background: var(--sfondo); padding: 16px 20px; overflow: auto; align-content: start; }
+.sala-monitor:fullscreen .sala-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+.sala-monitor:fullscreen .piantina { max-height: calc(100vh - 200px); }
+.cruscotto { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.cruscotto-voce { background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; padding: 10px 14px; display: grid; gap: 2px; align-content: start; }
+.cruscotto-voce > span { font-size: .74rem; color: var(--muto); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.cruscotto-voce strong { font-size: 1.5rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.cruscotto-voce strong small { font-size: .9rem; color: var(--muto); font-weight: 600; }
+.cruscotto-voce > small { color: var(--muto); font-size: .78rem; }
+.cruscotto-barra { height: 6px; border-radius: 999px; background: var(--linea); overflow: hidden; margin-top: 4px; }
+.cruscotto-barra i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4C8C5B, #D79A32 75%, #C2493D); transition: width .6s ease; }
+.cruscotto-voce.evidenza { border-color: var(--ok); animation: pronti 1.6s ease-in-out infinite; }
+.cruscotto-voce.evidenza strong { color: var(--ok); }
+.cruscotto-ora strong { font-size: 2rem; }
+.cruscotto-ora > span { text-transform: capitalize; }
+@keyframes pronti { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--ok) 25%, transparent); } }
+.tavolo-conto { font-size: 10px; opacity: .9; }
+.tavolo-allerta circle { transform-box: fill-box; transform-origin: center; animation: allerta 1.2s ease-in-out infinite; }
+@keyframes allerta { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+@media (prefers-reduced-motion: reduce) { .cruscotto-voce.evidenza, .tavolo-allerta circle { animation: none; } .cruscotto-barra i { transition: none; } }

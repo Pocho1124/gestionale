@@ -10,6 +10,7 @@ type RigaVino = SchedaVino & { prodotto_id: string; locale_id: string };
 interface Abbinamento { piatto_id: string; vino_id: string; locale_id: string; motivo: string }
 import { preparaImmagine } from "../lib/immagini";
 import { EditorComposizione } from "../componenti/EditorComposizione";
+import { GestioneAggiunte } from "../componenti/GestioneAggiunte";
 import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
 
 const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
@@ -173,6 +174,8 @@ export function Catalogo() {
           )}
         </div>
       )}
+
+      {puoModificare && locale && categorie.length > 0 && <GestioneAggiunte locale={locale.id} categorie={categorie} />}
 
       {categorie.length === 0 && (
         <div className="vuoto">

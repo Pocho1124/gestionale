@@ -96,8 +96,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, con test vitest)
-supabase/migrations/ 23 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (244 test)
+supabase/migrations/ 24 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (260 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -123,6 +123,7 @@ deploy/pi/           installer per il server
 |`enciclopedia\_vini`|enciclopedia (base curata, X-Wines, aggiunte del locale), `cerca\_vino()` con pg\_trgm e indici, capacità `catalogo`|
 |`descrizioni\_vini`|acidità, gradazione, profilo aromatico dei vitigni principali|
 |`nome\_cliente`|`impostazioni\_tavolo` (personalizzazioni della pagina QR, capacità `impostazioni`), `nomi\_clienti` (nome facoltativo/obbligatorio all'apertura: senza audit, solo sala, cancellato a chiusura/rifiuto/scadenza), `richiedi\_tavolo(…, p\_nome)`|
+|`aggiunte`|aggiunte del locale (nome, prezzo, disponibile) attive sulle categorie scelte (`aggiunte\_categorie`); `prezzo\_riga()` le accetta nelle `opzioni` della riga (max 10, gruppo «Aggiunte», nome con «+ »); `menu\_pubblico` le espone per categoria|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -167,13 +168,13 @@ strutturato, Campania, vitigno …», «descrivi / riscrivi le descrizioni dei v
 
 ### Backoffice
 
-`http://192.168.111.183` – Sala (servizio, piantina, cartoncini QR), Catalogo (anche componibili), Aspetto,
+`http://192.168.111.183` – Sala (servizio con cruscotto e modalità monitor, piantina, cartoncini QR), Catalogo (anche componibili e aggiunte), Aspetto,
 Vini (enciclopedia), Magazzino, Cassa (solo titolare), Impostazioni (personale, reparti/stampanti, bot).
 
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 244 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 260 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite). **Core**: `vitest` in `packages/core`.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
 jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`

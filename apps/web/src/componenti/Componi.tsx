@@ -5,6 +5,10 @@ import type { GruppoScelte, Scelta } from "../lib/tipi";
 const euro = (c: number) => formatta(centesimi(c));
 export const prezzoComposto = (base: number, scelte: Scelta[]) => base + scelte.reduce((n, s) => n + s.sovrapprezzo_cent, 0);
 export const chiaveRiga = (prodotto: string, scelte: Scelta[]) => `${prodotto}|${scelte.map((s) => s.id).sort().join(",")}`;
+/** Gruppo «Aggiunte» in coda alle scelte del piatto: sempre facoltativo, massimo 10 (stesso limite del database). */
+export const ID_AGGIUNTE = "aggiunte";
+export const conAggiunte = (gruppi: GruppoScelte[], aggiunte: Scelta[] | undefined): GruppoScelte[] =>
+  aggiunte?.length ? [...gruppi, { id: ID_AGGIUNTE, nome: "Aggiunte", min: 0, max: Math.min(10, aggiunte.length), scelte: aggiunte }] : gruppi;
 export const descriviScelte = (scelte: { nome: string }[]) => (scelte.length ? ` (${scelte.map((s) => s.nome).join(", ")})` : "");
 
 /**
@@ -36,7 +40,7 @@ export function Componi(props: {
       {props.gruppi.map((g) => {
         const lista = scelte[g.id] ?? [];
         return (
-          <fieldset key={g.id} className="componi-gruppo">
+          <fieldset key={g.id} className={`componi-gruppo${g.id === ID_AGGIUNTE ? " componi-aggiunte" : ""}`}>
             <legend>{g.nome} <span className="componi-regola">{regola(g)} · {lista.length} scelti</span></legend>
             {g.scelte.map((s) => {
               const scelta = lista.some((x) => x.id === s.id);
@@ -45,7 +49,7 @@ export function Componi(props: {
                 <label key={s.id} className={`componi-voce${scelta ? " scelta" : ""}${pieno ? " piena" : ""}`}>
                   <input type={g.max === 1 ? "radio" : "checkbox"} name={g.id} checked={scelta} disabled={pieno} onChange={() => alterna(g, s)} />
                   <span>{s.nome}</span>
-                  <span className="componi-prezzo">{s.sovrapprezzo_cent ? `+ ${euro(s.sovrapprezzo_cent)}` : "incluso"}</span>
+                  <span className="componi-prezzo">{s.sovrapprezzo_cent ? `+ ${euro(s.sovrapprezzo_cent)}` : g.id === ID_AGGIUNTE ? "gratis" : "incluso"}</span>
                 </label>
               );
             })}

@@ -7,12 +7,12 @@ import { stampaConto } from "../lib/conto";
 import { useSessione } from "../lib/sessione";
 import { puo } from "../lib/permessi";
 import type { GruppoScelte, Scelta } from "../lib/tipi";
-import { Componi, chiaveRiga, descriviScelte, prezzoComposto } from "./Componi";
+import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from "./Componi";
 
 export interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: { nome: string }[] }
 export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string; stato: string; origine: string; nota: string; motivo: string; creato_at: string; righe_ordine: RigaOrdine[] }
 export interface RichiestaSala { id: string; tavolo_id: string; righe: { prodotto_id: string; quantita: number; nota?: string; opzioni?: string[] }[]; nota: string; creato_at: string; nomi_clienti?: { nome: string } | { nome: string }[] | null }
-export interface ProdottoBreve { id: string; nome: string; prezzo_cent: number; disponibile: boolean; visibile: boolean; categoria_id: string; gruppi: GruppoScelte[] }
+export interface ProdottoBreve { id: string; nome: string; prezzo_cent: number; disponibile: boolean; visibile: boolean; categoria_id: string; gruppi: GruppoScelte[]; aggiunte: Scelta[] }
 export interface CategoriaBreve { id: string; nome: string }
 export interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; nomi_clienti?: { nome: string }[] }
 export interface ComandaStampa { id: string; ordine_id: string | null; stato: string; tipo: string; errore: string; reparti: { nome: string } | null }
@@ -84,7 +84,7 @@ export function CodaRichieste(props: {
       {props.richieste.map((r) => {
         const righe = r.righe.map((x) => {
           const p = props.prodotti.get(x.prodotto_id);
-          const scelte = (p?.gruppi ?? []).flatMap((g) => g.scelte).filter((c) => (x.opzioni ?? []).includes(c.id));
+          const scelte = [...(p?.gruppi ?? []).flatMap((g) => g.scelte), ...(p?.aggiunte ?? [])].filter((c) => (x.opzioni ?? []).includes(c.id));
           return { ...x, p, scelte, prezzo: prezzoComposto(p?.prezzo_cent ?? 0, scelte) };
         });
         const chiuso = !props.aperto(r.tavolo_id);
@@ -134,7 +134,7 @@ export function PannelloTavolo(props: {
   const [coperti, setCoperti] = useState(2);
   const [attesa, setAttesa] = useState(false);
   const [aggiunta, setAggiunta] = useState<Record<string, { prodotto: ProdottoBreve; scelte: Scelta[]; q: number }> | null>(null);
-  const [componendo, setComponendo] = useState<ProdottoBreve | null>(null);
+  const [componendo, setComponendo] = useState<{ p: ProdottoBreve; gruppi: GruppoScelte[] } | null>(null);
   const [cerca, setCerca] = useState("");
   const ordiniTavolo = useMemo(() => props.ordini.filter((o) => sessione && o.sessione_id === sessione.id), [props.ordini, sessione]);
   if (!tavolo) return <p className="muto">Tocca un tavolo per aprirlo, vedere i suoi ordini o aggiungere una comanda.</p>;
@@ -225,12 +225,16 @@ export function PannelloTavolo(props: {
                         <div key={p.id} className="aggiungi-voce">
                           <span>{p.nome} <span className="muto piccolo">{p.gruppi.length ? "da " : ""}{euro(p.prezzo_cent)}</span></span>
                           {p.gruppi.length ? (
-                            <button className="btn btn-piccolo" onClick={() => setComponendo(p)}>Componi</button>
+                            <button className="btn btn-piccolo" onClick={() => setComponendo({ p, gruppi: conAggiunte(p.gruppi, p.aggiunte) })}>Componi</button>
                           ) : (
                             <span className="riga-form">
                               {(aggiunta[chiaveRiga(p.id, [])]?.q ?? 0) > 0 && <button className="btn btn-icona" onClick={() => cambiaVoce(p, [], -1)}>−</button>}
                               {(aggiunta[chiaveRiga(p.id, [])]?.q ?? 0) > 0 && <strong>{aggiunta[chiaveRiga(p.id, [])]!.q}</strong>}
                               <button className="btn btn-icona" onClick={() => cambiaVoce(p, [], 1)}>+</button>
+                              {p.aggiunte.length > 0 && (
+                                <button className="btn btn-piccolo btn-aggiunte" onClick={() => setComponendo({ p, gruppi: conAggiunte([], p.aggiunte) })}
+                                  aria-label={`Aggiunte per ${p.nome}`}>＋ Aggiunte</button>
+                              )}
                             </span>
                           )}
                         </div>
@@ -246,8 +250,8 @@ export function PannelloTavolo(props: {
                 </div>
               ))}
               {componendo && (
-                <Componi nome={componendo.nome} base={componendo.prezzo_cent} gruppi={componendo.gruppi} variante="gestionale"
-                  onChiudi={() => setComponendo(null)} onConferma={(sc) => { cambiaVoce(componendo, sc, 1); setComponendo(null); }} />
+                <Componi nome={componendo.p.nome} base={componendo.p.prezzo_cent} gruppi={componendo.gruppi} variante="gestionale"
+                  onChiudi={() => setComponendo(null)} onConferma={(sc) => { cambiaVoce(componendo.p, sc, 1); setComponendo(null); }} />
               )}
               <div className="riga-form">
                 <button className="btn" onClick={() => { setAggiunta(null); setCerca(""); }}>Annulla</button>

@@ -19,10 +19,14 @@ interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: st
 interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "nopass"; password: string; nascosta: boolean; url_ordini: string }
 
 /** Prodotto letto dal database con gruppi e voci, nel formato usato dalla composizione. */
-type GrezzoProdotto = Omit<ProdottoBreve, "gruppi"> & { gruppi_opzioni: { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number;
+type GrezzoProdotto = Omit<ProdottoBreve, "gruppi" | "aggiunte"> & { gruppi_opzioni: { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number;
   opzioni: { id: string; nome: string; sovrapprezzo_cent: number; disponibile: boolean; posizione: number }[] }[] };
-const daGrezzo = ({ gruppi_opzioni, ...p }: GrezzoProdotto): ProdottoBreve => ({
+/** Aggiunte del locale con le categorie su cui sono attive. */
+interface GrezzaAggiunta { id: string; nome: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
+const daGrezzo = (aggiunte: GrezzaAggiunta[]) => ({ gruppi_opzioni, ...p }: GrezzoProdotto): ProdottoBreve => ({
   ...p,
+  aggiunte: aggiunte.filter((a) => a.disponibile && a.aggiunte_categorie.some((c) => c.categoria_id === p.categoria_id))
+    .sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome)).map((a) => ({ id: a.id, nome: a.nome, sovrapprezzo_cent: a.prezzo_cent })),
   gruppi: [...(gruppi_opzioni ?? [])].sort((a, b) => a.posizione - b.posizione).map((g) => ({
     id: g.id, nome: g.nome, min: g.min_scelte, max: g.max_scelte,
     scelte: g.opzioni.filter((o) => o.disponibile).sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome))
@@ -108,10 +112,13 @@ export function Sala() {
     const k = await sb().from("comande_stampa").select("id, ordine_id, stato, tipo, errore, reparti(nome)").eq("locale_id", locale.id)
       .gte("creata_at", new Date(Date.now() - 24 * 3600_000).toISOString());
     if (!k.error) setComande(k.data as unknown as ComandaStampa[]);
+    // Aggiunte (tabella assente prima dell'aggiornamento del database: si ignora)
+    const ag = await sb().from("aggiunte").select("id, nome, prezzo_cent, disponibile, posizione, aggiunte_categorie(categoria_id)").eq("locale_id", locale.id);
+    const aggiunte = ag.error ? [] : (ag.data as unknown as GrezzaAggiunta[]);
     const errore = s.error ?? t.error ?? x.error ?? e.error ?? o.error ?? r.error ?? p.error ?? c.error;
     if (errore) { avvisa(messaggioErrore(errore), "errore"); return; }
     setSale(s.data as Sala[]); setTavoli(t.data as Tavolo[]); setSessioni(x.data as SessioneT[]); setElementi(e.data as Elemento[]);
-    setOrdini(o.data as unknown as OrdineSala[]); setProdotti((p.data as unknown as GrezzoProdotto[]).map(daGrezzo)); setCategorie(c.data as CategoriaBreve[]);
+    setOrdini(o.data as unknown as OrdineSala[]); setProdotti((p.data as unknown as GrezzoProdotto[]).map(daGrezzo(aggiunte))); setCategorie(c.data as CategoriaBreve[]);
     const nuoveRichieste = r.data as unknown as RichiestaSala[];
     setRichieste(nuoveRichieste);
     // Suono per richieste e ordini da confermare arrivati dopo il primo caricamento
@@ -143,16 +150,32 @@ export function Sala() {
   const tavoloSel = selezione?.tipo === "tavolo" ? tavoli.find((t) => t.id === selezione.id) ?? null : null;
   const elementoSel = selezione?.tipo === "elemento" ? elementi.find((x) => x.id === selezione.id) ?? null : null;
   const salaCorrente = sale.find((s) => s.id === salaId);
+  const conto = useCallback((sessione: string) => ordini.filter((o) => o.sessione_id === sessione && !["rifiutato", "annullato"].includes(o.stato))
+    .reduce((n, o) => n + o.righe_ordine.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0), [ordini]);
+
+  // Modalità monitor: sala a schermo intero (Esc per uscire)
+  const monitor = useRef<HTMLDivElement>(null);
+  const [schermoIntero, setSchermoIntero] = useState(false);
+  useEffect(() => {
+    const cambia = () => setSchermoIntero(document.fullscreenElement === monitor.current && !!monitor.current);
+    document.addEventListener("fullscreenchange", cambia);
+    return () => document.removeEventListener("fullscreenchange", cambia);
+  }, []);
 
   if (!locale) return null;
   return (
-    <div className="pagina">
+    <div className="pagina pagina-sala">
       <div className="pagina-testa riga-form" style={{ justifyContent: "space-between" }}>
         <h1>Sala</h1>
         <button className={`btn btn-piccolo${suoni ? " btn-pieno" : ""}`} onClick={() => {
           const v = !suoni; setSuoni(v); try { localStorage.setItem("gestionale.suoni", v ? "1" : "0"); } catch { /* memoria non disponibile */ }
           if (v) suona();
         }}>{suoni ? "🔔 Avvisi sonori attivi" : "🔕 Attiva avvisi sonori"}</button>
+        {vista === "servizio" && document.fullscreenEnabled && (
+          <button className="btn btn-piccolo" onClick={() => void monitor.current?.requestFullscreen().catch(() => avvisa("Schermo intero non disponibile", "errore"))}>
+            ⛶ Modalità monitor
+          </button>
+        )}
         <div className="schede-modo" role="tablist" style={{ maxWidth: 460 }}>
           <button role="tab" aria-selected={vista === "servizio"} onClick={() => setVista("servizio")}>Servizio</button>
           {puoModificare && <button role="tab" aria-selected={vista === "piantina"} onClick={() => setVista("piantina")}>Piantina</button>}
@@ -160,6 +183,11 @@ export function Sala() {
         </div>
       </div>
 
+      <div ref={monitor} className={`sala-monitor${schermoIntero ? " attivo" : ""}`}>
+      {vista === "servizio" && (
+        <Cruscotto tavoli={tavoli.filter((t) => t.attivo)} sessioni={sessioni} ordini={ordini} conto={conto} monitor={schermoIntero}
+          onEsci={() => void document.exitFullscreen()} />
+      )}
       {vista === "servizio" && (
         <CodaRichieste richieste={richieste} ordini={ordini} tavoli={tavoli} prodotti={new Map(prodotti.map((p) => [p.id, p]))}
           aperto={(id) => !!sessionePer(id)} onFatto={carica}
@@ -188,7 +216,7 @@ export function Sala() {
             <div className={`sala-layout${vista === "piantina" ? " modifica" : ""}`}>
               <Piantina sala={salaCorrente} tavoli={tavoliSala} elementi={elementi.filter((x) => x.sala_id === salaId)}
                 inAttesa={new Set([...richieste.map((r) => r.tavolo_id), ...ordini.filter((o) => o.stato === "da_confermare").map((o) => o.tavolo_id)])}
-                sessionePer={sessionePer} modificabile={vista === "piantina"} selezione={selezione} onSeleziona={setSelezione}
+                sessionePer={sessionePer} conto={vista === "servizio" ? conto : undefined} modificabile={vista === "piantina"} selezione={selezione} onSeleziona={setSelezione}
                 onTavolo={async (t, patch) => {
                   setTavoli((ts) => ts.map((z) => (z.id === t.id ? { ...z, ...patch } : z)));
                   const { error } = await sb().from("tavoli").update(patch).eq("id", t.id);
@@ -211,13 +239,49 @@ export function Sala() {
         )
       )}
 
+      </div>
+
       {vista === "cartoncini" && <Cartoncini locale={locale} tavoli={tavoli.filter((t) => t.attivo)} sale={sale} />}
     </div>
   );
 }
 
+/** Cruscotto della sala: occupazione, coperti, incasso in corso, cucina. Si aggiorna con il tempo reale. */
+function Cruscotto(props: { tavoli: Tavolo[]; sessioni: SessioneT[]; ordini: OrdineSala[]; conto: (s: string) => number; monitor: boolean; onEsci: () => void }) {
+  const aperti = new Set(props.sessioni.map((s) => s.tavolo_id));
+  const occupati = props.tavoli.filter((t) => aperti.has(t.id)).length;
+  const coperti = props.sessioni.reduce((n, s) => n + s.coperti, 0);
+  const inSala = props.sessioni.reduce((n, s) => n + props.conto(s.id), 0);
+  const permanenza = props.sessioni.length ? Math.round(props.sessioni.reduce((n, s) => n + minuti(s.aperta_at), 0) / props.sessioni.length) : 0;
+  const sessioniAperte = new Set(props.sessioni.map((s) => s.id));
+  const delServizio = props.ordini.filter((o) => sessioniAperte.has(o.sessione_id));
+  const inCucina = delServizio.filter((o) => o.stato === "confermato" || o.stato === "in_preparazione").length;
+  const pronti = delServizio.filter((o) => o.stato === "pronto").length;
+  const percentuale = props.tavoli.length ? Math.round((occupati / props.tavoli.length) * 100) : 0;
+  const euro = (c: number) => `${(c / 100).toLocaleString("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €`;
+  return (
+    <div className="cruscotto" aria-label="Riepilogo della sala">
+      <div className="cruscotto-voce">
+        <span>Tavoli occupati</span><strong>{occupati}<small> / {props.tavoli.length}</small></strong>
+        <div className="cruscotto-barra" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentuale} aria-label="Occupazione"><i style={{ width: `${percentuale}%` }} /></div>
+      </div>
+      <div className="cruscotto-voce"><span>Coperti</span><strong>{coperti}</strong><small>{permanenza ? `permanenza media ${durata(permanenza)}` : "sala vuota"}</small></div>
+      <div className="cruscotto-voce"><span>In sala</span><strong>{euro(inSala)}</strong><small>{coperti ? `${euro(inSala / coperti)} a coperto` : "nessun conto aperto"}</small></div>
+      <div className="cruscotto-voce"><span>In cucina</span><strong>{inCucina}</strong><small>{inCucina === 1 ? "ordine in lavorazione" : "ordini in lavorazione"}</small></div>
+      <div className={`cruscotto-voce${pronti ? " evidenza" : ""}`}><span>Pronti da servire</span><strong>{pronti ? `🛎️ ${pronti}` : "0"}</strong><small>{pronti ? "portali al tavolo" : "tutto servito"}</small></div>
+      {props.monitor && (
+        <div className="cruscotto-voce cruscotto-ora">
+          <span>{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</span>
+          <strong>{new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</strong>
+          <button className="link" onClick={props.onEsci}>Esci dal monitor</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Piantina(props: {
-  sala?: Sala; inAttesa?: Set<string>; tavoli: Tavolo[]; elementi: Elemento[]; sessionePer: (id: string) => SessioneT | undefined; modificabile: boolean;
+  sala?: Sala; inAttesa?: Set<string>; conto?: (sessione: string) => number; tavoli: Tavolo[]; elementi: Elemento[]; sessionePer: (id: string) => SessioneT | undefined; modificabile: boolean;
   selezione: Selezione; onSeleziona: (s: Selezione) => void;
   onTavolo: (t: Tavolo, patch: Partial<Tavolo>) => void; onElemento: (e: Elemento, patch: Partial<Elemento>) => void;
 }) {
@@ -322,8 +386,15 @@ export function Piantina(props: {
                 ? <circle r={w / 2} className="tavolo-forma" />
                 : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={10} className="tavolo-forma" />}
             </g>
-            <text className="tavolo-nome" dy={s ? -3 : 7}>{t.nome}</text>
-            {s && <text className="tavolo-info" dy={15}>{w < 70 ? durataBreve(minuti(s.aperta_at)) : durata(minuti(s.aperta_at))}</text>}
+            {(() => {
+              // Con il conto (tavoli da 4 posti in su) le tre righe si stringono al centro
+              const euro = s && props.conto && h >= 44 ? props.conto(s.id) : 0;
+              return <>
+                <text className="tavolo-nome" dy={s ? (euro ? -8 : -3) : 7}>{t.nome}</text>
+                {s && <text className="tavolo-info" dy={euro ? 7 : 15}>{w < 70 ? durataBreve(minuti(s.aperta_at)) : durata(minuti(s.aperta_at))}</text>}
+                {euro > 0 && <text className="tavolo-info tavolo-conto" dy={20}>{Math.round(euro / 100)} €</text>}
+              </>;
+            })()}
             {s && <g transform={`translate(${w / 2 + 6} ${-h / 2 - 6})`} className="tavolo-badge"><circle r={11} /><text dy={4}>{s.coperti}</text></g>}
             {props.inAttesa?.has(t.id) && <g transform={`translate(${-w / 2 - 6} ${-h / 2 - 6})`} className="tavolo-allerta"><circle r={13} /><text dy={5}>!</text></g>}
           </g>

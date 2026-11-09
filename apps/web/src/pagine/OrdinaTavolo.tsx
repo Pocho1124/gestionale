@@ -3,8 +3,8 @@ import { useParams } from "react-router-dom";
 import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { caricaFont, pilaFont } from "../lib/font";
-import type { MenuPubblico, PiattoMenu, Scelta } from "../lib/tipi";
-import { Componi, chiaveRiga, descriviScelte, prezzoComposto } from "../componenti/Componi";
+import type { GruppoScelte, MenuPubblico, PiattoMenu, Scelta } from "../lib/tipi";
+import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from "../componenti/Componi";
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
 
@@ -38,7 +38,7 @@ export function OrdinaTavolo() {
   const [info, setInfo] = useState<InfoTavolo | null | "assente">(null);
   const [menu, setMenu] = useState<MenuPubblico | null>(null);
   const [carrello, setCarrello] = useState<Record<string, RigaCarrello>>({});
-  const [componendo, setComponendo] = useState<PiattoMenu | null>(null);
+  const [componendo, setComponendo] = useState<{ p: PiattoMenu; gruppi: GruppoScelte[] } | null>(null);
   const [vista, setVista] = useState<"menu" | "carrello" | "ordini">("menu");
   const [codice, setCodice] = useState(() => leggi(chiaveCodice));
   const [richiesta, setRichiesta] = useState(() => leggi(`richiesta-${token}`));
@@ -185,18 +185,25 @@ export function OrdinaTavolo() {
               </div>
               {p.descrizione && <p className="menu-desc">{p.descrizione}</p>}
               {componibile(p) && <p className="menu-allergeni">Componi a piacere: {p.opzioni.map((g) => g.nome).join(", ")}</p>}
+              {p.disponibile && (c.aggiunte?.length ?? 0) > 0 && nelCarrello(p) > (carrello[chiaveRiga(p.id, [])]?.quantita ?? 0) && !componibile(p) && (
+                <p className="menu-allergeni">{nelCarrello(p) - (carrello[chiaveRiga(p.id, [])]?.quantita ?? 0)} con aggiunte nel tuo ordine</p>
+              )}
               {p.allergeni.length > 0 && <p className="menu-allergeni">Allergeni: {p.allergeni.join(", ")}</p>}
               <div className="ordina-quantita">
                 {p.disponibile ? (componibile(p) ? (
                   <>
                     {nelCarrello(p) > 0 && <strong>{nelCarrello(p)} nel tuo ordine</strong>}
-                    <button onClick={() => setComponendo(p)} aria-label={`Componi ${p.nome}`}>Componi</button>
+                    <button onClick={() => setComponendo({ p, gruppi: conAggiunte(p.opzioni, c.aggiunte) })} aria-label={`Componi ${p.nome}`}>Componi</button>
                   </>
                 ) : (
                   <>
                     {carrello[chiaveRiga(p.id, [])] && <button onClick={() => cambia(p, -1)} aria-label={`Togli ${p.nome}`}>−</button>}
                     {carrello[chiaveRiga(p.id, [])] && <strong>{carrello[chiaveRiga(p.id, [])]!.quantita}</strong>}
                     <button onClick={() => cambia(p, 1)} aria-label={`Aggiungi ${p.nome}`}>{carrello[chiaveRiga(p.id, [])] ? "+" : "Aggiungi"}</button>
+                    {(c.aggiunte?.length ?? 0) > 0 && (
+                      <button className="ordina-aggiunte" onClick={() => setComponendo({ p, gruppi: conAggiunte([], c.aggiunte) })}
+                        aria-label={`Aggiunte per ${p.nome}`}>＋ Aggiunte</button>
+                    )}
                   </>
                 )) : <span className="menu-badge">Esaurito</span>}
               </div>
@@ -285,8 +292,8 @@ export function OrdinaTavolo() {
       )}
 
       {componendo && (
-        <Componi nome={componendo.nome} base={componendo.prezzo_cent} gruppi={componendo.opzioni} variante="menu" onChiudi={() => setComponendo(null)}
-          onConferma={(scelte) => { cambiaRiga(componendo, scelte, 1); setComponendo(null); setMessaggio({ testo: `${componendo.nome} aggiunto al tuo ordine` }); }} />
+        <Componi nome={componendo.p.nome} base={componendo.p.prezzo_cent} gruppi={componendo.gruppi} variante="menu" onChiudi={() => setComponendo(null)}
+          onConferma={(scelte) => { cambiaRiga(componendo.p, scelte, 1); setComponendo(null); setMessaggio({ testo: `${componendo.p.nome} aggiunto al tuo ordine` }); }} />
       )}
 
       {vista === "menu" && pezzi > 0 && (

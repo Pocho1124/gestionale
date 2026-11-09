@@ -26,6 +26,8 @@ export interface MenuPubblico {
   aspetto: Aspetto | null;
   categorie: {
     id: string; nome: string; descrizione: string;
+    /** Aggiunte disponibili per i piatti di questa categoria (es. «Mozzarella di bufala» + 2 €). */
+    aggiunte?: Scelta[];
     prodotti: {
       id: string; nome: string; descrizione: string; prezzo_cent: number; disponibile: boolean;
       allergeni: string[]; etichette: string[]; immagine_url: string | null; foto?: number | null;
