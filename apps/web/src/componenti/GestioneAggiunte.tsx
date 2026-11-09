@@ -24,6 +24,7 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
       .eq("locale_id", locale).order("posizione").order("nome");
     if (error) { setAggiunte([]); return; }   // database non ancora aggiornato
     setAggiunte(data as Aggiunta[]);
+    if (!data.length) setAperto(true);
   }, [locale]);
   useEffect(() => { void carica(); }, [carica]);
 
@@ -59,7 +60,7 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
       </div>
       {aperto && (
         <div className="aggiunte-gestione">
-          <p className="muto piccolo">Le aggiunte si scelgono al tavolo, dal tablet e dal telefono, con il tasto «＋ Aggiunte» sui piatti delle categorie indicate.</p>
+          <p className="muto piccolo">Le aggiunte si scelgono al tavolo, dal tablet e dal telefono, con il tasto «＋ Aggiunte» sui piatti delle categorie indicate (se non ne scegli nessuna, su tutti i piatti).</p>
           <form className="riga-form" onSubmit={aggiungi}>
             <input placeholder="Nuova aggiunta (es. Mozzarella di bufala)" value={nome} maxLength={60} onChange={(e) => setNome(e.target.value)} />
             <input className="input-prezzo" inputMode="decimal" placeholder="€ 0,00" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} aria-label="Prezzo" />
@@ -92,7 +93,7 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
                     </label>
                   );
                 })}
-                {!a.aggiunte_categorie.length && <span className="muto piccolo">nessuna categoria: al tavolo non compare</span>}
+                {!a.aggiunte_categorie.length && <span className="muto piccolo">nessuna categoria scelta: vale per tutte</span>}
               </fieldset>
             </div>
           ))}

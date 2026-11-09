@@ -21,11 +21,11 @@ interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "n
 /** Prodotto letto dal database con gruppi e voci, nel formato usato dalla composizione. */
 type GrezzoProdotto = Omit<ProdottoBreve, "gruppi" | "aggiunte"> & { gruppi_opzioni: { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number;
   opzioni: { id: string; nome: string; sovrapprezzo_cent: number; disponibile: boolean; posizione: number }[] }[] };
-/** Aggiunte del locale con le categorie su cui sono attive. */
+/** Aggiunte del locale con le categorie su cui sono attive (nessuna categoria = tutte). */
 interface GrezzaAggiunta { id: string; nome: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
 const daGrezzo = (aggiunte: GrezzaAggiunta[]) => ({ gruppi_opzioni, ...p }: GrezzoProdotto): ProdottoBreve => ({
   ...p,
-  aggiunte: aggiunte.filter((a) => a.disponibile && a.aggiunte_categorie.some((c) => c.categoria_id === p.categoria_id))
+  aggiunte: aggiunte.filter((a) => a.disponibile && (!a.aggiunte_categorie.length || a.aggiunte_categorie.some((c) => c.categoria_id === p.categoria_id)))
     .sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome)).map((a) => ({ id: a.id, nome: a.nome, sovrapprezzo_cent: a.prezzo_cent })),
   gruppi: [...(gruppi_opzioni ?? [])].sort((a, b) => a.posizione - b.posizione).map((g) => ({
     id: g.id, nome: g.nome, min: g.min_scelte, max: g.max_scelte,

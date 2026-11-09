@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { centesimi, formatta } from "@gest/core";
+import { centesimi, daEuro, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
@@ -9,7 +9,10 @@ import type { CategoriaBreve, ProdottoBreve } from "./ServizioSala";
 
 const euro = (c: number) => formatta(centesimi(c));
 /** Riga della comanda: stesso piatto con scelte o note diverse = righe distinte (in cucina arrivano separate). */
-interface Riga { id: string; prodotto: ProdottoBreve; scelte: Scelta[]; q: number; nota: string }
+interface Riga { id: string; prodotto: ProdottoBreve; scelte: Scelta[]; q: number; nota: string; supplemento: string }
+/** Supplemento della nota in centesimi (null se scritto male); il database accetta da 0 a 100 €. */
+const centSupplemento = (t: string) => { try { return t.trim() ? daEuro(t) : 0; } catch { return null; } };
+const prezzoRiga = (r: Riga) => prezzoComposto(r.prodotto.prezzo_cent, r.scelte) + (centSupplemento(r.supplemento) ?? 0);
 const NOTE_RAPIDE = ["Senza glutine", "Ben cotta", "Senza cipolla", "Poco sale", "A parte", "Subito", "Dopo"];
 
 /**
@@ -51,8 +54,8 @@ export function AggiungiOrdine(props: {
     const chiave = chiaveRiga(p.id, scelte);
     const nuovo = `r${++contatore.current}`;   // usato solo se nasce una riga nuova
     setRighe((rs) => {
-      const i = conNota ? -1 : rs.findIndex((r) => chiaveRiga(r.prodotto.id, r.scelte) === chiave && !r.nota);
-      if (i < 0) return delta < 0 ? rs : [...rs, { id: nuovo, prodotto: p, scelte, q: 1, nota: "" }];
+      const i = conNota ? -1 : rs.findIndex((r) => chiaveRiga(r.prodotto.id, r.scelte) === chiave && !r.nota && !r.supplemento.trim());
+      if (i < 0) return delta < 0 ? rs : [...rs, { id: nuovo, prodotto: p, scelte, q: 1, nota: "", supplemento: "" }];
       const q = Math.min(20, rs[i]!.q + delta);
       return q <= 0 ? rs.filter((_, j) => j !== i) : rs.map((r, j) => (j === i ? { ...r, q } : r));
     });
@@ -60,17 +63,20 @@ export function AggiungiOrdine(props: {
   }
   const aggiornaRiga = (id: string, patch: Partial<Riga>) =>
     setRighe((rs) => rs.flatMap((r) => (r.id !== id ? [r] : (patch.q ?? r.q) <= 0 ? [] : [{ ...r, ...patch, q: Math.min(20, patch.q ?? r.q) }])));
-  const semplici = (p: ProdottoBreve) => righe.filter((r) => r.prodotto.id === p.id && !r.scelte.length && !r.nota).reduce((n, r) => n + r.q, 0);
+  const semplici = (p: ProdottoBreve) => righe.filter((r) => r.prodotto.id === p.id && !r.scelte.length && !r.nota && !r.supplemento.trim()).reduce((n, r) => n + r.q, 0);
   const nelCarrello = (p: ProdottoBreve) => righe.filter((r) => r.prodotto.id === p.id).reduce((n, r) => n + r.q, 0);
   const pezzi = righe.reduce((n, r) => n + r.q, 0);
-  const totale = righe.reduce((n, r) => n + r.q * prezzoComposto(r.prodotto.prezzo_cent, r.scelte), 0);
+  const totale = righe.reduce((n, r) => n + r.q * prezzoRiga(r), 0);
 
   async function invia() {
     if (!righe.length) return;
+    const errata = righe.find((r) => { const c = centSupplemento(r.supplemento); return c === null || c < 0 || c > 10000; });
+    if (errata) { avvisa(`Supplemento non valido per «${errata.prodotto.nome}» (da 0 a 100 €, es. 2,50)`, "errore"); setNotaAperta(errata.id); return; }
     setInvio(true);
     const { error } = await sb().rpc("ordine_sala", {
       p_tavolo: props.tavolo.id, p_nota: notaGenerale.trim(),
-      p_righe: righe.map((r) => ({ prodotto_id: r.prodotto.id, quantita: r.q, nota: r.nota.trim(), opzioni: r.scelte.map((c) => c.id) })),
+      p_righe: righe.map((r) => ({ prodotto_id: r.prodotto.id, quantita: r.q, nota: r.nota.trim(), opzioni: r.scelte.map((c) => c.id),
+        ...(centSupplemento(r.supplemento) ? { supplemento_cent: centSupplemento(r.supplemento) } : {}) })),
     });
     setInvio(false);
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
@@ -141,7 +147,7 @@ export function AggiungiOrdine(props: {
           </button>
           {riepilogoAperto && (
             <>
-              {righe.length === 0 ? <p className="muto piccolo">Tocca un piatto per aggiungerlo. Con «📝 Nota» lo aggiungi come riga a parte, con la sua nota per la cucina.</p> : (
+              {righe.length === 0 ? <p className="muto piccolo">Tocca un piatto per aggiungerlo. Con «📝 Nota» lo aggiungi come riga a parte, con la sua nota per la cucina ed eventualmente un costo.</p> : (
                 <ul className="comanda-righe">
                   {righe.map((r) => (
                     <li key={r.id}>
@@ -153,15 +159,25 @@ export function AggiungiOrdine(props: {
                         </span>
                         <span className="comanda-riga-nome">{r.prodotto.nome}
                           {r.scelte.length > 0 && <span className="scelte-riga">{r.scelte.map((c) => c.nome).join(", ")}</span>}
-                          {r.nota && notaAperta !== r.id && <span className="comanda-nota">📝 {r.nota}</span>}
+                          {(r.nota || r.supplemento.trim()) && notaAperta !== r.id && (
+                            <span className="comanda-nota">📝 {r.nota}{centSupplemento(r.supplemento) ? ` · + ${euro(centSupplemento(r.supplemento)!)}` : ""}</span>
+                          )}
                         </span>
-                        <span className="comanda-riga-prezzo">{euro(r.q * prezzoComposto(r.prodotto.prezzo_cent, r.scelte))}</span>
-                        <button className="btn btn-testo btn-piccolo" onClick={() => setNotaAperta(notaAperta === r.id ? null : r.id)}>{r.nota ? "Modifica nota" : "📝"}</button>
+                        <span className="comanda-riga-prezzo">{euro(r.q * prezzoRiga(r))}</span>
+                        <button className="btn btn-testo btn-piccolo" onClick={() => setNotaAperta(notaAperta === r.id ? null : r.id)}>{r.nota || r.supplemento.trim() ? "Modifica nota" : "📝"}</button>
                       </div>
                       {notaAperta === r.id && (
                         <div className="comanda-nota-campo">
-                          <input ref={campoNota} maxLength={120} placeholder="Nota per la cucina (es. senza mozzarella)" value={r.nota}
-                            onChange={(e) => aggiornaRiga(r.id, { nota: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") setNotaAperta(null); }} aria-label={`Nota per ${r.prodotto.nome}`} />
+                          <div className="comanda-nota-riga">
+                            <input ref={campoNota} maxLength={120} placeholder="Nota per la cucina (es. doppia mozzarella)" value={r.nota}
+                              onChange={(e) => aggiornaRiga(r.id, { nota: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") setNotaAperta(null); }} aria-label={`Nota per ${r.prodotto.nome}`} />
+                            <label className="comanda-supplemento">+ €
+                              <input inputMode="decimal" placeholder="0,00" value={r.supplemento} maxLength={6}
+                                className={centSupplemento(r.supplemento) === null ? "errato" : undefined}
+                                onChange={(e) => aggiornaRiga(r.id, { supplemento: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") setNotaAperta(null); }}
+                                aria-label={`Costo della nota per ${r.prodotto.nome}`} />
+                            </label>
+                          </div>
                           <div className="scelte">
                             {NOTE_RAPIDE.map((t) => (
                               <button key={t} className="chip" onClick={() => aggiornaRiga(r.id, { nota: (r.nota ? `${r.nota}, ${t.toLowerCase()}` : t).slice(0, 120) })}>{t}</button>

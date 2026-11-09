@@ -573,3 +573,8 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
   .comanda-popup { height: 100dvh; width: 100%; border-radius: 0; }
   .comanda-riga { grid-template-columns: auto 1fr auto; } .comanda-riga > .btn-testo { grid-column: 2 / -1; justify-self: start; }
 }
+.comanda-nota-riga { display: flex; gap: 8px; align-items: center; }
+.comanda-nota-riga > input { flex: 1; min-width: 0; }
+.comanda-supplemento { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap; }
+.comanda-supplemento input { width: 80px; text-align: right; }
+.comanda-supplemento input.errato { border-color: var(--pericolo); outline-color: var(--pericolo); }
