@@ -86,8 +86,55 @@ export function Impostazioni() {
       <div className="pagina-testa"><h1>Impostazioni</h1></div>
       <SezioneUtenti />
       {puo(ruolo, "reparti") && <SezioneReparti />}
+      {puo(ruolo, "impostazioni") && <SezioneTavolo />}
       <SezioneTelegram />
     </div>
+  );
+}
+
+interface ImpostazioniTavolo { chiedi_nome: boolean; nome_obbligatorio: boolean }
+const TAVOLO_PREDEFINITO: ImpostazioniTavolo = { chiedi_nome: false, nome_obbligatorio: false };
+
+/** Personalizzazioni della pagina del tavolo (QR): ognuna si attiva o disattiva qui. */
+function SezioneTavolo() {
+  const { locale } = useSessione();
+  const avvisa = useAvviso();
+  const [imp, setImp] = useState<ImpostazioniTavolo>(TAVOLO_PREDEFINITO);
+
+  const carica = useCallback(async () => {
+    if (!locale) return;
+    const { data, error } = await sb().from("impostazioni_tavolo").select("chiedi_nome, nome_obbligatorio").eq("locale_id", locale.id).maybeSingle();
+    if (error) { avvisa(messaggioErrore(error), "errore"); return; }
+    setImp((data as ImpostazioniTavolo | null) ?? TAVOLO_PREDEFINITO);
+  }, [locale, avvisa]);
+  useEffect(() => { void carica(); }, [carica]);
+  if (!locale) return null;
+
+  const salva = async (patch: Partial<ImpostazioniTavolo>) => {
+    const nuove = { ...imp, ...patch };
+    if (!nuove.chiedi_nome) nuove.nome_obbligatorio = false;   // obbligatorio solo se il nome si chiede
+    const { error } = await sb().from("impostazioni_tavolo").upsert({ locale_id: locale.id, ...nuove }, { onConflict: "locale_id" });
+    if (error) avvisa(messaggioErrore(error), "errore"); else avvisa("Salvato");
+    await carica();
+  };
+
+  return (
+    <section className="gruppo">
+      <legend>Ordini dal tavolo (QR)</legend>
+      <p className="muto piccolo">
+        Personalizzazioni della pagina che il cliente apre dal QR del tavolo. Il nome è un dato personale: si chiede solo se lo attivi,
+        lo vede solo il personale di sala, non entra nello storico e si cancella alla chiusura del tavolo (o se la richiesta è rifiutata o scade).
+      </p>
+      <label className="riga-form">
+        <input type="checkbox" checked={imp.chiedi_nome} onChange={(e) => void salva({ chiedi_nome: e.target.checked })} />
+        Chiedi il nome del cliente quando chiede di aprire il tavolo
+      </label>
+      <label className="riga-form">
+        <input type="checkbox" checked={imp.nome_obbligatorio} disabled={!imp.chiedi_nome}
+          onChange={(e) => void salva({ nome_obbligatorio: e.target.checked })} />
+        Nome obbligatorio (senza nome la richiesta non parte)
+      </label>
+    </section>
   );
 }
 

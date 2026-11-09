@@ -96,8 +96,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, con test vitest)
-supabase/migrations/ 22 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (221 test)
+supabase/migrations/ 23 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (244 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -122,6 +122,7 @@ deploy/pi/           installer per il server
 |`piatti\_componibili`|piatti con gruppi di scelte (es. tagliere), prezzo calcolato dal DB|
 |`enciclopedia\_vini`|enciclopedia (base curata, X-Wines, aggiunte del locale), `cerca\_vino()` con pg\_trgm e indici, capacità `catalogo`|
 |`descrizioni\_vini`|acidità, gradazione, profilo aromatico dei vitigni principali|
+|`nome\_cliente`|`impostazioni\_tavolo` (personalizzazioni della pagina QR, capacità `impostazioni`), `nomi\_clienti` (nome facoltativo/obbligatorio all'apertura: senza audit, solo sala, cancellato a chiusura/rifiuto/scadenza), `richiedi\_tavolo(…, p\_nome)`|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -130,7 +131,7 @@ deploy/pi/           installer per il server
 |sala.apri, sala.comanda, ordini.conferma|✅|✅|✅|✅|—|
 |sala.chiudi, ordini.annulla|✅|✅|✅|—|—|
 |cucina.avanza, esauriti|✅|✅|✅|✅|✅|
-|magazzino, reparti, utenti, catalogo|✅|✅|—|—|—|
+|magazzino, reparti, utenti, catalogo, impostazioni|✅|✅|—|—|—|
 |cassa|✅|—|—|—|—|
 
 ## Componenti
@@ -172,7 +173,7 @@ Vini (enciclopedia), Magazzino, Cassa (solo titolare), Impostazioni (personale, 
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 221 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 244 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite). **Core**: `vitest` in `packages/core`.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
 jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`

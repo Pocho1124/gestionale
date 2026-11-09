@@ -15,7 +15,7 @@ interface Tavolo { id: string; locale_id: string; sala_id: string; nome: string;
 type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pianta" | "zona" | "testo" | "cassa" | "bagni";
 interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoElemento; x: number; y: number; w: number; h: number; rotazione: number; etichetta: string }
 type Selezione = { tipo: "tavolo" | "elemento"; id: string } | null;
-interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string }
+interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; nomi_clienti?: { nome: string }[] }
 interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "nopass"; password: string; nascosta: boolean; url_ordini: string }
 
 /** Prodotto letto dal database con gruppi e voci, nel formato usato dalla composizione. */
@@ -95,11 +95,11 @@ export function Sala() {
     const [s, t, x, e, o, r, p, c] = await Promise.all([
       sb().from("sale").select("*").eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("tavoli").select("*").eq("locale_id", locale.id).order("nome"),
-      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at").eq("locale_id", locale.id).is("chiusa_at", null),
+      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at, nomi_clienti(nome)").eq("locale_id", locale.id).is("chiusa_at", null),
       sb().from("elementi_sala").select("*").eq("locale_id", locale.id),
       sb().from("ordini").select("id, tavolo_id, sessione_id, stato, origine, nota, motivo, creato_at, righe_ordine(nome, quantita, prezzo_cent, nota, opzioni)")
         .eq("locale_id", locale.id).gte("creato_at", new Date(Date.now() - 24 * 3600_000).toISOString()).order("creato_at", { ascending: false }),
-      sb().from("richieste_tavolo").select("id, tavolo_id, righe, nota, creato_at").eq("locale_id", locale.id).eq("stato", "in_attesa").gte("creato_at", quindiciMinuti).order("creato_at"),
+      sb().from("richieste_tavolo").select("id, tavolo_id, righe, nota, creato_at, nomi_clienti(nome)").eq("locale_id", locale.id).eq("stato", "in_attesa").gte("creato_at", quindiciMinuti).order("creato_at"),
       sb().from("prodotti").select("id, nome, prezzo_cent, disponibile, visibile, categoria_id, gruppi_opzioni(id, nome, min_scelte, max_scelte, posizione, opzioni(id, nome, sovrapprezzo_cent, disponibile, posizione))")
         .eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("categorie").select("id, nome").eq("locale_id", locale.id).order("posizione").order("nome"),
@@ -112,7 +112,7 @@ export function Sala() {
     if (errore) { avvisa(messaggioErrore(errore), "errore"); return; }
     setSale(s.data as Sala[]); setTavoli(t.data as Tavolo[]); setSessioni(x.data as SessioneT[]); setElementi(e.data as Elemento[]);
     setOrdini(o.data as unknown as OrdineSala[]); setProdotti((p.data as unknown as GrezzoProdotto[]).map(daGrezzo)); setCategorie(c.data as CategoriaBreve[]);
-    const nuoveRichieste = r.data as RichiestaSala[];
+    const nuoveRichieste = r.data as unknown as RichiestaSala[];
     setRichieste(nuoveRichieste);
     // Suono per richieste e ordini da confermare arrivati dopo il primo caricamento
     const inAttesa = [...nuoveRichieste.map((z) => z.id), ...(o.data as unknown as OrdineSala[]).filter((z) => z.stato === "da_confermare").map((z) => z.id)];

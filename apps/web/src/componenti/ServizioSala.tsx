@@ -11,10 +11,10 @@ import { Componi, chiaveRiga, descriviScelte, prezzoComposto } from "./Componi";
 
 export interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: { nome: string }[] }
 export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string; stato: string; origine: string; nota: string; motivo: string; creato_at: string; righe_ordine: RigaOrdine[] }
-export interface RichiestaSala { id: string; tavolo_id: string; righe: { prodotto_id: string; quantita: number; nota?: string; opzioni?: string[] }[]; nota: string; creato_at: string }
+export interface RichiestaSala { id: string; tavolo_id: string; righe: { prodotto_id: string; quantita: number; nota?: string; opzioni?: string[] }[]; nota: string; creato_at: string; nomi_clienti?: { nome: string } | { nome: string }[] | null }
 export interface ProdottoBreve { id: string; nome: string; prezzo_cent: number; disponibile: boolean; visibile: boolean; categoria_id: string; gruppi: GruppoScelte[] }
 export interface CategoriaBreve { id: string; nome: string }
-export interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string }
+export interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; nomi_clienti?: { nome: string }[] }
 export interface ComandaStampa { id: string; ordine_id: string | null; stato: string; tipo: string; errore: string; reparti: { nome: string } | null }
 interface TavoloBreve { id: string; nome: string; posti: number }
 
@@ -41,6 +41,9 @@ export function suona() {
     });
   } catch { /* audio non disponibile */ }
 }
+
+/** Nome lasciato dal cliente (relazione uno a uno: oggetto, o elenco con un elemento). */
+const nomeCliente = (r: RichiestaSala) => (Array.isArray(r.nomi_clienti) ? r.nomi_clienti[0]?.nome : r.nomi_clienti?.nome) ?? "";
 
 /** Coda in cima alla sala: richieste di apertura dal telefono e ordini da confermare. */
 export function CodaRichieste(props: {
@@ -87,7 +90,7 @@ export function CodaRichieste(props: {
         const chiuso = !props.aperto(r.tavolo_id);
         return (
           <article key={r.id} className="coda-voce coda-richiesta">
-            <header><strong>🔔 Tavolo {nomeTavolo(r.tavolo_id)}</strong><span className="muto piccolo">{ora(r.creato_at)} · {chiuso ? "chiede di aprire il tavolo" : "nuovo telefono al tavolo"}</span></header>
+            <header><strong>🔔 Tavolo {nomeTavolo(r.tavolo_id)}{nomeCliente(r) ? ` · ${nomeCliente(r)}` : ""}</strong><span className="muto piccolo">{ora(r.creato_at)} · {chiuso ? "chiede di aprire il tavolo" : "nuovo telefono al tavolo"}</span></header>
             <p>{righe.map((x) => `${x.quantita}× ${x.p?.nome ?? "?"}${descriviScelte(x.scelte)}${x.nota ? ` — ${x.nota}` : ""}`).join(" · ")} — {euro(totale(righe.map((x) => ({ quantita: x.quantita, prezzo_cent: x.prezzo }))))}</p>
             {r.nota && <p className="ordine-nota">📝 {r.nota}</p>}
             <footer className="riga-form">
@@ -172,6 +175,7 @@ export function PannelloTavolo(props: {
       ) : (
         <>
           <p>Aperto alle {ora(sessione.aperta_at)} · {sessione.coperti} coperti</p>
+          {!!sessione.nomi_clienti?.length && <p>👤 {sessione.nomi_clienti.map((n) => n.nome).join(", ")}</p>}
           <div className="codice-tavolo"><span className="muto piccolo">Codice del tavolo</span><strong>{sessione.codice}</strong></div>
 
           <h3 className="pannello-titolo">Ordini <span className="muto piccolo">totale {euro(conto)}</span></h3>

@@ -5,7 +5,7 @@ import type { Ruolo } from "./tipi";
  * Serve solo a mostrare o nascondere i comandi: il controllo vero lo fa sempre il database.
  */
 export type Capacita = "sala.apri" | "sala.comanda" | "ordini.conferma" | "sala.chiudi" | "ordini.annulla" | "cucina.avanza"
-  | "esauriti" | "magazzino" | "reparti" | "utenti" | "cassa" | "catalogo";
+  | "esauriti" | "magazzino" | "reparti" | "utenti" | "cassa" | "catalogo" | "impostazioni";
 
 const MATRICE: Record<Capacita, Ruolo[]> = {
   "sala.apri": ["owner", "manager", "caposala", "cameriere"],
@@ -19,6 +19,7 @@ const MATRICE: Record<Capacita, Ruolo[]> = {
   reparti: ["owner", "manager"],
   utenti: ["owner", "manager"],
   catalogo: ["owner", "manager"],
+  impostazioni: ["owner", "manager"],
   cassa: ["owner"],
 };
 

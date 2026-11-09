@@ -8,7 +8,7 @@ import { Componi, chiaveRiga, descriviScelte, prezzoComposto } from "../componen
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
 
-interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean }
+interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean; chiedi_nome?: boolean; nome_obbligatorio?: boolean }
 interface RigaCarrello { chiave: string; piatto: PiattoMenu; quantita: number; nota: string; scelte: Scelta[]; prezzo: number }
 interface OrdineCliente { id: string; stato: string; motivo: string; creato_at: string; righe: { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: string[] }[] }
 
@@ -44,6 +44,8 @@ export function OrdinaTavolo() {
   const [richiesta, setRichiesta] = useState(() => leggi(`richiesta-${token}`));
   const [mostraCodice, setMostraCodice] = useState(false);
   const [nota, setNota] = useState("");
+  // Nome del cliente: solo in memoria (non si salva sul telefono), inviato solo con la richiesta di apertura
+  const [nome, setNome] = useState("");
   const [ordini, setOrdini] = useState<OrdineCliente[]>([]);
   const [conto, setConto] = useState<string | null>(null);
   const [notaConto, setNotaConto] = useState("");
@@ -118,14 +120,18 @@ export function OrdinaTavolo() {
   const inAttesa = useMemo(() => ordini.filter((o) => o.stato === "da_confermare").length, [ordini]);
 
   async function inviaRichiesta() {
+    if (info !== null && info !== "assente" && info.nome_obbligatorio && !nome.trim()) {
+      setMessaggio({ testo: "Scrivi il tuo nome per chiedere l'apertura del tavolo", errore: true }); return;
+    }
     const { data, error } = await sb().rpc("richiedi_tavolo", {
       p_token: token, p_segreto: segretoDispositivo(token), p_nota: nota.trim(),
+      p_nome: info !== null && info !== "assente" && info.chiedi_nome ? nome.trim() : "",
       p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim(), opzioni: r.scelte.map((x) => x.id) })),
     });
     const e = data as { richiesta?: string; errore?: string } | null;
     if (error || !e?.richiesta) { setMessaggio({ testo: e?.errore ?? error?.message ?? "Invio non riuscito", errore: true }); void carica(); return; }
     scrivi(`richiesta-${token}`, e.richiesta); setRichiesta(e.richiesta);
-    setCarrello({}); setNota("");
+    setCarrello({}); setNota(""); setNome("");
     setMessaggio({ testo: "Richiesta inviata! Il personale sta arrivando a confermare il tuo ordine." });
   }
 
@@ -219,6 +225,15 @@ export function OrdinaTavolo() {
               <label className="ordina-campo">Nota per il personale
                 <input maxLength={200} value={nota} placeholder="Facoltativa" onChange={(e) => setNota(e.target.value)} />
               </label>
+              {info.chiedi_nome && !/^\d{4}$/.test(codice) && (
+                <>
+                  <label className="ordina-campo">Il tuo nome{info.nome_obbligatorio ? "" : " (facoltativo)"}
+                    <input maxLength={40} value={nome} autoComplete="given-name" required={info.nome_obbligatorio}
+                      placeholder="Così il personale sa chi cercare" onChange={(e) => setNome(e.target.value)} />
+                  </label>
+                  <p className="menu-allergeni">Il nome serve solo al personale per riconoscerti e viene cancellato quando il tavolo si chiude.</p>
+                </>
+              )}
               {mostraCodice || codice ? (
                 <label className="ordina-campo">Codice del tavolo (facoltativo)
                   <input inputMode="numeric" pattern="[0-9]*" maxLength={4} value={codice} placeholder="4 cifre"
