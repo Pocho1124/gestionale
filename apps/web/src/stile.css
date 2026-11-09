@@ -541,3 +541,35 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .tabella th.n, .tabella td.n { text-align: right; white-space: nowrap; }
 .tabella tfoot td { font-weight: 600; border-bottom: 0; }
 @media (max-width: 640px) { .tabella { display: block; overflow-x: auto; } }
+
+/* Comanda dal tablet: popup con categorie, note e riepilogo in basso */
+.comanda-popup { width: min(980px, 100%); height: min(92vh, 900px); text-align: left; display: grid; grid-template-rows: auto auto auto 1fr auto; gap: 10px; padding: 16px; }
+.comanda-testa { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.comanda-cerca { width: 100%; font-size: 1rem; padding: 10px 12px; }
+.comanda-categorie { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.comanda-categorie .chip { white-space: nowrap; padding: 6px 14px; font-size: .95rem; background: var(--superficie); color: inherit; }
+.comanda-categorie .chip.attivo { background: var(--primario); color: var(--su-primario); }
+.comanda-piatti { overflow-y: auto; min-height: 0; display: grid; gap: 12px; align-content: start; padding-right: 4px; }
+.comanda-categoria { margin: 4px 0 6px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muto); }
+.comanda-griglia { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.comanda-piatto { border: 1px solid var(--linea); border-radius: 12px; padding: 8px; display: grid; gap: 6px; background: var(--superficie); }
+.comanda-piatto.scelto { border-color: var(--primario); box-shadow: inset 0 0 0 1px var(--primario); }
+.comanda-piatto-nome { position: relative; display: grid; gap: 2px; text-align: left; border: 0; background: none; color: inherit; font: 600 1rem var(--corpo); cursor: pointer; padding: 4px 34px 4px 4px; min-height: 48px; }
+.comanda-badge { position: absolute; top: 2px; right: 2px; min-width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; background: var(--primario); color: var(--su-primario); font-size: .85rem; }
+.comanda-azioni { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.comanda-riepilogo { border-top: 2px solid var(--linea); padding-top: 8px; display: grid; gap: 8px; max-height: 42vh; overflow-y: auto; }
+.comanda-riepilogo-testa { display: flex; justify-content: space-between; gap: 10px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 2px 0; }
+.comanda-righe { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.comanda-righe li { border-bottom: 1px solid var(--linea); padding: 4px 0; display: grid; gap: 6px; }
+.comanda-riga { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; }
+.comanda-riga-nome { display: grid; }
+.comanda-riga-prezzo { font-variant-numeric: tabular-nums; font-weight: 600; }
+.comanda-nota { font-size: .85rem; color: var(--primario); }
+.comanda-nota-campo { display: grid; gap: 6px; padding-left: 8px; border-left: 3px solid var(--primario); }
+.comanda-invio { justify-content: flex-end; }
+.comanda-invio .btn-pieno { padding: 12px 18px; font-size: 1.05rem; }
+@media (max-width: 640px) {
+  .popup-sfondo:has(> .comanda-popup) { padding: 0; }
+  .comanda-popup { height: 100dvh; width: 100%; border-radius: 0; }
+  .comanda-riga { grid-template-columns: auto 1fr auto; } .comanda-riga > .btn-testo { grid-column: 2 / -1; justify-self: start; }
+}

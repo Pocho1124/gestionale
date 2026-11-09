@@ -7,8 +7,9 @@ import { stampaConto } from "../lib/conto";
 import { useSessione } from "../lib/sessione";
 import { puo } from "../lib/permessi";
 import type { GruppoScelte, Scelta } from "../lib/tipi";
-import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from "./Componi";
+import { descriviScelte, prezzoComposto } from "./Componi";
 import { Pagamento } from "./Pagamento";
+import { AggiungiOrdine } from "./AggiungiOrdine";
 
 export interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: { nome: string }[] }
 export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string; stato: string; origine: string; nota: string; motivo: string; creato_at: string; righe_ordine: RigaOrdine[] }
@@ -144,9 +145,7 @@ export function PannelloTavolo(props: {
   const [preconti, setPreconti] = useState<string[]>(precontiStampati);
   const [coperti, setCoperti] = useState(2);
   const [attesa, setAttesa] = useState(false);
-  const [aggiunta, setAggiunta] = useState<Record<string, { prodotto: ProdottoBreve; scelte: Scelta[]; q: number }> | null>(null);
-  const [componendo, setComponendo] = useState<{ p: ProdottoBreve; gruppi: GruppoScelte[] } | null>(null);
-  const [cerca, setCerca] = useState("");
+  const [comanda, setComanda] = useState(false);   // popup «Aggiungi all'ordine»
   const ordiniTavolo = useMemo(() => props.ordini.filter((o) => sessione && o.sessione_id === sessione.id), [props.ordini, sessione]);
   if (!tavolo) return <p className="muto">Tocca un tavolo per aprirlo, vedere i suoi ordini o aggiungere una comanda.</p>;
 
@@ -159,14 +158,6 @@ export function PannelloTavolo(props: {
   }
   const conto = ordiniTavolo.filter((o) => o.stato !== "rifiutato" && o.stato !== "annullato").reduce((n, o) => n + totale(o.righe_ordine), 0);
   const stampe = (ordine: string) => (props.comande ?? []).filter((c) => c.ordine_id === ordine);
-  const scelti = Object.values(aggiunta ?? {}).filter((x) => x.q > 0);
-  const cambiaVoce = (prodotto: ProdottoBreve, scelte: Scelta[], delta: number) => setAggiunta((a) => {
-    const k = chiaveRiga(prodotto.id, scelte), q = Math.max(0, Math.min(20, (a?.[k]?.q ?? 0) + delta));
-    const nuovo = { ...(a ?? {}) };
-    if (q === 0) delete nuovo[k]; else nuovo[k] = { prodotto, scelte, q };
-    return nuovo;
-  });
-  const disponibili = props.prodotti.filter((p) => p.visibile && p.disponibile && (!cerca || p.nome.toLowerCase().includes(cerca.toLowerCase())));
 
   return (
     <div className="pannello-tavolo">
@@ -220,59 +211,7 @@ export function PannelloTavolo(props: {
             </div>
           ))}
 
-          {aggiunta === null ? (
-            <button className="btn" onClick={() => setAggiunta({})}>+ Aggiungi all'ordine</button>
-          ) : (
-            <div className="aggiungi-comanda">
-              <input placeholder="Cerca un piatto o un vino" value={cerca} onChange={(e) => setCerca(e.target.value)} />
-              <div className="aggiungi-lista">
-                {props.categorie.map((c) => {
-                  const lista = disponibili.filter((p) => p.categoria_id === c.id);
-                  if (!lista.length) return null;
-                  return (
-                    <div key={c.id}>
-                      <p className="muto piccolo">{c.nome}</p>
-                      {lista.map((p) => (
-                        <div key={p.id} className="aggiungi-voce">
-                          <span>{p.nome} <span className="muto piccolo">{p.gruppi.length ? "da " : ""}{euro(p.prezzo_cent)}</span></span>
-                          {p.gruppi.length ? (
-                            <button className="btn btn-piccolo" onClick={() => setComponendo({ p, gruppi: conAggiunte(p.gruppi, p.aggiunte) })}>Componi</button>
-                          ) : (
-                            <span className="riga-form">
-                              {(aggiunta[chiaveRiga(p.id, [])]?.q ?? 0) > 0 && <button className="btn btn-icona" onClick={() => cambiaVoce(p, [], -1)}>−</button>}
-                              {(aggiunta[chiaveRiga(p.id, [])]?.q ?? 0) > 0 && <strong>{aggiunta[chiaveRiga(p.id, [])]!.q}</strong>}
-                              <button className="btn btn-icona" onClick={() => cambiaVoce(p, [], 1)}>+</button>
-                              {p.aggiunte.length > 0 && (
-                                <button className="btn btn-piccolo btn-aggiunte" onClick={() => setComponendo({ p, gruppi: conAggiunte([], p.aggiunte) })}
-                                  aria-label={`Aggiunte per ${p.nome}`}>＋ Aggiunte</button>
-                              )}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-              {scelti.filter((x) => x.scelte.length).map((x) => (
-                <div key={chiaveRiga(x.prodotto.id, x.scelte)} className="aggiungi-voce">
-                  <span>{x.q}× {x.prodotto.nome}<span className="scelte-riga">{x.scelte.map((c) => c.nome).join(", ")} · {euro(prezzoComposto(x.prodotto.prezzo_cent, x.scelte))}</span></span>
-                  <button className="btn btn-icona" onClick={() => cambiaVoce(x.prodotto, x.scelte, -1)} aria-label="Togli">−</button>
-                </div>
-              ))}
-              {componendo && (
-                <Componi nome={componendo.p.nome} base={componendo.p.prezzo_cent} gruppi={componendo.gruppi} variante="gestionale"
-                  onChiudi={() => setComponendo(null)} onConferma={(sc) => { cambiaVoce(componendo.p, sc, 1); setComponendo(null); }} />
-              )}
-              <div className="riga-form">
-                <button className="btn" onClick={() => { setAggiunta(null); setCerca(""); }}>Annulla</button>
-                <button className="btn btn-pieno" disabled={!scelti.length || attesa} onClick={async () => {
-                  const ok = await esegui(() => sb().rpc("ordine_sala", { p_tavolo: tavolo.id, p_righe: scelti.map((x) => ({ prodotto_id: x.prodotto.id, quantita: x.q, opzioni: x.scelte.map((c) => c.id) })), p_nota: "" }), "Comanda aggiunta");
-                  if (ok) { setAggiunta(null); setCerca(""); }
-                }}>Invia comanda ({scelti.reduce((n, x) => n + x.q, 0)})</button>
-              </div>
-            </div>
-          )}
+          <button className="btn btn-pieno" onClick={() => setComanda(true)}>+ Aggiungi all'ordine</button>
 
           <button className="btn" onClick={async () => {
             const errore = await stampaConto(sessione.id, locale?.nome ?? "");
@@ -286,6 +225,7 @@ export function PannelloTavolo(props: {
           ) : <p className="muto piccolo">Per incassare e chiudere il tavolo chiama il caposala.</p>}
         </>
       )}
+      {comanda && sessione && <AggiungiOrdine tavolo={tavolo} prodotti={props.prodotti} categorie={props.categorie} onChiudi={() => setComanda(false)} onInviata={props.onFatto} />}
       {cassa && <Pagamento sessioneId={cassa} tavolo={tavolo} onChiudi={() => setCassa(null)} onFatto={props.onFatto} />}
     </div>
   );
