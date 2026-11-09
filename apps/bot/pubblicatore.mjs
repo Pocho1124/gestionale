@@ -130,6 +130,8 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?${famiglie}&display=swap" rel="stylesheet">
 <style>
+/* Qualsiasi elemento con l'attributo hidden resta nascosto, anche se uno stile gli assegna un display */
+[hidden]{display:none !important}
 :root{--p:${colore(a.colore_primario, PREDEFINITO.colore_primario)};--a:${colore(a.colore_accento, PREDEFINITO.colore_accento)};--s:${colore(a.colore_sfondo, PREDEFINITO.colore_sfondo)};--t:${colore(a.colore_testo, PREDEFINITO.colore_testo)};--ft:${pila(ft)};--fc:${pila(fc)}}
 *{box-sizing:border-box}
 html{scroll-padding-top:56px}

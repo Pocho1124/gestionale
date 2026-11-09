@@ -24,6 +24,7 @@ jobs:
           npm install --no-package-lock --no-audit --no-fund
           npx tsc --noEmit
           npx vitest run
+
   web:
     runs-on: ubuntu-latest
     steps:
@@ -36,10 +37,12 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
+
   database:
     runs-on: ubuntu-latest
     services:
       db:
+        # Stessa immagine del Pi
         image: supabase/postgres:17.6.1.136
         env:
           POSTGRES_PASSWORD: postgres
