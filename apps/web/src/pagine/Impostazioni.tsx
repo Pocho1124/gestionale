@@ -87,8 +87,57 @@ export function Impostazioni() {
       <SezioneUtenti />
       {puo(ruolo, "reparti") && <SezioneReparti />}
       {puo(ruolo, "impostazioni") && <SezioneTavolo />}
+      {puo(ruolo, "impostazioni") && <SezionePos />}
       <SezioneTelegram />
     </div>
+  );
+}
+
+interface TerminalePos { id: string; nome: string; attivo: boolean; posizione: number }
+
+/** Terminali POS: con più di uno, al momento del pagamento si sceglie su quale battere l'importo. */
+function SezionePos() {
+  const { locale } = useSessione();
+  const avvisa = useAvviso();
+  const [lista, setLista] = useState<TerminalePos[]>([]);
+  const [nome, setNome] = useState("");
+  const carica = useCallback(async () => {
+    if (!locale) return;
+    const { data, error } = await sb().from("terminali_pos").select("id, nome, attivo, posizione").eq("locale_id", locale.id).order("posizione").order("nome");
+    if (!error) setLista(data as TerminalePos[]);
+  }, [locale]);
+  useEffect(() => { void carica(); }, [carica]);
+  if (!locale) return null;
+  const esegui = async (azione: PromiseLike<{ error: unknown }>, ok: string) => {
+    const { error } = await azione;
+    if (error) avvisa(messaggioErrore(error), "errore"); else avvisa(ok);
+    await carica();
+  };
+  return (
+    <section className="gruppo">
+      <legend>Pagamenti con il POS</legend>
+      <p className="muto piccolo">
+        Dal conto, «Invia al POS» registra l'importo da battere sul terminale; l'incasso conta solo quando confermi l'esito
+        (approvato o rifiutato). Il collegamento diretto con il terminale si aggiunge in base al modello del POS.
+      </p>
+      {lista.map((t) => (
+        <div key={t.id} className="riga-form">
+          <strong style={{ flex: 1 }}>💳 {t.nome}</strong>
+          <label className="interruttore"><input type="checkbox" checked={t.attivo}
+            onChange={(e) => void esegui(sb().from("terminali_pos").update({ attivo: e.target.checked }).eq("id", t.id), e.target.checked ? "Terminale attivo" : "Terminale disattivato")} />Attivo</label>
+          <button className="btn btn-pericolo btn-piccolo" onClick={() => {
+            if (confirm(`Eliminare il terminale «${t.nome}»? I pagamenti già registrati restano.`)) void esegui(sb().from("terminali_pos").delete().eq("id", t.id), "Terminale eliminato");
+          }}>Elimina</button>
+        </div>
+      ))}
+      <form className="riga-form" onSubmit={(e) => {
+        e.preventDefault();
+        void esegui(sb().from("terminali_pos").insert({ locale_id: locale.id, nome: nome.trim(), posizione: lista.length }), "Terminale aggiunto").then(() => setNome(""));
+      }}>
+        <input placeholder="Nome del terminale (es. POS cassa)" maxLength={40} value={nome} onChange={(e) => setNome(e.target.value)} />
+        <button className="btn" disabled={!nome.trim()}>Aggiungi terminale</button>
+      </form>
+    </section>
   );
 }
 

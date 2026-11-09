@@ -492,3 +492,52 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .tavolo-allerta circle { transform-box: fill-box; transform-origin: center; animation: allerta 1.2s ease-in-out infinite; }
 @keyframes allerta { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 @media (prefers-reduced-motion: reduce) { .cruscotto-voce.evidenza, .tavolo-allerta circle { animation: none; } .cruscotto-barra i { transition: none; } }
+
+/* Conto: popup di pagamento */
+.pagamento-popup { width: min(720px, 100%); max-height: 92vh; overflow: auto; text-align: left; gap: 14px; }
+.pagamento-testa { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.conto-cifre { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .conto-cifre { grid-template-columns: 1fr; } }
+.conto-cifre > div { border: 1px solid var(--linea); border-radius: 12px; padding: 8px 12px; display: grid; gap: 1px; }
+.conto-cifre span { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muto); font-weight: 600; }
+.conto-cifre strong { font-size: 1.45rem; font-variant-numeric: tabular-nums; }
+.conto-cifre small { color: var(--muto); font-size: .78rem; }
+.conto-cifre .da-pagare { border-color: var(--primario); background: color-mix(in srgb, var(--primario) 8%, transparent); }
+.conto-cifre .da-pagare strong { color: var(--primario); font-size: 1.8rem; }
+.conto-cifre .da-pagare.saldato { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.conto-cifre .da-pagare.saldato strong { color: var(--ok); }
+.pagamento-sconto summary { cursor: pointer; font-weight: 600; }
+.pagamento-sconto .riga-form { margin-top: 8px; }
+.pagamento-romana { display: grid; gap: 8px; }
+.numero-grande { min-width: 36px; text-align: center; font-size: 1.4rem; }
+.quote { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.quota { display: grid; gap: 2px; border: 1px solid var(--linea); border-radius: 10px; padding: 8px 10px; background: var(--superficie); color: inherit; cursor: pointer; text-align: left; font: inherit; }
+.quota b { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.quota.scelta { border-color: var(--primario); box-shadow: 0 0 0 2px var(--primario); }
+.quota.pagata { opacity: .55; cursor: default; background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.metodi { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.metodo { border: 1px solid var(--linea); border-radius: 12px; padding: 12px 8px; background: var(--superficie); color: inherit; font: 600 1rem var(--corpo); cursor: pointer; }
+.metodo.attivo { border-color: var(--primario); background: var(--primario); color: var(--su-primario); }
+.resto { color: var(--ok); font-size: 1.1rem; }
+.pagamento-registra { padding: 12px; font-size: 1.05rem; }
+.pagamenti-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pagamenti-lista li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; border-bottom: 1px solid var(--linea); padding: 6px 0; }
+.pagamenti-lista li > span:first-child { flex: 1; min-width: 160px; }
+.pagamenti-lista .pagamento-in_attesa { background: color-mix(in srgb, var(--accento) 18%, transparent); border-radius: 8px; padding: 8px; }
+.pagamenti-lista .pagamento-rifiutato { opacity: .6; text-decoration: line-through; }
+.esito-pos input { width: 140px; }
+.pagamento-piede { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; border-top: 1px solid var(--linea); padding-top: 12px; }
+.pagamento-fatto { display: grid; gap: 10px; text-align: center; }
+.pagamento-fatto .pagamenti-lista { text-align: left; }
+.btn-chiudi-tavolo { padding: 12px; font-size: 1.05rem; }
+
+/* Fatture */
+.campi-fattura { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.campi-fattura label, .campo-largo { display: grid; gap: 3px; font-size: .85rem; font-weight: 600; }
+.campi-fattura input, .campi-fattura select { font-weight: 400; }
+.campi-fattura-azioni { grid-column: 1 / -1; }
+.nuova-fattura { gap: 12px; }
+.righe-fattura { display: grid; gap: 6px; }
+.tabella th.n, .tabella td.n { text-align: right; white-space: nowrap; }
+.tabella tfoot td { font-weight: 600; border-bottom: 0; }
+@media (max-width: 640px) { .tabella { display: block; overflow-x: auto; } }

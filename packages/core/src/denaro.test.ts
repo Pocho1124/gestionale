@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centesimi, daEuro, formatta, moltiplica, scorporaIva, somma, variaPercentuale } from "./denaro";
+import { centesimi, daEuro, dividiAllaRomana, formatta, moltiplica, resto, scorporaIva, somma, variaPercentuale } from "./denaro";
 
 describe("daEuro", () => {
   it("accetta virgola e punto", () => {
@@ -50,5 +50,25 @@ describe("variaPercentuale", () => {
   it("non scende sotto zero e rifiuta -100%", () => {
     expect(variaPercentuale(centesimi(100), -99)).toBe(0);
     expect(() => variaPercentuale(centesimi(100), -100)).toThrow();
+  });
+});
+
+describe("dividiAllaRomana", () => {
+  it("divide 10,00 € in 3 quote che tornano al centesimo", () => {
+    expect(dividiAllaRomana(centesimi(1000), 3)).toEqual([334, 333, 333]);
+  });
+  it("divide in parti esatte quando può", () => {
+    expect(dividiAllaRomana(centesimi(2700), 4)).toEqual([675, 675, 675, 675]);
+  });
+  it("rifiuta zero quote e totali negativi", () => {
+    expect(() => dividiAllaRomana(centesimi(1000), 0)).toThrow();
+    expect(() => dividiAllaRomana(centesimi(-1), 2)).toThrow();
+  });
+});
+
+describe("resto", () => {
+  it("calcola il resto e rifiuta il contante insufficiente", () => {
+    expect(resto(centesimi(1350), centesimi(2000))).toBe(650);
+    expect(() => resto(centesimi(1350), centesimi(1000))).toThrow();
   });
 });

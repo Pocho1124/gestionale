@@ -54,3 +54,20 @@ export function variaPercentuale(c: Centesimi, percento: number, passo = 10): Ce
   const nuovo = Math.round((c * (1 + percento / 100)) / passo) * passo;
   return centesimi(Math.max(0, nuovo));
 }
+
+/**
+ * Divisione «alla romana»: il totale in N quote uguali; i centesimi che avanzano vanno alle prime quote,
+ * così la somma torna sempre al centesimo (es. 10,00 € in 3 → 3,34 + 3,33 + 3,33).
+ */
+export function dividiAllaRomana(totale: Centesimi, parti: number): Centesimi[] {
+  if (!Number.isInteger(parti) || parti < 1 || parti > 60) throw new RangeError(`Numero di quote non valido: ${parti}`);
+  if (totale < 0) throw new RangeError("Il totale non può essere negativo");
+  const base = Math.floor(totale / parti), avanzo = totale - base * parti;
+  return Array.from({ length: parti }, (_, i) => centesimi(base + (i < avanzo ? 1 : 0)));
+}
+
+/** Resto in contanti: ricevuto meno importo; errore se il contante non basta. */
+export function resto(importo: Centesimi, ricevuto: Centesimi): Centesimi {
+  if (ricevuto < importo) throw new RangeError("Il contante ricevuto è inferiore all'importo");
+  return centesimi(ricevuto - importo);
+}

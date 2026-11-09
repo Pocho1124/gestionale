@@ -81,9 +81,9 @@ migrazioni + test pgTAP su `supabase/postgres`, poi immagine `ghcr.io/pocho1124/
 
 ```
 apps/web/            Backoffice React + Vite (TypeScript), anche menu interno /m/<slug> e pagina tavolo /t/<token>
-  src/pagine/        Sala, Catalogo, Aspetto, Magazzino, Cassa, Impostazioni, Enciclopedia (voce «Vini»), MenuPubblico, OrdinaTavolo, Accesso
+  src/pagine/        Sala, Catalogo, Aspetto, Magazzino, Cassa, Fatture, Impostazioni, Enciclopedia (voce «Vini»), MenuPubblico, OrdinaTavolo, Accesso
   src/componenti/    MenuVista (menu), SchedaPiatto, TrovaVino (quiz), MappaRegioni, ServizioSala, Componi, ...
-  src/lib/           supabase, sessione, permessi, tipi, immagini (+worker), archivio, regioni.ts, mappaItalia.ts
+  src/lib/           supabase, sessione, permessi, tipi, immagini (+worker), archivio, regioni.ts, mappaItalia.ts, conto (preconto), fatture (XML FatturaPA, copia di cortesia)
 apps/bot/            Servizi Node 22 senza dipendenze esterne
   bot.mjs            bot Telegram (@Enotechiabot)
   pubblicatore.mjs   genera la pagina statica del menu e la pubblica su Cloudflare
@@ -95,9 +95,9 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   migra-immagini.mjs migrazione immagini base64 → Storage
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
-packages/core/       logica di dominio condivisa (denaro, con test vitest)
-supabase/migrations/ 24 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (260 test)
+packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
+supabase/migrations/ 25 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (288 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -124,6 +124,7 @@ deploy/pi/           installer per il server
 |`descrizioni\_vini`|acidità, gradazione, profilo aromatico dei vitigni principali|
 |`nome\_cliente`|`impostazioni\_tavolo` (personalizzazioni della pagina QR, capacità `impostazioni`), `nomi\_clienti` (nome facoltativo/obbligatorio all'apertura: senza audit, solo sala, cancellato a chiusura/rifiuto/scadenza), `richiedi\_tavolo(…, p\_nome)`|
 |`aggiunte`|aggiunte del locale (nome, prezzo, disponibile) attive sulle categorie scelte (`aggiunte\_categorie`); `prezzo\_riga()` le accetta nelle `opzioni` della riga (max 10, gruppo «Aggiunte», nome con «+ »); `menu\_pubblico` le espone per categoria|
+|`pagamenti\_fatture`|`pagamenti` (parti del conto: contanti con resto, carta via POS `in\_attesa` → `esito\_pos`, altro; importo o % calcolati dal DB), `sconto\_cent` sul conto, `terminali\_pos`, `chiudi\_tavolo` solo a conto saldato al centesimo, `resoconto\_cassa` per metodo e sconti; `dati\_fiscali`, `fatture` immutabili numerate per anno (`emetti\_fattura`: scorporo IVA per riga, sconto ripartito per aliquota), solo capacità `cassa`|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -169,12 +170,12 @@ strutturato, Campania, vitigno …», «descrivi / riscrivi le descrizioni dei v
 ### Backoffice
 
 `http://192.168.111.183` – Sala (servizio con cruscotto e modalità monitor, piantina, cartoncini QR), Catalogo (anche componibili e aggiunte), Aspetto,
-Vini (enciclopedia), Magazzino, Cassa (solo titolare), Impostazioni (personale, reparti/stampanti, bot).
+Vini (enciclopedia), Magazzino, Cassa e Fatture (solo titolare), Impostazioni (personale, reparti/stampanti, bot).
 
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 260 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 288 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite). **Core**: `vitest` in `packages/core`.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
 jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
@@ -196,6 +197,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_T
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
 6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; report incassi avanzati; menu multilingua.
 7. Test automatici del servizio di stampa (`stampa.mjs`).
+8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.
 
 ## Note pratiche
 

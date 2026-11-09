@@ -13,6 +13,7 @@ import { Impostazioni } from "./pagine/Impostazioni";
 import { Magazzino } from "./pagine/Magazzino";
 import { Cassa } from "./pagine/Cassa";
 import { Enciclopedia } from "./pagine/Enciclopedia";
+import { Fatture } from "./pagine/Fatture";
 
 function AreaRiservata() {
   const { pronta, sessione, locale, puoModificare } = useSessione();
@@ -29,6 +30,7 @@ function AreaRiservata() {
         <Route path="/magazzino" element={<Magazzino />} />
         <Route path="/cassa" element={<Cassa />} />
         <Route path="/enciclopedia" element={<Enciclopedia />} />
+        <Route path="/fatture" element={<Fatture />} />
         {puoModificare && <Route path="/aspetto" element={<Aspetto />} />}
         <Route path="*" element={<Navigate to="/catalogo" replace />} />
       </Route>

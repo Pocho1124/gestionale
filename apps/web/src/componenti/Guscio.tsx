@@ -51,6 +51,7 @@ export function Guscio() {
           {puo(ruolo, "catalogo") && <NavLink to="/enciclopedia">Vini</NavLink>}
           {puo(ruolo, "magazzino") && <NavLink to="/magazzino">Magazzino</NavLink>}
           {puo(ruolo, "cassa") && <NavLink to="/cassa">Cassa</NavLink>}
+          {puo(ruolo, "cassa") && <NavLink to="/fatture">Fatture</NavLink>}
           {puo(ruolo, "utenti") && <NavLink to="/impostazioni">Impostazioni</NavLink>}
           <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>
         </nav>

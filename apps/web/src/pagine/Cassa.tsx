@@ -8,11 +8,12 @@ import { puo } from "../lib/permessi";
 
 interface Resoconto {
   numero?: number; dal: string | null; al: string; conti: number; coperti: number; totale_cent: number;
-  per_pagamento: Record<string, number>; per_reparto: { reparto: string; totale_cent: number }[];
+  per_pagamento: Record<string, number>; sconti_cent?: number; per_reparto: { reparto: string; totale_cent: number }[];
   piu_venduti: { nome: string; quantita: number; totale_cent: number }[]; annullati: { ordini: number; totale_cent: number }; tavoli_aperti: number;
 }
 interface Chiusura { id: string; numero: number; dal: string; al: string; riepilogo: Resoconto }
 const euro = (c: number) => formatta(centesimi(c ?? 0));
+const METODI: Record<string, string> = { contanti: "Contanti", carta: "Carta / POS", altro: "Altro", misto: "Misto (conti precedenti)", "non indicato": "Non indicato" };
 const data = (iso: string | null) => (iso ? new Date(iso).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "inizio attività");
 
 /** Resoconto delle vendite e chiusura di cassa: solo amministratore. Documento gestionale, non fiscale. */
@@ -82,7 +83,8 @@ function VistaResoconto({ r }: { r: Resoconto }) {
         <span className="muto">{r.conti} conti · {r.coperti} coperti · scontrino medio {euro(r.conti ? Math.round(r.totale_cent / r.conti) : 0)}</span></div>
       <section className="gruppo"><legend>Per pagamento</legend>
         {Object.entries(r.per_pagamento).length === 0 ? <p className="muto">Nessun incasso.</p> :
-          Object.entries(r.per_pagamento).map(([k, v]) => <p key={k} className="riga-cassa"><span>{k}</span><b>{euro(v)}</b></p>)}</section>
+          Object.entries(r.per_pagamento).map(([k, v]) => <p key={k} className="riga-cassa"><span>{METODI[k] ?? k}</span><b>{euro(v)}</b></p>)}
+        {(r.sconti_cent ?? 0) > 0 && <p className="riga-cassa muto"><span>Sconti concessi</span><b>{euro(r.sconti_cent!)}</b></p>}</section>
       <section className="gruppo"><legend>Per reparto</legend>
         {r.per_reparto.map((x) => <p key={x.reparto} className="riga-cassa"><span>{x.reparto}</span><b>{euro(x.totale_cent)}</b></p>)}</section>
       <section className="gruppo"><legend>Più venduti</legend>
@@ -106,7 +108,8 @@ function stampaResoconto(r: Resoconto, localeNome: string) {
   const riga = (a: string, b: string) => { const p = el("p"); p.append(el("span", a), el("b", b)); return p; };
   d.body.append(el("h1", localeNome), el("p", r.numero ? `Chiusura di cassa n. ${r.numero}` : "Resoconto (cassa non chiusa)"), el("p", `${data(r.dal)} → ${data(r.al)}`), el("hr"),
     riga("Conti", String(r.conti)), riga("Coperti", String(r.coperti)), riga("TOTALE", euro(r.totale_cent)), el("hr"),
-    ...Object.entries(r.per_pagamento).map(([k, v]) => riga(k, euro(v))), el("hr"),
+    ...Object.entries(r.per_pagamento).map(([k, v]) => riga(METODI[k] ?? k, euro(v))),
+    ...((r.sconti_cent ?? 0) > 0 ? [riga("Sconti concessi", euro(r.sconti_cent!))] : []), el("hr"),
     ...r.per_reparto.map((x) => riga(x.reparto, euro(x.totale_cent))), el("hr"),
     riga(`Annullati (${r.annullati.ordini})`, euro(r.annullati.totale_cent)), el("hr"),
     el("p", "Documento gestionale non fiscale"));

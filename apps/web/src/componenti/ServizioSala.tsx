@@ -8,6 +8,7 @@ import { useSessione } from "../lib/sessione";
 import { puo } from "../lib/permessi";
 import type { GruppoScelte, Scelta } from "../lib/tipi";
 import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from "./Componi";
+import { Pagamento } from "./Pagamento";
 
 export interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: { nome: string }[] }
 export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string; stato: string; origine: string; nota: string; motivo: string; creato_at: string; righe_ordine: RigaOrdine[] }
@@ -122,6 +123,15 @@ export function CodaRichieste(props: {
   );
 }
 
+/** Conti di cui è già stato stampato il preconto (in questa scheda del browser): compare «Chiudi tavolo». */
+const CHIAVE_PRECONTI = "gestionale.preconti";
+const precontiStampati = (): string[] => { try { return JSON.parse(sessionStorage.getItem(CHIAVE_PRECONTI) ?? "[]") as string[]; } catch { return []; } };
+function segnaPreconto(sessione: string): string[] {
+  const lista = [...new Set([...precontiStampati(), sessione])].slice(-50);
+  try { sessionStorage.setItem(CHIAVE_PRECONTI, JSON.stringify(lista)); } catch { /* memoria non disponibile */ }
+  return lista;
+}
+
 /** Pannello del tavolo selezionato: apertura/chiusura, codice, ordini della sessione, aggiunta di una comanda. */
 export function PannelloTavolo(props: {
   tavolo: TavoloBreve | null; sessione?: SessioneBreve; ordini: OrdineSala[]; prodotti: ProdottoBreve[]; categorie: CategoriaBreve[];
@@ -130,7 +140,8 @@ export function PannelloTavolo(props: {
   const avvisa = useAvviso();
   const { locale, ruolo } = useSessione();
   const { tavolo, sessione } = props;
-  const [pagamento, setPagamento] = useState<"contanti" | "carta" | "misto" | "altro" | null>(null);
+  const [cassa, setCassa] = useState<string | null>(null);   // sessione del conto aperto nel popup
+  const [preconti, setPreconti] = useState<string[]>(precontiStampati);
   const [coperti, setCoperti] = useState(2);
   const [attesa, setAttesa] = useState(false);
   const [aggiunta, setAggiunta] = useState<Record<string, { prodotto: ProdottoBreve; scelte: Scelta[]; q: number }> | null>(null);
@@ -265,30 +276,17 @@ export function PannelloTavolo(props: {
 
           <button className="btn" onClick={async () => {
             const errore = await stampaConto(sessione.id, locale?.nome ?? "");
-            if (errore) avvisa(errore, "errore");
-          }}>🖨️ Stampa conto</button>
+            if (errore) { avvisa(errore, "errore"); return; }
+            setPreconti(segnaPreconto(sessione.id));
+          }}>🖨️ Stampa preconto</button>
           {puo(ruolo, "sala.chiudi") ? (
-            pagamento === null ? (
-              <button className="btn btn-pericolo" disabled={attesa} onClick={() => setPagamento("contanti")}>Incassa e chiudi · {euro(conto)}</button>
-            ) : (
-              <div className="aggiungi-comanda">
-                <strong>Pagamento di {euro(conto)}</strong>
-                <div className="scelte">
-                  {(["contanti", "carta", "misto", "altro"] as const).map((m) => (
-                    <button key={m} className={`chip${pagamento === m ? " attivo" : ""}`} onClick={() => setPagamento(m)}>{m[0]!.toUpperCase() + m.slice(1)}</button>
-                  ))}
-                </div>
-                <div className="riga-form">
-                  <button className="btn" onClick={() => setPagamento(null)}>Annulla</button>
-                  <button className="btn btn-pericolo" disabled={attesa} onClick={async () => {
-                    if (await esegui(() => sb().rpc("chiudi_tavolo", { p_tavolo: tavolo.id, p_pagamento: pagamento }), `Tavolo ${tavolo.nome} chiuso · ${pagamento}`)) setPagamento(null);
-                  }}>Conferma e chiudi tavolo</button>
-                </div>
-              </div>
-            )
+            preconti.includes(sessione.id) ? (
+              <button className="btn btn-pericolo btn-chiudi-tavolo" disabled={attesa} onClick={() => setCassa(sessione.id)}>💶 Chiudi tavolo · {euro(conto)}</button>
+            ) : <button className="btn btn-testo piccolo" onClick={() => setCassa(sessione.id)}>Incassa senza preconto</button>
           ) : <p className="muto piccolo">Per incassare e chiudere il tavolo chiama il caposala.</p>}
         </>
       )}
+      {cassa && <Pagamento sessioneId={cassa} tavolo={tavolo} onChiudi={() => setCassa(null)} onFatto={props.onFatto} />}
     </div>
   );
 }

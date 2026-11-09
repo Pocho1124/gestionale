@@ -23,7 +23,7 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
   const finestra = window.open("", "_blank", "width=420,height=640");
   if (!finestra) return "Il browser ha bloccato la finestra di stampa: consenti i popup per questo indirizzo.";
   const [s, o] = await Promise.all([
-    sb().from("sessioni_tavolo").select("coperti, aperta_at, tavoli(nome)").eq("id", sessioneId).single(),
+    sb().from("sessioni_tavolo").select("coperti, aperta_at, sconto_cent, tavoli(nome)").eq("id", sessioneId).single(),
     sb().from("ordini").select("stato, righe_ordine(nome, quantita, prezzo_cent, opzioni)").eq("sessione_id", sessioneId).neq("stato", "rifiutato"),
   ]);
   if (s.error || o.error) { finestra.close(); return (s.error ?? o.error)!.message; }
@@ -40,7 +40,8 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
   }
   const lista = [...righe.values()];
   const totale = lista.reduce((n, r) => n + r.quantita * r.prezzo_cent, 0);
-  const sess = s.data as unknown as { coperti: number; tavoli: { nome: string } | null };
+  const sess = s.data as unknown as { coperti: number; sconto_cent?: number; tavoli: { nome: string } | null };
+  const sconto = Math.min(Number(sess.sconto_cent ?? 0), totale);
   const tavolo = String(sess.tavoli?.nome ?? "");
 
   const d = finestra.document;
@@ -64,8 +65,14 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
     tabella.append(tr);
   }
   const separatore = el("tr"); const cella = el("td"); cella.colSpan = 2; cella.append(el("div", undefined, "linea")); separatore.append(cella);
-  const tot = el("tr", undefined, "tot"); tot.append(el("td", "TOTALE"), el("td", euro(totale), "n"));
-  tabella.append(separatore, tot);
+  tabella.append(separatore);
+  if (sconto > 0) {
+    const sub = el("tr"); sub.append(el("td", "Subtotale"), el("td", euro(totale), "n"));
+    const sc = el("tr"); sc.append(el("td", "Sconto"), el("td", `− ${euro(sconto)}`, "n"));
+    tabella.append(sub, sc);
+  }
+  const tot = el("tr", undefined, "tot"); tot.append(el("td", "TOTALE"), el("td", euro(totale - sconto), "n"));
+  tabella.append(tot);
 
   d.body.append(
     el("h1", localeNome),
