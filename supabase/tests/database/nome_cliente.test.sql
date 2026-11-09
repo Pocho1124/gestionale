@@ -64,9 +64,9 @@ set local role anon; select pg_temp.anonimo();
 select is(public.tavolo_cliente('token-tavolo-sette-nome') ->> 'nome_obbligatorio', 'true', 'La pagina del tavolo sa che il nome è obbligatorio');
 select is(public.richiedi_tavolo('token-tavolo-sette-nome', 'telefono-due-00000000002', pg_temp.righe(), '', '   ') ->> 'errore',
           'Scrivi il tuo nome per chiedere l''apertura del tavolo', 'Senza nome la richiesta non parte');
-select like(public.richiedi_tavolo('token-tavolo-sette-nome', 'telefono-due-00000000002', pg_temp.righe(), '', '<script>x</script>') ->> 'errore',
+select alike(public.richiedi_tavolo('token-tavolo-sette-nome', 'telefono-due-00000000002', pg_temp.righe(), '', '<script>x</script>') ->> 'errore',
             'Nome non valido%', 'Caratteri non ammessi rifiutati');
-select like(public.richiedi_tavolo('token-tavolo-sette-nome', 'telefono-due-00000000002', pg_temp.righe(), '', repeat('a', 41)) ->> 'errore',
+select alike(public.richiedi_tavolo('token-tavolo-sette-nome', 'telefono-due-00000000002', pg_temp.righe(), '', repeat('a', 41)) ->> 'errore',
             'Nome non valido%', 'Nome oltre 40 caratteri rifiutato');
 insert into ctx select 'anna', public.richiedi_tavolo('token-tavolo-sette-nome', 'telefono-due-00000000002', pg_temp.righe(), '', '  Anna   D''Esempio ') ->> 'richiesta';
 select ok(pg_temp.id('anna') is not null, 'Con un nome valido la richiesta parte');
