@@ -73,7 +73,7 @@ export function EditorComposizione({ prodotto }: { prodotto: { id: string; local
             <label>Voci <select value={g.da_aggiunte ?? ""} aria-label={`Da dove vengono le voci di ${g.nome}`}
               onChange={(e) => void esito(sb().from("gruppi_opzioni").update({ da_aggiunte: e.target.value || null }).eq("id", g.id),
                 e.target.value ? `«${g.nome}»: collegato alle aggiunte «${e.target.value}»` : `«${g.nome}»: voci scritte qui`)}>
-              <option value="">scritte qui sotto</option>
+              <option value="">scritte qui sotto (se vuoto: aggiunte con lo stesso nome)</option>
               {[...new Set([...gruppiAggiunte, ...(g.da_aggiunte ? [g.da_aggiunte] : [])])].map((n) => <option key={n} value={n}>dalle aggiunte «{n}»</option>)}
             </select></label>
             <button className="btn btn-pericolo btn-piccolo" onClick={() => { if (confirm(`Eliminare il gruppo «${g.nome}» e le sue voci?`)) void esito(sb().from("gruppi_opzioni").delete().eq("id", g.id), "Gruppo eliminato"); }}>Elimina gruppo</button>
@@ -89,12 +89,14 @@ export function EditorComposizione({ prodotto }: { prodotto: { id: string; local
               <button className="btn btn-pericolo btn-piccolo" onClick={() => void esito(sb().from("opzioni").delete().eq("id", o.id), "Voce eliminata")}>Togli</button>
             </div>
           ))}
-          {g.da_aggiunte && (
-            <p className="muto piccolo">{collegate(g.da_aggiunte).length
-              ? `Dalle aggiunte «${g.da_aggiunte}» (comprese nel prezzo): ${collegate(g.da_aggiunte).join(", ")}`
-              : `⚠️ Nessuna aggiunta disponibile nel gruppo «${g.da_aggiunte}»: assegnala in «＋ Aggiunte» qui sopra (e attivala su questa categoria).`}</p>
-          )}
-          {!g.da_aggiunte && g.opzioni.length === 0 && g.min_scelte > 0 && <p className="muto piccolo">⚠️ Nessuna voce: senza voci il piatto non si può ordinare.</p>}
+          {(() => {
+            // Collegamento esplicito, oppure automatico se il gruppo non ha voci proprie (stessa regola del database)
+            const fonte = g.da_aggiunte ?? (g.opzioni.length === 0 ? g.nome : null);
+            if (!fonte) return null;
+            const nomi = collegate(fonte);
+            if (nomi.length) return <p className="muto piccolo">{g.da_aggiunte ? "Dalle" : "In automatico dalle"} aggiunte «{fonte.trim()}» (comprese nel prezzo): {nomi.join(", ")}</p>;
+            return g.min_scelte > 0 ? <p className="muto piccolo">⚠️ Nessuna voce: scrivile qui sotto oppure assegna il gruppo «{fonte.trim()}» alle aggiunte in «＋ Aggiunte» (attive su questa categoria).</p> : null;
+          })()}
           <NuovaVoce onAggiungi={(nomi, cent) => esito(sb().from("opzioni").insert(nomi.map((nome, i) =>
             ({ locale_id: prodotto.locale_id, gruppo_id: g.id, nome, sovrapprezzo_cent: cent, posizione: g.opzioni.length + i }))),
             nomi.length > 1 ? `${nomi.length} voci aggiunte` : "Voce aggiunta")} />

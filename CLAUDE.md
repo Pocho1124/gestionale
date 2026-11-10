@@ -100,8 +100,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 39 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (387 test)
+supabase/migrations/ 40 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (392 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -143,6 +143,7 @@ deploy/pi/           installer per il server
 |`menu\_spagnolo`|`nome\_es`, `descrizione\_es`, `note\_es` e `traduzione\_es\_da` (stato a parte) su categorie, prodotti e vini, esposti da `menu\_pubblico` (pagina `<slug>/es/`)|
 |`aggiunte\_gruppo`|`gruppo` sulle aggiunte (es. Salumi, Formaggi): nella scelta al tavolo e dal tablet «Aggiunte · Salumi», «Aggiunte · Formaggi»; esposto da `menu\_pubblico`|
 |`scelte\_da\_aggiunte`|gruppo del piatto collegato a un gruppo di aggiunte (`gruppi\_opzioni.da\_aggiunte`, es. tagliere «Salumi»): voci lette sempre dalle aggiunte, comprese nel prezzo, id «gruppo:aggiunta»; `prezzo\_riga()` le controlla (gruppo, disponibilità, categoria, numero di scelte)|
+|`collegamento\_automatico`|`gruppo\_aggiunte\_collegato()`: un gruppo senza voci proprie che si chiama come un gruppo di aggiunte le usa da solo (es. «Salumi»); il collegamento esplicito vale sempre|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -193,7 +194,7 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 387 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 392 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
   **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 14 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
