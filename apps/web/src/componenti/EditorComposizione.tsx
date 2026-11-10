@@ -34,8 +34,15 @@ export function EditorComposizione({ prodotto }: { prodotto: { id: string; local
   return (
     <fieldset className="chip-gruppo vino-gruppo">
       <legend>Componibile (es. tagliere personalizzato)</legend>
-      <p className="muto piccolo">Il cliente sceglie le voci di ogni gruppo; il prezzo è quello del piatto ({formatta(centesimi(prodotto.prezzo_cent))},
-        anche 0) più le voci scelte. Esempio: gruppo «Salumi» da 1 a 3, gruppo «Formaggi» da 0 a 3.</p>
+      <p className="muto piccolo">Il cliente sceglie le voci di ogni gruppo. Prezzo fisso: quello del piatto ({formatta(centesimi(prodotto.prezzo_cent))});
+        cambia solo con le aggiunte del locale o con un supplemento messo su una voce (es. tartufo +3 €). Le voci si possono incollare
+        tutte insieme, separate da virgola.</p>
+      {gruppi.length === 0 && (
+        <button type="button" className="btn btn-piccolo" onClick={() => void esito(sb().from("gruppi_opzioni").insert([
+          { locale_id: prodotto.locale_id, prodotto_id: prodotto.id, nome: "Salumi", min_scelte: 3, max_scelte: 3, posizione: 0 },
+          { locale_id: prodotto.locale_id, prodotto_id: prodotto.id, nome: "Formaggi", min_scelte: 3, max_scelte: 3, posizione: 1 },
+        ]), "Tagliere pronto: aggiungi salumi e formaggi")}>🧀 Tagliere: scegli 3 salumi e 3 formaggi</button>
+      )}
       {gruppi.map((g) => (
         <div key={g.id} className="gruppo-composizione">
           <div className="riga-form">
@@ -59,7 +66,9 @@ export function EditorComposizione({ prodotto }: { prodotto: { id: string; local
               <button className="btn btn-pericolo btn-piccolo" onClick={() => void esito(sb().from("opzioni").delete().eq("id", o.id), "Voce eliminata")}>Togli</button>
             </div>
           ))}
-          <NuovaVoce onAggiungi={(nome, cent) => esito(sb().from("opzioni").insert({ locale_id: prodotto.locale_id, gruppo_id: g.id, nome, sovrapprezzo_cent: cent, posizione: g.opzioni.length }), "Voce aggiunta")} />
+          <NuovaVoce onAggiungi={(nomi, cent) => esito(sb().from("opzioni").insert(nomi.map((nome, i) =>
+            ({ locale_id: prodotto.locale_id, gruppo_id: g.id, nome, sovrapprezzo_cent: cent, posizione: g.opzioni.length + i }))),
+            nomi.length > 1 ? `${nomi.length} voci aggiunte` : "Voce aggiunta")} />
         </div>
       ))}
       <form className="riga-form" onSubmit={(e) => {
@@ -74,7 +83,8 @@ export function EditorComposizione({ prodotto }: { prodotto: { id: string; local
   );
 }
 
-function NuovaVoce({ onAggiungi }: { onAggiungi: (nome: string, cent: number) => Promise<void> }) {
+/** Una o più voci («Crudo, Speck, Salame»), con un supplemento facoltativo uguale per tutte (vuoto = compreso nel prezzo). */
+function NuovaVoce({ onAggiungi }: { onAggiungi: (nomi: string[], cent: number) => Promise<void> }) {
   const [nome, setNome] = useState("");
   const [prezzo, setPrezzo] = useState("");
   return (
@@ -82,11 +92,13 @@ function NuovaVoce({ onAggiungi }: { onAggiungi: (nome: string, cent: number) =>
       e.preventDefault();
       let cent = 0;
       try { cent = prezzo.trim() ? daEuro(prezzo) : 0; } catch { return; }
-      void onAggiungi(nome.trim(), cent).then(() => { setNome(""); setPrezzo(""); });
+      const nomi = [...new Set(nome.split(/[,;\n]/).map((x) => x.trim().slice(0, 80)).filter(Boolean))].slice(0, 30);
+      if (nomi.length) void onAggiungi(nomi, cent).then(() => { setNome(""); setPrezzo(""); });
     }}>
-      <input placeholder="Nuova voce (es. Prosciutto crudo)" maxLength={80} value={nome} onChange={(e) => setNome(e.target.value)} required />
-      <input placeholder="€ (es. 3,50)" inputMode="decimal" style={{ width: 100 }} value={prezzo} onChange={(e) => setPrezzo(e.target.value)} />
-      <button className="btn btn-piccolo">+ Voce</button>
+      <input placeholder="Voci (es. Prosciutto crudo, Speck, Salame)" maxLength={1000} value={nome} onChange={(e) => setNome(e.target.value)} required />
+      <input placeholder="Supplemento € (facoltativo)" title="Vuoto = compreso nel prezzo del piatto" inputMode="decimal" style={{ width: 170 }}
+        value={prezzo} onChange={(e) => setPrezzo(e.target.value)} />
+      <button className="btn btn-piccolo">+ Aggiungi</button>
     </form>
   );
 }
