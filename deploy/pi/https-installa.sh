@@ -234,9 +234,9 @@ $(if [ -n "$DOMINIO" ]; then printf '\nhttps://%s {\n\ttls /certificati/%s.crt /
 				import sito_gestionale
 			}
 		}
-		# Tutto il resto (backoffice, accesso, dati) solo in HTTPS
+		# Tutto il resto (backoffice, accesso, dati) solo in HTTPS; con il dominio si va sempre al nome con il certificato valido
 		handle {
-			redir https://{host}{uri} permanent
+			redir https://$(if [ -n "$DOMINIO" ]; then printf '%s' "$DOMINIO"; else printf '{host}'; fi){uri} permanent
 		}
 	}
 }
