@@ -12,20 +12,27 @@ import { Cartoncini } from "../componenti/Cartoncini";
 import { type Elemento, type Sala, type Selezione, type SessioneT, type Tavolo } from "../lib/piantina";
 
 /** Prodotto letto dal database con gruppi e voci, nel formato usato dalla composizione. */
-type GrezzoProdotto = Omit<ProdottoBreve, "gruppi" | "aggiunte"> & { gruppi_opzioni: { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number;
+type GrezzoProdotto = Omit<ProdottoBreve, "gruppi" | "aggiunte"> & { gruppi_opzioni: { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number; da_aggiunte?: string | null;
   opzioni: { id: string; nome: string; sovrapprezzo_cent: number; disponibile: boolean; posizione: number }[] }[] };
 /** Aggiunte del locale con le categorie su cui sono attive (nessuna categoria = tutte). */
 interface GrezzaAggiunta { id: string; nome: string; gruppo?: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
-const daGrezzo = (aggiunte: GrezzaAggiunta[]) => ({ gruppi_opzioni, ...p }: GrezzoProdotto): ProdottoBreve => ({
+const daGrezzo = (aggiunte: GrezzaAggiunta[]) => ({ gruppi_opzioni, ...p }: GrezzoProdotto): ProdottoBreve => {
+  const valide = aggiunte.filter((a) => a.disponibile && (!a.aggiunte_categorie.length || a.aggiunte_categorie.some((c) => c.categoria_id === p.categoria_id)))
+    .sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome));
+  // Gruppo collegato alle aggiunte (es. tagliere «Salumi»): le aggiunte del gruppo, comprese, con id «gruppo:aggiunta» come nel database
+  const collegate = (g: { id: string; da_aggiunte?: string | null }) => !g.da_aggiunte ? [] : valide
+    .filter((a) => (a.gruppo ?? "").trim().toLowerCase() === g.da_aggiunte!.trim().toLowerCase())
+    .map((a) => ({ id: `${g.id}:${a.id}`, nome: a.nome, sovrapprezzo_cent: 0 }));
+  return {
   ...p,
-  aggiunte: aggiunte.filter((a) => a.disponibile && (!a.aggiunte_categorie.length || a.aggiunte_categorie.some((c) => c.categoria_id === p.categoria_id)))
-    .sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome)).map((a) => ({ id: a.id, nome: a.nome, sovrapprezzo_cent: a.prezzo_cent })),
+  aggiunte: valide.map((a) => ({ id: a.id, nome: a.nome, gruppo: a.gruppo, sovrapprezzo_cent: a.prezzo_cent })),
   gruppi: [...(gruppi_opzioni ?? [])].sort((a, b) => a.posizione - b.posizione).map((g) => ({
     id: g.id, nome: g.nome, min: g.min_scelte, max: g.max_scelte,
     scelte: g.opzioni.filter((o) => o.disponibile).sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome))
-      .map((o) => ({ id: o.id, nome: o.nome, sovrapprezzo_cent: o.sovrapprezzo_cent })),
+      .map((o) => ({ id: o.id, nome: o.nome, sovrapprezzo_cent: o.sovrapprezzo_cent })).concat(collegate(g)),
   })),
-});
+  };
+};
 
 export function Sala() {
   const { locale, puoModificare } = useSessione();
@@ -58,7 +65,7 @@ export function Sala() {
       sb().from("ordini").select("id, tavolo_id, sessione_id, stato, origine, nota, motivo, creato_at, righe_ordine(nome, quantita, prezzo_cent, nota, opzioni)")
         .eq("locale_id", locale.id).gte("creato_at", new Date(Date.now() - 24 * 3600_000).toISOString()).order("creato_at", { ascending: false }),
       sb().from("richieste_tavolo").select("id, tavolo_id, righe, nota, creato_at, nomi_clienti(nome)").eq("locale_id", locale.id).eq("stato", "in_attesa").gte("creato_at", quindiciMinuti).order("creato_at"),
-      sb().from("prodotti").select("id, nome, prezzo_cent, disponibile, visibile, categoria_id, gruppi_opzioni(id, nome, min_scelte, max_scelte, posizione, opzioni(id, nome, sovrapprezzo_cent, disponibile, posizione))")
+      sb().from("prodotti").select("id, nome, prezzo_cent, disponibile, visibile, categoria_id, gruppi_opzioni(id, nome, min_scelte, max_scelte, posizione, da_aggiunte, opzioni(id, nome, sovrapprezzo_cent, disponibile, posizione))")
         .eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("categorie").select("id, nome").eq("locale_id", locale.id).order("posizione").order("nome"),
     ]);
