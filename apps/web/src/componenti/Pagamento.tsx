@@ -16,9 +16,12 @@ interface PagamentoConto {
 interface StatoConto {
   sessione: string; chiuso: boolean; coperti: number; lordo_cent: number; sconto_cent: number; totale_cent: number;
   pagato_cent: number; in_attesa_cent: number; residuo_cent: number; pagamenti: PagamentoConto[];
+  righe?: RigaConto[];
 }
+/** Riga del conto con i pezzi già pagati (o in attesa del POS). */
+interface RigaConto { id: string; nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni: string[]; pagate: number }
 interface Terminale { id: string; nome: string }
-type Modo = "tutto" | "romana" | "parte";
+type Modo = "tutto" | "piatti" | "romana" | "parte";
 
 const euro = (c: number) => formatta(centesimi(c));
 const NOMI_METODO: Record<Metodo, string> = { contanti: "💶 Contanti", carta: "💳 POS", altro: "🎟️ Altro" };
@@ -50,6 +53,8 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
   const [codici, setCodici] = useState<Record<string, string>>({});
   const [attesa, setAttesa] = useState(false);
   const [chiuso, setChiuso] = useState<number | null>(null);
+  const [scelti, setScelti] = useState<Record<string, number>>({});   // pezzi scelti per riga (modo «Per piatti»)
+  const [chi, setChi] = useState("");
 
   const carica = useCallback(async () => {
     const { data, error } = await sb().rpc("stato_conto", { p_sessione: props.sessioneId });
@@ -82,9 +87,17 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
     if (!conto) return 0;
     if (modo === "tutto") return Math.max(0, conto.residuo_cent);
     if (modo === "romana") return quota === null ? 0 : Math.min(quote[quota] ?? 0, conto.residuo_cent);
+    if (modo === "piatti") {
+      // Anteprima: stessa regola del database (sconto in proporzione, saldo esatto con l'ultimo pezzo)
+      const righe = conto.righe ?? [];
+      const lordo = righe.reduce((n, x) => n + Math.min(scelti[x.id] ?? 0, x.quantita - x.pagate) * x.prezzo_cent, 0);
+      if (!lordo) return 0;
+      if (righe.every((x) => x.quantita - x.pagate - (scelti[x.id] ?? 0) <= 0)) return conto.residuo_cent;
+      return Math.min(conto.lordo_cent ? Math.round((lordo * conto.totale_cent) / conto.lordo_cent) : 0, conto.residuo_cent);
+    }
     if (inPercentuale) { const p = numero(valore); return p > 0 && p <= 100 ? Math.min(Math.round((conto.totale_cent * p) / 100), conto.residuo_cent) : 0; }
     return euroOZero(valore) ?? 0;
-  }, [conto, modo, quota, quote, inPercentuale, valore]);
+  }, [conto, modo, quota, quote, inPercentuale, valore, scelti]);
   const ricevutoCent = metodo === "contanti" ? euroOZero(ricevuto) : 0;
   const restoCent = ricevutoCent && ricevutoCent >= importo ? ricevutoCent - importo : 0;
 
@@ -102,17 +115,18 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
     if (metodo === "contanti" && ricevutoCent === null) { avvisa("Contante ricevuto non valido (es. 50 o 20,50)", "errore"); return; }
     if (metodo === "contanti" && ricevutoCent && ricevutoCent < importo) { avvisa("Il contante ricevuto è inferiore all'importo", "errore"); return; }
     const percentuale = modo === "parte" && inPercentuale;
-    const etichetta = modo === "tutto" ? (conto.pagato_cent || conto.in_attesa_cent ? "Saldo" : "Unico")
+    const etichetta = modo === "piatti" ? (chi.trim() || "Piatti") : modo === "tutto" ? (conto.pagato_cent || conto.in_attesa_cent ? "Saldo" : "Unico")
       : modo === "romana" ? `Romana ${(quota ?? 0) + 1}/${parti}` : percentuale ? `${valore.trim()}%` : "Parte";
     const data = await rpc("registra_pagamento", {
       p_sessione: props.sessioneId, p_metodo: metodo,
-      p_importo_cent: percentuale ? null : importo, p_percentuale: percentuale ? numero(valore) : null,
+      p_importo_cent: percentuale || modo === "piatti" ? null : importo, p_percentuale: percentuale ? numero(valore) : null,
+      p_righe: modo === "piatti" ? Object.entries(scelti).filter(([, q]) => q > 0).map(([riga_id, quantita]) => ({ riga_id, quantita })) : null,
       p_ricevuto_cent: metodo === "contanti" && ricevutoCent ? ricevutoCent : null,
       p_quota: etichetta, p_terminale: metodo === "carta" && terminale ? terminale : null,
     });
     if (!data) return;
     const r = data as StatoConto & { resto_cent: number };
-    setConto(r); setRicevuto(""); setValore(""); setQuota(null);
+    setConto(r); setRicevuto(""); setValore(""); setQuota(null); setScelti({}); setChi("");
     avvisa(metodo === "carta" ? `Batti ${euro(importo)} sul POS e conferma l'esito` : r.resto_cent ? `Incassati ${euro(importo)} · resto ${euro(r.resto_cent)}` : `Incassati ${euro(importo)}`);
   }
 
@@ -195,9 +209,42 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
               <>
                 <div className="schede-modo" role="tablist" aria-label="Come dividere">
                   <button role="tab" aria-selected={modo === "tutto"} onClick={() => setModo("tutto")}>Tutto</button>
+                  <button role="tab" aria-selected={modo === "piatti"} onClick={() => setModo("piatti")}>Per piatti</button>
                   <button role="tab" aria-selected={modo === "romana"} onClick={() => { setModo("romana"); setQuota(null); if (parti === 2 && conto.coperti > 2) setParti(Math.min(60, conto.coperti)); }}>Alla romana</button>
                   <button role="tab" aria-selected={modo === "parte"} onClick={() => setModo("parte")}>Importo o %</button>
                 </div>
+
+                {modo === "piatti" && (
+                  <div className="pagamento-piatti">
+                    <ul className="piatti-conto">
+                      {(conto.righe ?? []).map((x) => {
+                        const restano = x.quantita - x.pagate, q = scelti[x.id] ?? 0;
+                        const imposta = (v: number) => setScelti((c) => ({ ...c, [x.id]: Math.max(0, Math.min(restano, v)) }));
+                        return (
+                          <li key={x.id} className={`${restano <= 0 ? "pagata" : ""}${q ? " scelta" : ""}`}>
+                            <button className="piatti-nome" disabled={restano <= 0} onClick={() => imposta(q < restano ? q + 1 : 0)}>
+                              <span>{x.nome}{x.opzioni.length > 0 && <span className="scelte-riga">{x.opzioni.join(", ")}</span>}</span>
+                              <span className="muto piccolo">{restano <= 0 ? "✓ pagato" : `${restano} di ${x.quantita} da pagare`} · {euro(x.prezzo_cent)} cad.</span>
+                            </button>
+                            {restano > 0 && (
+                              <span className="riga-form">
+                                <button className="btn btn-icona" disabled={!q} onClick={() => imposta(q - 1)} aria-label={`Un ${x.nome} in meno`}>−</button>
+                                <strong className="piatti-q">{q}</strong>
+                                <button className="btn btn-icona" disabled={q >= restano} onClick={() => imposta(q + 1)} aria-label={`Un ${x.nome} in più`}>+</button>
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div className="riga-form">
+                      <input maxLength={40} placeholder="Chi paga (facoltativo, es. sedia 2)" value={chi} onChange={(e) => setChi(e.target.value)} aria-label="Etichetta del pagamento" />
+                      <button className="btn btn-testo" onClick={() => setScelti(Object.fromEntries((conto.righe ?? []).map((x) => [x.id, x.quantita - x.pagate])))}>Seleziona tutto</button>
+                      {Object.values(scelti).some(Boolean) && <button className="btn btn-testo" onClick={() => setScelti({})}>Azzera</button>}
+                      {importo > 0 && <span className="muto">= {euro(importo)}{conto.sconto_cent > 0 ? " con lo sconto" : ""}</span>}
+                    </div>
+                  </div>
+                )}
 
                 {modo === "romana" && (
                   <div className="pagamento-romana">
