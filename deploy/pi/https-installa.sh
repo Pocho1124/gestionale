@@ -5,7 +5,7 @@
 #    l'indirizzo locale; rinnovo automatico ogni notte.
 #  - Senza dominio: certificato dell'autorità interna di Caddy, da installare a mano su ogni dispositivo.
 # Le pagine dei clienti (/t/ tavolo, /m/ menu interno) restano raggiungibili anche in HTTP.
-# Tutto il resto in HTTP viene reindirizzato su HTTPS.
+# Con il dominio, chi usa il nome in HTTP va in HTTPS; per indirizzo IP il backoffice resta raggiungibile in HTTP come riserva.
 # Uso:
 #   sudo docker run --rm --entrypoint cat ghcr.io/pocho1124/gestionale-migrator:latest /deploy/https-installa.sh > /tmp/https-installa.sh && sudo sh /tmp/https-installa.sh --dominio gestionale.enotechiasantalucia.it
 set -eu
@@ -149,6 +149,33 @@ services:
 $DATI
 YML
 
+# Parte finale del blocco HTTP: con il dominio rimando al nome e riserva per IP, senza dominio tutto in HTTPS
+if [ -n "$DOMINIO" ]; then
+  BLOCCO_HTTP=$(cat <<RISERVA
+		# Chi usa il nome va sempre in HTTPS con il certificato valido
+		@nome host $DOMINIO
+		handle @nome {
+			redir https://$DOMINIO{uri} permanent
+		}
+		# Per indirizzo IP il backoffice resta in HTTP, solo nella rete del locale: riserva se il router
+		# non risolve il nome (protezione «DNS rebinding»). HTTPS per IP non funziona: Caddy nel container non vede l'IP
+		handle {
+			route {
+				import api_gestionale
+				import sito_gestionale
+			}
+		}
+RISERVA
+)
+else
+  BLOCCO_HTTP=$(cat <<'SOLOHTTPS'
+		# Tutto il resto (backoffice, accesso, dati) solo in HTTPS
+		handle {
+			redir https://{host}{uri} permanent
+		}
+SOLOHTTPS
+)
+fi
 echo "== 3/5 Configurazione del gateway (HTTPS per lo staff, HTTP solo per le pagine dei clienti)"
 # La sezione del backoffice è in fondo al file ed è generata dagli installer: si riscrive per intero
 awk '/# BACKOFFICE/ { exit } { print }' "$CADDY.prima-https-$STAMP" > "$CADDY"
@@ -234,10 +261,7 @@ $(if [ -n "$DOMINIO" ]; then printf '\nhttps://%s {\n\ttls /certificati/%s.crt /
 				import sito_gestionale
 			}
 		}
-		# Tutto il resto (backoffice, accesso, dati) solo in HTTPS; con il dominio si va sempre al nome con il certificato valido
-		handle {
-			redir https://$(if [ -n "$DOMINIO" ]; then printf '%s' "$DOMINIO"; else printf '{host}'; fi){uri} permanent
-		}
+$BLOCCO_HTTP
 	}
 }
 CADDYCONF
