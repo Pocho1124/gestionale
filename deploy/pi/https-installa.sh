@@ -251,22 +251,29 @@ fi
 echo "== 4/5 Riavvio del gateway"
 (cd /opt/supabase && docker compose up -d gateway >/dev/null) || { ripristina; exit 1; }
 GW=$(cd /opt/supabase && docker compose ps -q gateway)
-log_gateway() { echo "Ultime righe del gateway:"; docker logs --tail 25 "$GW" 2>&1 | sed 's/^/   /' || true; }
+log_gateway() {
+  echo "Porte pubblicate:"; docker port "$GW" 2>&1 | sed 's/^/   /' || true
+  echo "Ultime righe del gateway:"; docker logs --tail 25 "$GW" 2>&1 | sed 's/^/   /' || true
+}
+# Con il dominio si verifica il nome (curl invia il nome del server, SNI); senza, l'indirizzo IP
+if [ -n "$DOMINIO" ]; then URL_PROVA="https://$DOMINIO/"; OPZ="--resolve $DOMINIO:443:$IP"; else URL_PROVA="https://$IP/"; OPZ="-k"; fi
 CODICE=000
 for _ in 1 2 3 4 5 6 7 8; do
   sleep 5
-  CODICE=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' "https://$IP/" || true)
+  # shellcheck disable=SC2086
+  CODICE=$(curl -s $OPZ --max-time 5 -o /dev/null -w '%{http_code}' "$URL_PROVA" || true)
   [ "$CODICE" = "200" ] && break
 done
 if [ "$(docker inspect -f '{{.State.Running}}' "$GW" 2>/dev/null)" != "true" ] || [ "$(docker inspect -f '{{.State.Restarting}}' "$GW")" = "true" ]; then
   echo "Il gateway non parte con la nuova configurazione."; log_gateway
   ripristina; exit 1
 fi
-[ "$CODICE" = "200" ] || { echo "Il backoffice in HTTPS non risponde (HTTP $CODICE)"; log_gateway; ripristina; exit 1; }
+# Con il dominio il certificato deve risultare valido (nessun -k)
+[ "$CODICE" = "200" ] || { echo "$URL_PROVA non risponde in HTTPS (HTTP $CODICE)"; log_gateway; ripristina; exit 1; }
 if [ -n "$DOMINIO" ]; then
-  # Senza -k: il certificato deve risultare valido
-  CODICE=$(curl -s --resolve "$DOMINIO:443:$IP" -o /dev/null -w '%{http_code}' "https://$DOMINIO/" || true)
-  [ "$CODICE" = "200" ] || { echo "https://$DOMINIO non risponde con un certificato valido (HTTP $CODICE)"; log_gateway; ripristina; exit 1; }
+  # L'accesso per indirizzo IP è solo di riserva: senza nome il gateway nel container può non trovare il certificato
+  CODICE_IP=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' "https://$IP/" || true)
+  [ "$CODICE_IP" = "200" ] || echo "Nota: https://$IP non risponde (HTTP $CODICE_IP); usa https://$DOMINIO"
 fi
 REDIR=$(curl -s -o /dev/null -w '%{http_code}' "http://$IP/" || true)
 
@@ -282,7 +289,10 @@ if [ -n "$DOMINIO" ]; then
   echo "Se il nome non si apre in negozio, il router blocca i nomi che puntano alla rete locale (protezione «DNS rebinding»):"
   echo "aggiungi un'eccezione per $DOMINIO nelle impostazioni DNS del router."
 fi
-echo "HTTPS attivo: https://$IP  (HTTP del backoffice -> HTTPS: risposta $REDIR)"
-echo "Certificato da installare sui dispositivi dello staff: http://$IP/certificato-locale.crt"
-echo "Impronta SHA-256 da confrontare sul dispositivo: $IMPRONTA"
+if [ -z "$DOMINIO" ]; then
+  echo "HTTPS attivo: https://$IP"
+  echo "Certificato da installare sui dispositivi dello staff: http://$IP/certificato-locale.crt"
+  echo "Impronta SHA-256 da confrontare sul dispositivo: $IMPRONTA"
+fi
+echo "HTTP del backoffice -> HTTPS: risposta $REDIR"
 echo "Le pagine dei clienti (/t/..., /m/...) restano raggiungibili anche in HTTP."
