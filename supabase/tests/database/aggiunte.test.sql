@@ -62,8 +62,8 @@ select throws_ok($$ insert into public.aggiunte_categorie (aggiunta_id, categori
 
 -- Menu: solo le aggiunte disponibili, solo dove sono attive
 select is(public.menu_pubblico('locale-aggiunte') -> 'categorie' -> 0 -> 'aggiunte',
-          '[{"id": "e5000000-0000-0000-0000-000000000001", "nome": "Mozzarella di bufala", "sovrapprezzo_cent": 200},
-            {"id": "e5000000-0000-0000-0000-000000000002", "nome": "Acciughe", "sovrapprezzo_cent": 150}]'::jsonb,
+          '[{"id": "e5000000-0000-0000-0000-000000000001", "nome": "Mozzarella di bufala", "gruppo": "", "sovrapprezzo_cent": 200},
+            {"id": "e5000000-0000-0000-0000-000000000002", "nome": "Acciughe", "gruppo": "", "sovrapprezzo_cent": 150}]'::jsonb,
           'Le Pizze mostrano le aggiunte disponibili, in ordine');
 select is(public.menu_pubblico('locale-aggiunte') -> 'categorie' -> 1 -> 'aggiunte', '[]'::jsonb, 'I Vini non hanno aggiunte');
 
