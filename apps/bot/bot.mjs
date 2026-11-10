@@ -147,7 +147,28 @@ const TUTTO = /\b(tutto|tutti|tutte|intero menu|tutto il menu)\b/;
 const maiuscola = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const pulisci = (s) => s.replace(/\s*(€|euro|eur)\s*$/i, "").replace(/\s+/g, " ").replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, "").trim();
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const RIGA_PREZZO = /^(.*?)[\s\-–—:.]*?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?\s*$/i;
+const RIGA_PREZZO = /^(.*?)[\s\-–—:.]*?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?[\s.;!]*$/i;   // anche con il punto finale
+/** Nome della voce senza la preposizione prima del prezzo («Barbera d'Asti a 12 €» → «Barbera d'Asti»). */
+const nomeVoce = (s) => maiuscola(pulisci(s).replace(/\s+(?:a|al|da|prezzo)$/i, "")).slice(0, 120);
+const VERBO_AGGIUNTA = /^(?:\S+\s+){0,3}?(aggiung\w*|inserisc\w*|inserire|metti|mettere|carica|caricare)\b/i;
+
+/** Categoria esistente nominata nel testo (nome intero, oppure singolare/plurale per i nomi di una parola). */
+function categoriaNelTesto(testo, cat) {
+  const ti = ` ${norm(testo)} `;
+  return [...cat.categorie].sort((a, b) => b.nome.length - a.nome.length).find((c) => {
+    const n = norm(c.nome);
+    return ti.includes(` ${n} `) || (!n.includes(" ") && ti.split(" ").some((w) => w.length > 3 && radice(w) === radice(n)));
+  }) ?? null;
+}
+
+/** Riga d'intestazione senza prezzo: «Rossi», «Categoria: Rossi» oppure «aggiungi alla carta dei vini». */
+function categoriaDaRiga(riga, cat) {
+  const esistente = categoriaNelTesto(riga, cat);
+  if (esistente) return esistente;
+  const nome = maiuscola(pulisci(riga.replace(/^categoria\s*:?\s*/i, "").replace(VERBO_AGGIUNTA, "")
+    .replace(/^\s*(?:in|nella|nelle|nel|nei|negli|alla|alle|al|ai|agli|tra|fra)\s+/i, ""))).slice(0, 80);
+  return nome ? { nuova: true, nome } : null;
+}
 
 /** Elenco incollato: righe «Nome - 6,50» (opzionale «| descrizione»), righe senza prezzo = categoria. */
 export function interpretaElenco(testo, cat) {
@@ -159,10 +180,9 @@ export function interpretaElenco(testo, cat) {
     const [corpo, descrizione = ""] = r.split("|").map((x) => x.trim());
     const m = corpo.match(RIGA_PREZZO);
     if (m && m[1] && /[a-zà-ü]/i.test(m[1])) {
-      voci.push({ nome: maiuscola(pulisci(m[1])).slice(0, 120), euro: numero(m[2]), descrizione: descrizione.slice(0, 500), categoria });
+      voci.push({ nome: nomeVoce(m[1]), euro: numero(m[2]), descrizione: descrizione.slice(0, 500), categoria });
     } else if (!/\d/.test(corpo)) {
-      const nome = maiuscola(pulisci(corpo.replace(/^categoria\s*:?\s*/i, ""))).slice(0, 80);
-      categoria = cat.categorie.find((c) => norm(c.nome) === norm(nome)) ?? { nuova: true, nome };
+      categoria = categoriaDaRiga(corpo, cat) ?? categoria;
     }
   }
   if (voci.length < 2) return null;
@@ -222,7 +242,6 @@ export function leggiSchedaVino(testo) {
   return campi;
 }
 
-const VERBO_AGGIUNTA = /^(?:\S+\s+){0,3}?(aggiung\w*|inserisc\w*|inserire|metti|mettere|carica|caricare)\b/i;
 const PREZZO_COMUNE = /[.;,]?\s*\b(?:tutt[ei]|ciascun[oa]|cadaun[oa]|ognun[oa]|l\W?un[oa])\b[^\n\d]{0,25}?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?[^\n]*$/im;
 const PREZZO_COMUNE_DOPO = /\s+(?:a\s+)?(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:€|euro|eur)?\s+(?:l\W?un[oa]|ciascun[oa]|cadaun[oa]|ognun[oa])\b[^\n]*$/im;
 
@@ -237,11 +256,7 @@ export function interpretaAggiuntaMultipla(testo, cat) {
   const intestazione = due > 0 ? testo.slice(0, due) : testo.split(/\r?\n/)[0];
   // Un solo prodotto con prezzo e descrizione («aggiungi X … a 34 euro descrizione: …»): non è un elenco
   if (due > 0 && (/\d/.test(intestazione) || /\bdescrizion\w*\s*$/i.test(intestazione.trim()))) return null;
-  const ti = ` ${norm(intestazione)} `;
-  const categoria = [...cat.categorie].sort((a, b) => b.nome.length - a.nome.length).find((c) => {
-    const n = norm(c.nome);
-    return ti.includes(` ${n} `) || (!n.includes(" ") && ti.split(" ").some((w) => w.length > 3 && radice(w) === radice(n)));
-  }) ?? null;
+  const categoria = categoriaNelTesto(intestazione, cat);
   // Prezzo comune («tutte a 6 €», «6 euro l'una»)
   let corpo = due > 0 ? testo.slice(due + 1) : testo;
   let comune = null;
@@ -262,7 +277,7 @@ export function interpretaAggiuntaMultipla(testo, cat) {
   for (const pz of pezzi.slice(0, 40)) {
     const m = pz.match(RIGA_PREZZO);
     const conPrezzo = m && m[1] && /[a-zà-ü]/i.test(m[1]);
-    const nome = maiuscola(pulisci((conPrezzo ? m[1] : pz).replace(/\s+a$/i, ""))).slice(0, 120);
+    const nome = nomeVoce((conPrezzo ? m[1] : pz).replace(/[\s.;!]+$/, ""));
     if (!/[a-zà-ü]/i.test(nome) || nome.length > 60 || VERBO_AGGIUNTA.test(nome)) continue;
     voci.push({ nome, euro: conPrezzo ? numero(m[2]) : null, descrizione: "", categoria });
   }

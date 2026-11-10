@@ -88,6 +88,25 @@ describe("sicurezza", () => {
 });
 
 describe("interprete a regole", () => {
+  test("elenco con le virgole «Nome – 35 €», punto finale compreso", () => {
+    const a = bot.interpretaConRegole("aggiungi ai vini rossi: Barolo – 35 €, Barbaresco – 30 €, Rosso di Montalcino – 20 €.", catalogo);
+    assert.equal(a.azione, "importa");
+    assert.deepEqual(a.voci.map((v) => [v.nome, v.euro, v.categoria.nome]),
+      [["Barolo", 35, "Vini rossi"], ["Barbaresco", 30, "Vini rossi"], ["Rosso di Montalcino", 20, "Vini rossi"]]);
+  });
+
+  test("elenco su più righe con «aggiungi ai vini rossi» in testa: categoria esistente, niente «a» nel nome", () => {
+    const a = bot.interpretaConRegole("aggiungi ai vini rossi\n\nAmarone della Valpolicella a 35€\nBarbera d'Asti a 12€\nNebbiolo d'Alba a 18€", catalogo);
+    assert.equal(a.azione, "importa");
+    assert.deepEqual(a.voci.map((v) => [v.nome, v.euro, v.categoria.id]),
+      [["Amarone della Valpolicella", 35, ROSSI.id], ["Barbera d'Asti", 12, ROSSI.id], ["Nebbiolo d'Alba", 18, ROSSI.id]]);
+  });
+
+  test("elenco con intestazione di una categoria che non c'è: nuova, senza il verbo", () => {
+    const a = bot.interpretaConRegole("aggiungi alle bollicine\nFranciacorta a 30€\nProsecco a 20€", catalogo);
+    assert.deepEqual(a.voci[0].categoria, { nuova: true, nome: "Bollicine" });
+  });
+
   test("prezzo singolo con la virgola", () => {
     const a = bot.interpretaConRegole("la margherita costa 8,50 euro", catalogo);
     assert.equal(a.azione, "imposta_prezzo");
