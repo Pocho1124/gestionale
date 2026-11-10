@@ -86,22 +86,22 @@ apps/web/            Backoffice React + Vite (TypeScript), anche menu interno /m
   src/pagine/        Sala, Cucina, Catalogo, Aspetto, Magazzino, Cassa, Fatture, Impostazioni, Enciclopedia (voce «Vini»), MenuPubblico, OrdinaTavolo, Accesso
   src/componenti/    MenuVista (menu), SchedaPiatto, TrovaVino (quiz), MappaRegioni, ServizioSala, Componi, Piantina, PannelloPiantina,
                      Cartoncini, Cruscotto, Pagamento, AggiungiOrdine, Prenotazioni, ReportIncassi, GestioneAggiunte, ...
-  src/lib/           supabase, sessione, permessi, tipi, formato (euro), stampa (finestra di stampa sicura), piantina (modello della sala), lingua/traduzioni (pagina del tavolo IT/EN), immagini (+worker), archivio, regioni.ts, mappaItalia.ts, conto (preconto), fatture (XML FatturaPA, copia di cortesia)
+  src/lib/           supabase, sessione, permessi, tipi, formato (euro), stampa (finestra di stampa sicura), piantina (modello della sala), lingua/traduzioni (menu e pagina del tavolo IT/EN/ES/DE), immagini (+worker), archivio, regioni.ts, mappaItalia.ts, conto (preconto), fatture (XML FatturaPA, copia di cortesia)
 apps/bot/            Servizi Node 22 senza dipendenze esterne
   bot.mjs            bot Telegram (@Enotechiabot)
   pubblicatore.mjs   genera la pagina statica del menu e la pubblica su Cloudflare
   stampa.mjs         comande su stampanti ESC/POS di rete
   vitigni.mjs        base di conoscenza dei vitigni (ripiego se l'enciclopedia non risponde)
   descrizioni.mjs    descrizioni dei vini composte da dati verificati
-  traduttore.mjs     menu in inglese e spagnolo tradotto dall'IA locale (ogni minuto: nomi, descrizioni, note dei vini; ogni campo controllato da solo sui numeri; nomi dei vini invariati; a mano si completano solo i campi vuoti)
+  traduttore.mjs     menu in inglese, spagnolo e tedesco tradotto dall'IA locale (ogni minuto: nomi, descrizioni, note dei vini; ogni campo controllato da solo sui numeri; nomi dei vini invariati; a mano si completano solo i campi vuoti)
   regioni.mjs        zona di produzione → regione italiana (copia in apps/web/src/lib/regioni.ts: tenerle allineate)
   mappa-italia.mjs   confini regioni ISTAT (CC BY 4.0) in SVG (copia in apps/web/src/lib/mappaItalia.ts)
   migra-immagini.mjs migrazione immagini base64 → Storage
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 43 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (404 test)
+supabase/migrations/ 44 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (409 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -141,6 +141,7 @@ deploy/pi/           installer per il server
 |`traduzione\_automatica`|`traduzione\_da` su categorie e prodotti: impronta dell'italiano tradotto, «manuale» se scritta a mano, «…:scartata» se il controllo dei numeri l'ha rifiutata|
 |`note\_vini\_inglese`|`note\_en` e `traduzione\_da` sulle schede dei vini, esposte da `menu\_pubblico`|
 |`menu\_spagnolo`|`nome\_es`, `descrizione\_es`, `note\_es` e `traduzione\_es\_da` (stato a parte) su categorie, prodotti e vini, esposti da `menu\_pubblico` (pagina `<slug>/es/`)|
+|`menu\_tedesco`|`nome\_de`, `descrizione\_de`, `note\_de` e `traduzione\_de\_da` su categorie, prodotti e vini, esposti da `menu\_pubblico` (pagina `<slug>/de/`, tradotta dall'inglese controllato come lo spagnolo)|
 |`aggiunte\_gruppo`|`gruppo` sulle aggiunte (es. Salumi, Formaggi): nella scelta al tavolo e dal tablet «Aggiunte · Salumi», «Aggiunte · Formaggi»; esposto da `menu\_pubblico`|
 |`scelte\_da\_aggiunte`|gruppo del piatto collegato a un gruppo di aggiunte (`gruppi\_opzioni.da\_aggiunte`, es. tagliere «Salumi»): voci lette sempre dalle aggiunte, comprese nel prezzo, id «gruppo:aggiunta»; `prezzo\_riga()` le controlla (gruppo, disponibilità, categoria, numero di scelte)|
 |`collegamento\_automatico`|`gruppo\_aggiunte\_collegato()`: un gruppo senza voci proprie che si chiama come un gruppo di aggiunte le usa da solo (es. «Salumi»); il collegamento esplicito vale sempre|
@@ -197,11 +198,11 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 404 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 409 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
-  **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 16 test.
+  **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 17 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
-jsdom solo come dipendenza di sviluppo). Atteso: 105 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
+jsdom solo come dipendenza di sviluppo). Atteso: 107 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
 (non avviano i servizi) e `fetch` simulato (`test/simula.mjs`): nessuna chiamata reale a Telegram, Supabase, Ollama, Cloudflare.
   * `bot.test.mjs`: regole, IA vincolata (numeri solo dal testo, enum), anteprima → conferma → /annulla, notifiche di sala.
   * `pubblicatore.test.mjs`: D1/KV, immagini versionate e pulizia, percorsi, escape dell'HTML.

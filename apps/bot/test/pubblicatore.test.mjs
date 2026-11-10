@@ -60,7 +60,7 @@ describe("pubblicazione", () => {
     assert.equal(rpc.intestazioni.Authorization, "Bearer anon-di-prova");   // solo la chiave pubblica
 
     assert.deepEqual(caricate().sort(), [`${SLUG}/foto/${ID.genovese}.${id(91).slice(0, 10)}.jpg`, `${SLUG}/logo.${id(90).slice(0, 10)}.webp`].sort());
-    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/es/index.html`, `${SLUG}/versione.json`]);   // prima le pagine (italiano, inglese, spagnolo), poi la versione
+    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/es/index.html`, `${SLUG}/de/index.html`, `${SLUG}/versione.json`]);   // prima le pagine (italiano, inglese, spagnolo, tedesco), poi la versione
     for (const c of rete.chiamate.filter((x) => x.url.startsWith("https://api.cloudflare.com/"))) {
       assert.equal(c.intestazioni.Authorization, "Bearer token-di-prova");
     }
@@ -68,7 +68,7 @@ describe("pubblicazione", () => {
     assert.equal(tipo, "text/html; charset=utf-8");
     assert.match(html, new RegExp(`src="logo\\.${id(90).slice(0, 10)}\\.webp"`));
     assert.doesNotMatch(html, /logo_path|data:image/);   // niente percorsi interni o immagini incorporate
-    const versione = JSON.parse(rete.trova("POST", D1)[3].corpo.params[1]).versione;   // dopo le tre pagine
+    const versione = JSON.parse(rete.trova("POST", D1)[4].corpo.params[1]).versione;   // dopo le quattro pagine
     assert.match(html, new RegExp(`"versione":"${versione}"`));
   });
 
@@ -84,7 +84,7 @@ describe("pubblicazione", () => {
     const logo = `${SLUG}/logo.${id(90).slice(0, 10)}.webp`;
     chiaviKV = [logo, `${SLUG}/logo.vecchio0000.webp`, `${SLUG}/foto/${ID.margherita}.abc.jpg`, `${SLUG}/index.html`];
     await pub.giro();
-    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/es/index.html`, `${SLUG}/versione.json`]);
+    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/es/index.html`, `${SLUG}/de/index.html`, `${SLUG}/versione.json`]);
     assert.equal(caricate().length, 0);
     assert.match(rete.trova("POST", D1)[0].corpo.params[1], /7,50/);
     const eliminate = rete.trova("DELETE", KV).map((c) => decodeURIComponent(c.url.split("/values/")[1]));
@@ -99,7 +99,7 @@ describe("pubblicazione", () => {
     rete.quando("POST", D1, { success: true });
     rete.azzera();
     await pub.giro();
-    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/es/index.html`, `${SLUG}/versione.json`]);
+    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/es/index.html`, `${SLUG}/de/index.html`, `${SLUG}/versione.json`]);
   });
 
   test("menu non trovato: niente pubblicazione", async () => {
@@ -172,7 +172,7 @@ describe("pagina statica", () => {
     assert.match(html, /\.\.\/foto\/x\.jpg/);   // foto del piatto nella cartella superiore
     assert.doesNotMatch(html, /class="lingua"/);   // scelta della lingua solo in fondo
     assert.match(html, /"base":"\.\.\/"/);
-    assert.match(html, /<a href="\.\.\/" hreflang="it" lang="it">🇮🇹 Italiano<\/a>\s*<a href="\.\.\/en\/" hreflang="en" lang="en" aria-current="page">🇬🇧 English<\/a>\s*<a href="\.\.\/es\/" hreflang="es" lang="es">🇪🇸 Español<\/a>/);
+    assert.match(html, /<a href="\.\.\/" hreflang="it" lang="it">🇮🇹 Italiano<\/a>\s*<a href="\.\.\/en\/" hreflang="en" lang="en" aria-current="page">🇬🇧 English<\/a>\s*<a href="\.\.\/es\/" hreflang="es" lang="es">🇪🇸 Español<\/a>\s*<a href="\.\.\/de\/" hreflang="de" lang="de">🇩🇪 Deutsch<\/a>/);
   });
 
   test("sfondo a carosello: foto principale ferma, le altre sfumano a turno e si caricano dopo la pagina", () => {
@@ -212,6 +212,18 @@ describe("pagina statica", () => {
     assert.match(pub.pagina(v, "ora", null, null, {}, "v1", "es"), /<p class="desc">Tinto de buena estructura<\/p>/);   // colore sistemato in pubblicazione
   });
 
+  test("pagina in tedesco: testi del locale in tedesco, interfaccia e allergeni in tedesco", () => {
+    const m = menuEsempio();
+    m.categorie[0].nome_de = "Pinsas"; m.categorie[0].prodotti[0].descrizione_de = "Basilikum und Pinienkerne";
+    const html = pub.pagina(m, "ora", null, null, {}, "v1", "de");
+    assert.match(html, /<html lang="de">/);
+    assert.match(html, /<p class="desc">Basilikum und Pinienkerne<\/p>/);
+    assert.match(html, /Allergene: /);
+    assert.match(html, /Unentschlossen\?/);
+    assert.match(html, /aria-current="page">🇩🇪 Deutsch/);
+    assert.match(html, /"maiuscole":true/, "nel quiz «keinen Rotwein» con la maiuscola");
+  });
+
   test("pagina italiana: lingue in alto sopra «Trova il tuo vino», testi invariati", () => {
     const html = pub.pagina(menuEsempio(), "ora");
     assert.match(html, /<html lang="it">/);
@@ -219,7 +231,7 @@ describe("pagina statica", () => {
     // In alto: bandierine delle tre lingue, l'italiano attivo; in fondo non ci sono più
     assert.ok(html.indexOf('class="lingue"') < html.indexOf("<footer>"));
     assert.equal(html.split('class="lingue"').length, 2);
-    assert.match(html, /<div class="lingue"[^>]*>\s*<a href="\.\/" hreflang="it" lang="it" aria-current="page">🇮🇹 Italiano<\/a>\s*<a href="en\/" hreflang="en" lang="en">🇬🇧 English<\/a>\s*<a href="es\/" hreflang="es" lang="es">🇪🇸 Español<\/a>/);
+    assert.match(html, /<div class="lingue"[^>]*>\s*<a href="\.\/" hreflang="it" lang="it" aria-current="page">🇮🇹 Italiano<\/a>\s*<a href="en\/" hreflang="en" lang="en">🇬🇧 English<\/a>\s*<a href="es\/" hreflang="es" lang="es">🇪🇸 Español<\/a>\s*<a href="de\/" hreflang="de" lang="de">🇩🇪 Deutsch<\/a>/);
     assert.match(html, /Per informazioni sugli allergeni rivolgersi al personale/);
   });
 });

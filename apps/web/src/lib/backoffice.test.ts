@@ -95,7 +95,7 @@ describe("traduzioni della pagina del tavolo", () => {
     expect(Object.keys(TESTI_MENU.en).sort()).toEqual(Object.keys(TESTI_MENU.it).sort());
   });
   it("stessi testi in tutte le lingue", () => {
-    for (const l of ["en", "es"] as const) {
+    for (const l of ["en", "es", "de"] as const) {
       expect(Object.keys(TESTI_TAVOLO[l]).sort()).toEqual(Object.keys(TESTI_TAVOLO.it).sort());
       expect(Object.keys(TESTI_TAVOLO[l].stati).sort()).toEqual(Object.keys(TESTI_TAVOLO.it.stati).sort());
       expect(Object.keys(TESTI_MENU[l]).sort()).toEqual(Object.keys(TESTI_MENU.it).sort());
@@ -109,6 +109,15 @@ describe("traduzioni della pagina del tavolo", () => {
     expect(es.categorie[0]!.nome).toBe("Tintos");
     expect(es.categorie[0]!.prodotti[0]).toMatchObject({ descrizione: "Rosso strutturato", allergeni: ["Sulfitos"], etichette: ["Vegano"], vino: { note: "Criado en barrica" } });
     expect(nomeIn("es", { nome: "Tagliere", nome_es: "Tabla" })).toBe("Tabla");
+  });
+  it("menu interno in tedesco: testi, allergeni ed etichette in tedesco", () => {
+    const menu = { categorie: [{ nome: "Rossi", nome_de: "Rotweine", descrizione: "", prodotti: [
+      { nome: "Taurasi", descrizione: "Rosso strutturato", descrizione_de: "Kräftiger Rotwein", allergeni: ["Solfiti"], etichette: ["Vegano"],
+        vino: { note: "Affinato in botte", note_de: "Im Holzfass gereift" } }] }] };
+    const de = menuInLingua(menu, "de");
+    expect(de.categorie[0]!.nome).toBe("Rotweine");
+    expect(de.categorie[0]!.prodotti[0]).toMatchObject({ descrizione: "Kräftiger Rotwein", allergeni: ["Sulfite"], etichette: ["Vegan"], vino: { note: "Im Holzfass gereift" } });
+    expect(TESTI_MENU.de.nessuno("Rotwein")).toContain("keinen Rotwein");
   });
 });
 

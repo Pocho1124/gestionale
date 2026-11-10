@@ -144,7 +144,7 @@ describe("traduzione del menu", () => {
     const { db, modifiche } = dbFinto({ prodotti: [riga(14, "Tagliere misto", "Salumi e formaggi per 2", { traduzione_da: "manuale", nome_en: "Our board", descrizione_en: "Board" })] });
     let chiesto;
     const es = { "Tagliere misto": "Tabla mixta", "Salumi e formaggi per 2": "Embutidos y quesos para 2" };
-    await traduciMenu({ db, locale: LOCALE, chiediModello: async (r) => {
+    await traduciMenu({ db, locale: LOCALE, lingue: ["en", "es"], chiediModello: async (r) => {
       chiesto = r; const x = JSON.parse(r.utente); delete x.tipo;
       return Object.fromEntries(Object.entries(x).map(([k, v]) => [`${k}_spagnolo`, es[v]]));
     } });
@@ -180,8 +180,28 @@ describe("traduzione del menu", () => {
     let chiamate = 0;
     await traduciMenu({ db, locale: LOCALE, chiediModello: async () => { chiamate++; return {}; } });
     assert.equal(chiamate, 0);
-    assert.deepEqual(modifiche.map((m) => m.corpo.nome_en ?? m.corpo.nome_es), ["Wine list", "Pinsa", "Carta de vinos", "Pinsa"]);
+    assert.deepEqual(modifiche.map((m) => m.corpo.nome_en ?? m.corpo.nome_es ?? m.corpo.nome_de), ["Wine list", "Pinsa", "Carta de vinos", "Pinsa", "Weinkarte", "Pinsa"]);
     assert.equal(categoriaFissa("es", " Birre "), "Cervezas");
+    assert.equal(categoriaFissa("de", "Vini al calice"), "Offene Weine");
+    assert.equal(categoriaFissa("fr", "Birre"), "", "lingua sconosciuta: nessuna traduzione fissa");
+  });
+
+  test("tedesco: colonne e stato propri, tradotto dall'inglese controllato, colori sistemati", async () => {
+    const { db, modifiche } = dbFinto({ prodotti: [riga(22, "Tagliere misto", "Salumi e formaggi per 2"), riga(23, "Calice", "Rosso strutturato")] });
+    const chieste = [];
+    const de = { "Mixed board": "Gemischte Platte", "Cured meats and cheeses for 2": "Wurst und Käse für 2", "Calice": "Glas", "Full-bodied red": "Rosso, kräftig", "Rosso strutturato": "Rosso, kräftig" };
+    await traduciMenu({ db, locale: LOCALE, lingue: ["en", "de"], chiediModello: async (r) => {
+      chieste.push(r); const x = JSON.parse(r.utente); delete x.tipo;
+      if (/in inglese/.test(r.sistema)) return modello(r);
+      return Object.fromEntries(Object.entries(x).map(([k, v]) => [`${k}_tedesco`, de[v] ?? v]));
+    } });
+    assert.match(chieste.find((r) => /in tedesco/.test(r.sistema)).sistema, /dall'inglese in tedesco/);
+    const tagliere = modifiche.find((m) => m.percorso.includes(id(22)) && m.corpo.nome_de);
+    assert.deepEqual(tagliere, { percorso: `prodotti?id=eq.${id(22)}&traduzione_de_da=neq.manuale`,
+      corpo: { nome_de: "Gemischte Platte", descrizione_de: "Wurst und Käse für 2", traduzione_de_da: impronta("Tagliere misto", "Salumi e formaggi per 2") } });
+    assert.equal(modifiche.find((m) => m.percorso.includes(id(23)) && "descrizione_de" in m.corpo).corpo.descrizione_de, "Rot, kräftig");
+    assert.equal(coloriVino("de", "Vino rosso kräftig, bianco frisch"), "Rotwein kräftig, weiß frisch");
+    assert.equal(coloriVino("de", "Rosso di Montalcino, kräftig"), "Rosso di Montalcino, kräftig");
   });
 
   test("colori dei vini sempre uguali; i nomi propri restano", async () => {

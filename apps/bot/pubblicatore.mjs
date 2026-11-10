@@ -49,8 +49,8 @@ const PREDEFINITO = {
 };
 
 // ---------------------------------------------------------------- Lingue
-// Testi fissi della pagina in italiano, inglese e spagnolo. Nomi, descrizioni e note tradotti stanno nelle colonne
-// <campo>_en / <campo>_es (traduzione automatica dell'IA locale o scritta a mano): dove mancano resta l'italiano.
+// Testi fissi della pagina in italiano, inglese, spagnolo e tedesco. Nomi, descrizioni e note tradotti stanno nelle colonne
+// <campo>_en / <campo>_es / <campo>_de (traduzione automatica dell'IA locale o scritta a mano): dove mancano resta l'italiano.
 const TESTI = {
   it: {
     lang: "it", esaurito: "Esaurito", da: "da ", siAbbinaCon: "🍷 Si abbina con ", o: " o ", allergeni: "Allergeni: ",
@@ -123,6 +123,32 @@ const TESTI = {
       corpi: { leggero: "Ligero", medio: "Equilibrado", strutturato: "Con cuerpo" },
     },
   },
+  de: {
+    lang: "de", esaurito: "Ausverkauft", da: "ab ", siAbbinaCon: "🍷 Passt zu ", o: " oder ", allergeni: "Allergene: ",
+    viniPerRegione: "Weine nach Region", mappa: "🗺️ Auf der Karte wählen", tutte: "Alle", altreZone: "Andere Gebiete",
+    scegliRegione: "Region wählen", tocca: "Tippe auf eine hervorgehobene Region", regioniItalia: "Regionen Italiens", vini: "Weine",
+    fonteMappa: "Grenzen: ISTAT (CC BY 4.0)", mappaTitolo: "Region auf der Karte wählen", indeciso: "Unentschlossen?", trova: "Finde deinen Wein in 3 Fragen",
+    vuoto: "Die Speisekarte ist bald verfügbar.", chiudi: "Schließen", infoAllergeni: "Informationen zu Allergenen erhalten Sie bei unserem Personal.",
+    aggiornato: "Aktualisiert am ", categorie: "Kategorien", menuDi: "Speisekarte von ",
+    tipi: { rosso: "Rotwein", bianco: "Weißwein", rosato: "Roséwein", bollicine: "Schaumwein", dolce: "Dessertwein" },
+    allergeniNomi: {
+      Glutine: "Gluten", Crostacei: "Krebstiere", Uova: "Eier", Pesce: "Fisch", Arachidi: "Erdnüsse", Soia: "Soja", Latte: "Milch",
+      "Frutta a guscio": "Schalenfrüchte", Sedano: "Sellerie", Senape: "Senf", Sesamo: "Sesam", Solfiti: "Sulfite", Lupini: "Lupinen", Molluschi: "Weichtiere",
+    },
+    etichetteNomi: { Vegetariano: "Vegetarisch", Vegano: "Vegan", Piccante: "Scharf", "Senza glutine": "Glutenfrei", "Novità": "Neu", Consigliato: "Empfohlen", Surgelato: "Tiefgekühlt" },
+    c: {
+      torna: "← Zurück zu ", esaurito: "Ausverkauft", calice: "Glas ", bottiglia: " · Flasche ", scegli: "wähle ", da: "ab ", a: " bis ",
+      finoA: "bis zu ", incluso: "inklusive", allergeni: "Allergene: ", idealeCon: "Ideal zu", sommelier: "Unser Sommelier empfiehlt",
+      domanda: "Frage ", di3: " von 3", qVino: "Welchen Wein bevorzugst du?", sorprendimi: "Überrasch mich", qCorpo: "Wie hättest du ihn gern?",
+      leggero: "Leicht und frisch", equilibrato: "Ausgewogen", strutturato: "Kräftig und intensiv", indifferente: "Egal",
+      qCibo: "Was isst du dazu?", soloVino: "Nur Wein", comePreferisci: ", wie du magst", siAbbinaA: "Passt zu ", e: " und ",
+      // In tedesco i nomi restano con la maiuscola («keinen Rotwein»)
+      nonAbbiamo: "Im Moment haben wir keinen ", disponibile: " auf der Karte", nessunVino: "Derzeit kein Wein auf der Karte", maiuscole: true,
+      chiedi: ": frag unser Personal, wir beraten dich gern.", ricomincia: "Neu starten", vino: " Wein", vini: " Weine",
+      tipi: { rosso: "Rotwein", bianco: "Weißwein", rosato: "Roséwein", bollicine: "Schaumwein", dolce: "Dessertwein" },
+      corpi: { leggero: "Leicht", medio: "Ausgewogen", strutturato: "Kräftig" },
+    },
+  },
 };
 
 /**
@@ -145,7 +171,7 @@ export const prezzoMinimo = (p) => p.prezzo_cent + (p.opzioni || []).reduce((tot
   tot + (g.scelte || []).map((s) => s.sovrapprezzo_cent).sort((a, b) => a - b).slice(0, g.min).reduce((n, c) => n + c, 0), 0);
 
 /** Lingue del menu: codice, bandierina e nome nella propria lingua (in fondo alla pagina). */
-export const LINGUE = [["it", "🇮🇹", "Italiano"], ["en", "🇬🇧", "English"], ["es", "🇪🇸", "Español"]];
+export const LINGUE = [["it", "🇮🇹", "Italiano"], ["en", "🇬🇧", "English"], ["es", "🇪🇸", "Español"], ["de", "🇩🇪", "Deutsch"]];
 
 /** Menu con i testi del locale nella lingua scelta (dove manca la traduzione resta l'italiano). */
 export function menuInLingua(menu, lingua) {
@@ -170,7 +196,7 @@ export function menuInLingua(menu, lingua) {
 /**
  * logoFile / sfondoFile: file pubblicati accanto alla pagina (es. «logo.png?v=…»), se presenti.
  * sfondoFile può essere anche un elenco: la prima è la foto principale, le altre formano il carosello.
- * lingua «en» / «es»: pagina pubblicata in «<slug>/en/» o «<slug>/es/» (i file del menu sono nella cartella superiore).
+ * lingua «en» / «es» / «de»: pagina pubblicata in «<slug>/en/», «<slug>/es/» o «<slug>/de/» (i file del menu sono nella cartella superiore).
  */
 export function pagina(menuOriginale, aggiornato, logoFileIt = null, sfondoFileIt = null, fotoPiattiIt = {}, versione = "", lingua = "it") {
   const L = TESTI[lingua] ?? TESTI.it;
@@ -530,7 +556,7 @@ html{scroll-padding-top:76px}
     const vicini = valutati.filter((x) => x.d < 2);
     const r = (vicini.length ? vicini : valutati).sort((a, b) => b.pt - a.pt || a.v.prezzo_cent - b.v.prezzo_cent).slice(0, 3);
     const n = [el("p", "quiz-passo", T.sommelier)];
-    if (!r.length) n.push(el("p", null, (s.tipo !== "sorpresa" ? T.nonAbbiamo + TIPI[s.tipo].toLowerCase() + T.disponibile : T.nessunVino) + T.chiedi));
+    if (!r.length) n.push(el("p", null, (s.tipo !== "sorpresa" ? T.nonAbbiamo + (T.maiuscole ? TIPI[s.tipo] : TIPI[s.tipo].toLowerCase()) + T.disponibile : T.nessunVino) + T.chiedi));
     r.forEach((x, i) => n.push(riga(x.v, x.pq.join(" · "), i + 1)));
     const b = el("button", "quiz-scelta", T.ricomincia); b.addEventListener("click", quiz); n.push(b);
     mostra(n, null, "");

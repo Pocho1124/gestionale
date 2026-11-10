@@ -23,6 +23,7 @@ Prima di iniziare: `git push`, pipeline verde, poi sul server `sudo /opt/gestion
 - [ ] Menu pubblico `https://menu.enotechiasantalucia.it/enotechia-santalucia/` (dopo pochi secondi):
   - [ ] **🇮🇹 Italiano / 🇬🇧 English / 🇪🇸 Español** in alto, sopra «Trova il tuo vino» (pagina del tavolo: sotto il numero del tavolo), e non più in fondo; con English: nomi tradotti, gli altri in italiano, allergeni in inglese;
   - [ ] con Español: nomi, descrizioni, note dei vini, allergeni e testi della pagina in spagnolo (anche pagina del tavolo e menu interno `/m/`);
+  - [ ] con Deutsch: nomi, descrizioni, note dei vini, allergeni e testi in tedesco (vino rosso = «Rotwein», nel quiz «keinen Rotwein» con la maiuscola);
   - [ ] sfondo a carosello (Aspetto › Foto di sfondo › Carosello): le foto sfumano a turno, il testo resta leggibile; con «riduci movimento» del telefono resta ferma la prima;
   - [ ] «Vini per regione» in un riquadro, con «Scegli dalla mappa» grande al centro e le regioni sotto;
   - [ ] quiz «Find your wine», scheda di un piatto, mappa delle regioni in inglese;

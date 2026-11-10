@@ -1,5 +1,5 @@
-// Traduzione automatica del menu in inglese e spagnolo con l'IA locale del server (nessun servizio esterno).
-// Ogni lingua ha le sue colonne (nome_en / nome_es …) e il suo stato (traduzione_da / traduzione_es_da).
+// Traduzione automatica del menu in inglese, spagnolo e tedesco con l'IA locale del server (nessun servizio esterno).
+// Ogni lingua ha le sue colonne (nome_en / nome_es / nome_de …) e il suo stato (traduzione_da / traduzione_es_da / traduzione_de_da).
 // Traduce nome e descrizione di categorie e piatti e le note delle schede dei vini quando il testo italiano cambia.
 // Ogni campo vale da solo: una descrizione buona si salva anche se il nome non supera il controllo.
 // Traduzioni scritte a mano («manuale»): non si toccano mai; si completano solo i campi inglesi rimasti vuoti.
@@ -29,7 +29,7 @@ export function traduzioneValida(originale, tradotto, massimo) {
   return JSON.stringify(numeri(o)) === JSON.stringify(numeri(t));
 }
 
-// Solo parole che non esistono in inglese né in spagnolo (niente «la», «con», «del», «una», …)
+// Solo parole che non esistono in inglese, spagnolo o tedesco (niente «la», «con», «del», «una», «die», …)
 const PAROLE_ITALIANE = new Set(["il", "gli", "di", "della", "dello", "dei", "delle", "degli", "e", "alla", "ai", "alle", "per", "dalla",
   "nel", "nella", "nei", "sul", "sulla", "che", "è", "più", "fra", "anche"]);
 /** Testo rimasto in italiano: uguale all'originale o pieno di articoli e preposizioni italiane. */
@@ -37,7 +37,7 @@ export function sembraItaliano(originale, tradotto) {
   const t = String(tradotto ?? "").trim().toLowerCase();
   if (!t) return false;
   if (t === String(originale ?? "").trim().toLowerCase()) return true;
-  const parole = t.split(/[^a-zàèéìòù']+/).filter(Boolean);
+  const parole = t.split(/[^a-zàèéìòùäöüß']+/).filter(Boolean);
   const italiane = parole.filter((p) => PAROLE_ITALIANE.has(p)).length;
   return italiane >= 2 && italiane / parole.length >= 0.2;
 }
@@ -48,12 +48,14 @@ const descrittivo = (tabella, campo) => campo !== "nome" || tabella === "categor
 export const LINGUE = {
   en: { suffisso: "_en", stato: "traduzione_da", nome: "inglese", NOME: "INGLESE" },
   es: { suffisso: "_es", stato: "traduzione_es_da", nome: "spagnolo", NOME: "SPAGNOLO" },
+  de: { suffisso: "_de", stato: "traduzione_de_da", nome: "tedesco", NOME: "TEDESCO" },
 };
 
 /** Nomi ricorrenti delle categorie: esempi per il modello piccolo, che altrimenti li traduce alla lettera. */
 const ESEMPI = {
   inglese: "Carta dei vini = Wine list; Vini al calice = Wines by the glass; Taglieri = Platters; Birre = Beers; Bollicine = Sparkling wines",
   spagnolo: "Carta dei vini = Carta de vinos; Vini al calice = Vinos por copas; Taglieri = Tablas; Birre = Cervezas; Bollicine = Espumosos",
+  tedesco: "Carta dei vini = Weinkarte; Vini al calice = Offene Weine; Taglieri = Platten; Birre = Biere; Bollicine = Schaumweine",
 };
 
 const sistema = (L, fonte = "italiano") => [
@@ -95,22 +97,23 @@ export async function traduciMenu({ db, chiediModello, locale, log = () => {}, l
 
 /** Nomi ricorrenti delle categorie: traduzione fissa, senza modello (sempre uguale, anche quando resta uguale all'italiano). */
 const CATEGORIE_FISSE = {
-  "carta dei vini": ["Wine list", "Carta de vinos"], "vini": ["Wines", "Vinos"], "vini al calice": ["Wines by the glass", "Vinos por copas"],
-  "vini rossi": ["Red wines", "Vinos tintos"], "vini bianchi": ["White wines", "Vinos blancos"], "vini rosati": ["Rosé wines", "Vinos rosados"],
-  "bollicine": ["Sparkling wines", "Espumosos"], "vini dolci": ["Dessert wines", "Vinos dulces"], "taglieri": ["Platters", "Tablas"],
-  "tagliere": ["Platter", "Tabla"], "pinse": ["Pinsa", "Pinsas"], "pinsa": ["Pinsa", "Pinsa"], "birre": ["Beers", "Cervezas"],
-  "birre artigianali": ["Craft beers", "Cervezas artesanales"], "antipasti": ["Starters", "Entrantes"], "primi": ["First courses", "Primeros platos"],
-  "secondi": ["Main courses", "Segundos platos"], "contorni": ["Side dishes", "Guarniciones"], "dolci": ["Desserts", "Postres"],
-  "formaggi": ["Cheeses", "Quesos"], "salumi": ["Cured meats", "Embutidos"], "bevande": ["Drinks", "Bebidas"], "bibite": ["Soft drinks", "Refrescos"],
-  "analcolici": ["Non-alcoholic drinks", "Bebidas sin alcohol"], "caffetteria": ["Coffee", "Cafetería"], "amari": ["Digestifs", "Digestivos"],
-  "distillati": ["Spirits", "Destilados"], "cocktail": ["Cocktails", "Cócteles"], "aperitivi": ["Aperitifs", "Aperitivos"],
+  "carta dei vini": ["Wine list", "Carta de vinos", "Weinkarte"], "vini": ["Wines", "Vinos", "Weine"], "vini al calice": ["Wines by the glass", "Vinos por copas", "Offene Weine"],
+  "vini rossi": ["Red wines", "Vinos tintos", "Rotweine"], "vini bianchi": ["White wines", "Vinos blancos", "Weißweine"], "vini rosati": ["Rosé wines", "Vinos rosados", "Roséweine"],
+  "bollicine": ["Sparkling wines", "Espumosos", "Schaumweine"], "vini dolci": ["Dessert wines", "Vinos dulces", "Dessertweine"], "taglieri": ["Platters", "Tablas", "Platten"],
+  "tagliere": ["Platter", "Tabla", "Platte"], "pinse": ["Pinsa", "Pinsas", "Pinsa"], "pinsa": ["Pinsa", "Pinsa", "Pinsa"], "birre": ["Beers", "Cervezas", "Biere"],
+  "birre artigianali": ["Craft beers", "Cervezas artesanales", "Craft-Biere"], "antipasti": ["Starters", "Entrantes", "Vorspeisen"], "primi": ["First courses", "Primeros platos", "Erste Gänge"],
+  "secondi": ["Main courses", "Segundos platos", "Hauptgerichte"], "contorni": ["Side dishes", "Guarniciones", "Beilagen"], "dolci": ["Desserts", "Postres", "Desserts"],
+  "formaggi": ["Cheeses", "Quesos", "Käse"], "salumi": ["Cured meats", "Embutidos", "Wurstwaren"], "bevande": ["Drinks", "Bebidas", "Getränke"], "bibite": ["Soft drinks", "Refrescos", "Erfrischungsgetränke"],
+  "analcolici": ["Non-alcoholic drinks", "Bebidas sin alcohol", "Alkoholfreie Getränke"], "caffetteria": ["Coffee", "Cafetería", "Kaffee"], "amari": ["Digestifs", "Digestivos", "Digestifs"],
+  "distillati": ["Spirits", "Destilados", "Spirituosen"], "cocktail": ["Cocktails", "Cócteles", "Cocktails"], "aperitivi": ["Aperitifs", "Aperitivos", "Aperitifs"],
 };
-export const categoriaFissa = (lingua, nome) => CATEGORIE_FISSE[String(nome ?? "").trim().toLowerCase()]?.[lingua === "en" ? 0 : 1] ?? "";
+export const categoriaFissa = (lingua, nome) => CATEGORIE_FISSE[String(nome ?? "").trim().toLowerCase()]?.[{ en: 0, es: 1, de: 2 }[lingua] ?? -1] ?? "";
 
-/** Colori dei vini: sempre la stessa parola (in spagnolo il vino rosso è «tinto», mai «rojo»), mai l'italiano rimasto. */
+/** Colori dei vini: sempre la stessa parola (in spagnolo il vino rosso è «tinto», mai «rojo»; in tedesco «Rotwein»), mai l'italiano rimasto. */
 const COLORI = {
   en: [[/\brosso\b/gi, "red"], [/\bbianco\b/gi, "white"], [/\brosato\b/gi, "rosé"]],
   es: [[/\bvino rojo\b/gi, "vino tinto"], [/\brojo\b/gi, "tinto"], [/\brosso\b/gi, "tinto"], [/\bbianco\b/gi, "blanco"], [/\brosato\b/gi, "rosado"]],
+  de: [[/\bvino rosso\b/gi, "Rotwein"], [/\bvino bianco\b/gi, "Weißwein"], [/\bvino rosato\b/gi, "Roséwein"], [/\brosso\b/gi, "rot"], [/\bbianco\b/gi, "weiß"], [/\brosato\b/gi, "rosé"]],
 };
 /** Sostituisce le parole dei colori, ma non dentro i nomi propri (Rosso di Montalcino, Bianco di Custoza, nome del vino). */
 export function coloriVino(lingua, testo, nome = "") {
@@ -127,7 +130,7 @@ export function coloriVino(lingua, testo, nome = "") {
 }
 
 /**
- * Lo spagnolo si traduce dall'inglese già controllato quando c'è (il modello piccolo traduce molto meglio dall'inglese);
+ * Spagnolo e tedesco si traducono dall'inglese già controllato quando c'è (il modello piccolo traduce molto meglio dall'inglese);
  * numeri e italiano rimasto si controllano sempre sul testo italiano.
  */
 const ponte = (lingua, t, x, it, im) => {
@@ -176,7 +179,7 @@ async function traduciLingua({ L, lingua, righe, db, chiediModello, log, limite 
             required: daTradurre.map(([it]) => `${it}_${L.nome}`) },
         }) ?? {};
       } catch (e) {
-        // Una voce troppo lunga per il tempo concesso si salta per questo avvio: non blocca le altre né lo spagnolo
+        // Una voce troppo lunga per il tempo concesso si salta per questo avvio: non blocca le altre né le altre lingue
         if (e?.name === "TimeoutError") { tentati.add(v.chiave); log(`Traduzione ${L.nome} troppo lenta, saltata (${t.tabella} «${String(x[campi[0][0]] ?? "").slice(0, 40)}»)`); continue; }
         log(`Traduzione non disponibile: ${e.message}`);
         return { salvate, fermo: true };   // modello spento o occupato: si riprova al giro successivo
