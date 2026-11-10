@@ -78,6 +78,31 @@ export function Aspetto() {
     } catch (e) { avvisa(e instanceof Error ? e.message : "Foto non valida", "errore"); }
   }
 
+  /** Carosello: altre foto dello sfondo, caricate anche più insieme (al massimo 5 oltre alla principale). */
+  const carosello = bozza.sfondo_carosello ?? [];
+  async function caricaCarosello(files: FileList | null) {
+    if (!files?.length || !bozza) return;
+    const posto = Math.max(0, 5 - carosello.length);
+    const scelti = [...files].slice(0, posto);
+    if (!scelti.length) { avvisa("Al massimo 5 foto oltre alla principale", "errore"); return; }
+    const nuovi: string[] = [];
+    for (const file of scelti) {
+      try { nuovi.push(await caricaImmagine(locale!.id, "sfondo", await preparaImmagine(file, { lato: 1600, limite: 1_000_000 }))); }
+      catch (e) { avvisa(e instanceof Error ? e.message : "Foto non valida", "errore"); }
+    }
+    if (nuovi.length) {
+      setBozza((b) => (b ? { ...b, sfondo_carosello: [...(b.sfondo_carosello ?? []), ...nuovi] } : b));
+      avvisa(`${nuovi.length} foto aggiunte al carosello: controlla l'anteprima e poi pubblica`);
+    }
+    if (files.length > posto) avvisa("Al massimo 5 foto oltre alla principale: le altre non sono state caricate", "errore");
+  }
+  const spostaFoto = (i: number, verso: -1 | 1) => {
+    const l = [...carosello], j = i + verso;
+    if (j < 0 || j >= l.length) return;
+    [l[i], l[j]] = [l[j]!, l[i]!];
+    setBozza({ ...bozza, sfondo_carosello: l });
+  };
+
   async function caricaLogo(file: File | undefined) {
     if (!file || !bozza) return;
     try {
@@ -102,7 +127,8 @@ export function Aspetto() {
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
     // Le immagini sostituite o tolte escono dall'archivio
     if (salvato?.logo_path && salvato.logo_path !== bozza.logo_path) void eliminaImmagine(salvato.logo_path);
-    if (salvato?.sfondo_path && salvato.sfondo_path !== bozza.sfondo_path) void eliminaImmagine(salvato.sfondo_path);
+    if (salvato?.sfondo_path && salvato.sfondo_path !== bozza.sfondo_path && !(bozza.sfondo_carosello ?? []).includes(salvato.sfondo_path)) void eliminaImmagine(salvato.sfondo_path);
+    for (const p of salvato?.sfondo_carosello ?? []) if (p !== bozza.sfondo_path && !(bozza.sfondo_carosello ?? []).includes(p)) void eliminaImmagine(p);
     setSalvato(bozza); avvisa("Aspetto pubblicato: il menu dei clienti è aggiornato");
   }
 
@@ -158,7 +184,8 @@ export function Aspetto() {
                 <label className="btn">Sostituisci foto
                   <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => void caricaSfondo(e.target.files?.[0])} />
                 </label>
-                <button type="button" className="btn btn-pericolo" onClick={() => setBozza({ ...bozza, sfondo_path: null, sfondo_dati: null })}>Rimuovi</button>
+                {/* Togliendo la principale, la prima del carosello prende il suo posto */}
+                <button type="button" className="btn btn-pericolo" onClick={() => setBozza({ ...bozza, sfondo_path: carosello[0] ?? null, sfondo_dati: null, sfondo_carosello: carosello.slice(1) })}>Rimuovi</button>
               </div>
               <label className="campo">Visibilità della foto: {bozza.sfondo_opacita}%
                 <input type="range" min={5} max={70} value={bozza.sfondo_opacita} onChange={(e) => imposta("sfondo_opacita", Number(e.target.value))} />
@@ -174,6 +201,40 @@ export function Aspetto() {
               <label className="interruttore"><input type="checkbox" checked={bozza.sfondo_bn}
                 onChange={(e) => imposta("sfondo_bn", e.target.checked)} />Bianco e nero</label>
               <p className="muto piccolo">Per l'effetto «vedo non vedo»: visibilità 15-30% e un po' di sfocatura. Controlla che i prezzi restino ben leggibili.</p>
+              <div className="gruppo-interno">
+                <strong>Carosello</strong>
+                <p className="muto piccolo">Fino a 5 foto in più che si sfumano dolcemente una nell'altra, dopo la foto principale. Sul telefono si caricano dopo il menu.</p>
+                {carosello.length > 0 && (
+                  <div className="carosello-foto">
+                    {carosello.map((p, i) => (
+                      <figure key={p}>
+                        <img src={sorgenteImmagine(p) ?? ""} alt={`Foto ${i + 2} del carosello`} />
+                        <figcaption>
+                          <button type="button" className="btn btn-piccolo" disabled={i === 0} onClick={() => spostaFoto(i, -1)} aria-label="Sposta prima">←</button>
+                          <button type="button" className="btn btn-piccolo" disabled={i === carosello.length - 1} onClick={() => spostaFoto(i, 1)} aria-label="Sposta dopo">→</button>
+                          <button type="button" className="btn btn-piccolo btn-pericolo" onClick={() => setBozza({ ...bozza, sfondo_carosello: carosello.filter((x) => x !== p) })} aria-label="Togli dal carosello">✕</button>
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                )}
+                {carosello.length < 5 && (
+                  <label className="btn" style={{ justifySelf: "start" }}>+ Aggiungi foto al carosello
+                    <input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => { void caricaCarosello(e.target.files); e.target.value = ""; }} />
+                  </label>
+                )}
+                {carosello.length > 0 && (
+                  <>
+                    <div className="scelte" role="radiogroup" aria-label="Ogni quanto cambia la foto">
+                      {[6, 8, 12].map((s) => (
+                        <button key={s} type="button" className={`chip${(bozza.sfondo_intervallo ?? 8) === s ? " attivo" : ""}`} onClick={() => imposta("sfondo_intervallo", s)}>ogni {s} s</button>
+                      ))}
+                    </div>
+                    <label className="interruttore"><input type="checkbox" checked={bozza.sfondo_zoom !== false}
+                      onChange={(e) => imposta("sfondo_zoom", e.target.checked)} />Zoom lento sulle foto</label>
+                  </>
+                )}
+              </div>
             </>
           ) : (
             <>

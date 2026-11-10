@@ -4,6 +4,7 @@ import { euro, euroTesto } from "./formato";
 import { LATI, dimensioni, sedie, stacco, stato, type Tavolo } from "./piantina";
 import { nomeFileXml, xmlFattura, type Fattura } from "./fatture";
 import { conAggiunte, prezzoMinimo } from "./aggiunte";
+import { animazioniCarosello } from "./carosello";
 import { TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, menuInLingua, nomeIn } from "./traduzioni";
 
 const tavolo = (forma: Tavolo["forma"], posti: number): Tavolo =>
@@ -126,5 +127,15 @@ describe("aggiunte divise per gruppo", () => {
     const voci = (...p: number[]) => p.map((c) => ({ sovrapprezzo_cent: c }));
     expect(prezzoMinimo(0, [{ min: 1, scelte: voci(600, 400, 500) }, { min: 0, scelte: voci(300) }])).toBe(400);
     expect(prezzoMinimo(1000, [{ min: 2, scelte: voci(0, 0, 0) }])).toBe(1000);
+  });
+});
+
+describe("sfondo a carosello", () => {
+  it("una sfumatura per ogni foto oltre alla principale, ciclo = foto × intervallo", () => {
+    const { css, animazione } = animazioniCarosello(3, 8);
+    expect(animazione(2)).toBe("carosello2 24s linear infinite");
+    expect(css).toContain("@keyframes carosello1{0%,25.000%{opacity:0}33.333%,58.333%{opacity:1}66.667%,100%{opacity:0}}");
+    expect(animazioniCarosello(1, 8).css).toBe("");
+    expect(animazioniCarosello(2, 1).animazione(1)).toBe("carosello1 8s linear infinite");   // intervallo minimo 4 s
   });
 });

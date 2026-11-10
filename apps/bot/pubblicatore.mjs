@@ -125,6 +125,21 @@ const TESTI = {
   },
 };
 
+/**
+ * Sfondo a carosello: una regola @keyframes per ogni foto oltre alla principale, che resta ferma sotto.
+ * n = foto in tutto, intervallo = secondi per foto, sfumatura di 2 s (copia in apps/web/src/lib/carosello.ts).
+ */
+export function animazioniCarosello(n, intervallo, prefisso = "carosello") {
+  const T = Math.min(30, Math.max(4, Math.round(intervallo) || 8)), C = n * T, F = Math.min(2, T / 2);
+  const pct = (x) => `${Math.max(0, Math.min(100, (x / C) * 100)).toFixed(3)}%`;
+  let css = "";
+  for (let k = 1; k < n; k++) {
+    const fine = (k + 1) * T >= C ? "100%{opacity:0}" : `${pct((k + 1) * T)},100%{opacity:0}`;
+    css += `@keyframes ${prefisso}${k}{0%,${pct(k * T - F)}{opacity:0}${pct(k * T)},${pct((k + 1) * T - F)}{opacity:1}${fine}}`;
+  }
+  return { css, animazione: (k) => `${prefisso}${k} ${C}s linear infinite` };
+}
+
 /** Prezzo «da» di un piatto componibile: prezzo del piatto più le voci obbligatorie più economiche (copia in apps/web/src/lib/aggiunte.ts). */
 export const prezzoMinimo = (p) => p.prezzo_cent + (p.opzioni || []).reduce((tot, g) =>
   tot + (g.scelte || []).map((s) => s.sovrapprezzo_cent).sort((a, b) => a - b).slice(0, g.min).reduce((n, c) => n + c, 0), 0);
@@ -154,6 +169,7 @@ export function menuInLingua(menu, lingua) {
 // ---------------------------------------------------------------- Pagina statica
 /**
  * logoFile / sfondoFile: file pubblicati accanto alla pagina (es. «logo.png?v=…»), se presenti.
+ * sfondoFile può essere anche un elenco: la prima è la foto principale, le altre formano il carosello.
  * lingua «en» / «es»: pagina pubblicata in «<slug>/en/» o «<slug>/es/» (i file del menu sono nella cartella superiore).
  */
 export function pagina(menuOriginale, aggiornato, logoFileIt = null, sfondoFileIt = null, fotoPiattiIt = {}, versione = "", lingua = "it") {
@@ -161,7 +177,8 @@ export function pagina(menuOriginale, aggiornato, logoFileIt = null, sfondoFileI
   const su = lingua !== "it" && TESTI[lingua] ? "../" : "";   // percorso verso i file del menu
   const menu = menuInLingua(menuOriginale, lingua);
   const logoFile = logoFileIt && !/^https:\/\//.test(logoFileIt) ? su + logoFileIt : logoFileIt;
-  const sfondoFile = sfondoFileIt ? su + sfondoFileIt : sfondoFileIt;
+  const sfondi = (Array.isArray(sfondoFileIt) ? sfondoFileIt : [sfondoFileIt]).filter(Boolean).map((f) => su + f);
+  const sfondoFile = sfondi[0] ?? null;
   const fotoPiatti = Object.fromEntries(Object.entries(fotoPiattiIt).map(([k, v]) => [k, su + v]));
   const TIPI = L.tipi;
   const perId = new Map(menu.categorie.flatMap((c) => c.prodotti.map((p) => [p.id, p])));
@@ -181,9 +198,14 @@ export function pagina(menuOriginale, aggiornato, logoFileIt = null, sfondoFileI
   const mostraNome = !logo || a.mostra_nome !== false;
   const entro = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
   const modo = a.sfondo_modo === "testata" ? "testata" : "pagina";
+  const filtro = `filter:blur(${entro(a.sfondo_sfocatura, 0, 20, 3)}px)${a.sfondo_bn ? " grayscale(1)" : ""}`;
+  // Carosello: le foto oltre alla principale si caricano dopo la pagina (data-sfondo) e sfumano a turno sopra la principale
+  const carosello = animazioniCarosello(sfondi.length, entro(a.sfondo_intervallo, 4, 30, 8));
   const foto = sfondoFile
-    ? `<div class="sfondo-menu sfondo-menu-${modo}" aria-hidden="true"><div class="sfondo-menu-img" style="background-image:url('${esc(sfondoFile)}');filter:blur(${entro(a.sfondo_sfocatura, 0, 20, 3)}px)${a.sfondo_bn ? " grayscale(1)" : ""}"></div>`
-      + `<div class="sfondo-menu-velo" style="opacity:${1 - entro(a.sfondo_opacita, 0, 100, 22) / 100}"></div></div>`
+    ? `<div class="sfondo-menu sfondo-menu-${modo}" aria-hidden="true"><div class="sfondo-menu-strati${sfondi.length > 1 && a.sfondo_zoom !== false ? " zoom" : ""}">`
+      + `<div class="sfondo-menu-img" style="background-image:url('${esc(sfondoFile)}');${filtro}"></div>`
+      + sfondi.slice(1).map((f, i) => `<div class="sfondo-menu-img sfondo-carosello" data-sfondo="${esc(f)}" style="${filtro};animation:${carosello.animazione(i + 1)}"></div>`).join("")
+      + `</div><div class="sfondo-menu-velo" style="opacity:${1 - entro(a.sfondo_opacita, 0, 100, 22) / 100}"></div></div>`
     : "";
 
   const regioneVino = (p) => (p.vino ? regioneDi(p.vino.regione) || L.altreZone : null);
@@ -255,6 +277,12 @@ body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit
 .sfondo-menu-testata{position:absolute;inset:0;border-radius:0 0 18px 18px}
 .sfondo-menu-img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.08)}
 .sfondo-menu-velo{position:absolute;inset:0;background:var(--s)}
+/* Carosello dello sfondo: sfumature lente, zoom appena percettibile; fermo se il telefono chiede meno movimento */
+.sfondo-menu-strati{position:absolute;inset:0}.sfondo-carosello{opacity:0}
+.sfondo-menu-strati.zoom{animation:sfondo-lento 24s ease-in-out infinite alternate}
+@keyframes sfondo-lento{from{transform:scale(1)}to{transform:scale(1.07)}}
+${carosello.css}
+@media (prefers-reduced-motion:reduce){.sfondo-carosello{display:none}.sfondo-menu-strati.zoom{animation:none}}
 /* Scelta della lingua in alto, sopra «Trova il tuo vino» */
 .lingue{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0 0}.lingue a{color:var(--p);text-decoration:none;font-weight:700;border:1px solid color-mix(in srgb,var(--p) 60%,transparent);border-radius:999px;padding:5px 12px;font-size:.82rem;background:color-mix(in srgb,var(--s) 70%,transparent)}.lingue a[aria-current]{background:var(--p);color:var(--s);border-color:var(--p)}
 .filtro-regioni{margin:16px 0 0;padding:16px 14px 14px;border-radius:18px;text-align:center;background:color-mix(in srgb,var(--s) 90%,transparent);border:1px solid color-mix(in srgb,var(--p) 30%,transparent);box-shadow:0 10px 30px rgba(0,0,0,.2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
@@ -406,6 +434,8 @@ html{scroll-padding-top:76px}
 <script type="application/json" id="dati">${dati}</script>
 <script>
 (() => {
+  // Foto del carosello: dopo il caricamento della pagina, così il menu compare subito
+  addEventListener("load", () => document.querySelectorAll("[data-sfondo]").forEach((e) => { e.style.backgroundImage = "url('" + e.dataset.sfondo.replace(/['()]/g, "") + "')"; }));
   const D = JSON.parse(document.getElementById("dati").textContent);
   const per = new Map();
   D.categorie.forEach((c) => c.prodotti.forEach((p) => per.set(p.id, Object.assign({ categoria: c.id }, p))));
@@ -722,10 +752,17 @@ export async function giro() {
       if (ultimo.get(slug) === impronta) continue;
       const ora = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Rome" }).format(new Date());
       const logoFile = await immagine(slug, "logo", menu.aspetto?.logo_dati, menu.aspetto?.logo_path);
-      const sfondoFile = await immagine(slug, "sfondo", menu.aspetto?.sfondo_dati, menu.aspetto?.sfondo_path);
+      const sfondoPrincipale = await immagine(slug, "sfondo", menu.aspetto?.sfondo_dati, menu.aspetto?.sfondo_path);
+      // Carosello: solo insieme a una foto principale, al massimo 5 in più (il database lo garantisce)
+      const altriSfondi = [];
+      if (sfondoPrincipale) for (const [i, percorso] of (menu.aspetto?.sfondo_carosello ?? []).slice(0, 5).entries()) {
+        const f = await immagineArchivio(slug, `sfondo-${i + 2}`, percorso);
+        if (f) altriSfondi.push(f);
+      }
+      const sfondoFile = sfondoPrincipale ? [sfondoPrincipale, ...altriSfondi] : null;
       const fotoPiatti = await fotoDeiPiatti(slug, menu);
       const { aspetto, ...resto } = menu;
-      const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null, logo_path: null, sfondo_path: null } : aspetto };
+      const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null, logo_path: null, sfondo_path: null, sfondo_carosello: [] } : aspetto };
       const versione = impronta.slice(0, 12);
       await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti, versione), `Menu ${slug} aggiornato`);
       for (const [l] of LINGUE.slice(1)) await pubblica(`${slug}/${l}/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti, versione, l), `Menu ${slug} (${l})`);
@@ -734,7 +771,7 @@ export async function giro() {
       ultimo.set(slug, impronta);
       log(`Pubblicato il menu «${slug}»`);
       // Dopo la pubblicazione: via le immagini non più usate (vecchie versioni, piatti tolti)
-      const usate = new Set([logoFile, sfondoFile, ...Object.values(fotoPiatti)].filter(Boolean).map((f) => `${slug}/${f}`));
+      const usate = new Set([logoFile, ...(sfondoFile ?? []), ...Object.values(fotoPiatti)].filter(Boolean).map((f) => `${slug}/${f}`));
       await pulisciArchivio(slug, usate);
     } catch (e) {
       // Offline o Cloudflare irraggiungibile: online resta l'ultima versione, si riprova al giro successivo

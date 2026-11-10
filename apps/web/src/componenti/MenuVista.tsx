@@ -3,7 +3,8 @@ import { centesimi, formatta } from "@gest/core";
 import type { Aspetto, MenuPubblico } from "../lib/tipi";
 import { caricaFont, pilaFont } from "../lib/font";
 import { SchedaPiatto } from "./SchedaPiatto";
-import { sorgenteImmagine } from "../lib/archivio";
+import { sorgenteImmagine, urlImmagine } from "../lib/archivio";
+import { animazioniCarosello } from "../lib/carosello";
 import { regioneDi } from "../lib/regioni";
 import { MappaRegioni } from "./MappaRegioni";
 import { MAPPA_ITALIA } from "../lib/mappaItalia";
@@ -53,12 +54,19 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
 
   const modo = aspetto.sfondo_modo === "testata" ? "testata" : "pagina";
   const visibile = Math.min(100, Math.max(0, aspetto.sfondo_opacita)) / 100;
+  const filtro = `blur(${aspetto.sfondo_sfocatura}px)${aspetto.sfondo_bn ? " grayscale(1)" : ""}`;
+  // Carosello: le altre foto sfumano a turno sopra la principale (stesse animazioni della pagina pubblica)
+  const altre = sfondo ? (aspetto.sfondo_carosello ?? []).slice(0, 5).map((p) => urlImmagine(p)).filter((u): u is string => !!u) : [];
+  const carosello = animazioniCarosello(altre.length + 1, aspetto.sfondo_intervallo ?? 8, "menu-carosello");
   const foto = sfondo ? (
     <div className={`menu-sfondo menu-sfondo-${modo}`} aria-hidden="true">
-      <div className="menu-sfondo-immagine" style={{
-        backgroundImage: `url("${sfondo}")`,
-        filter: `blur(${aspetto.sfondo_sfocatura}px)${aspetto.sfondo_bn ? " grayscale(1)" : ""}`,
-      }} />
+      {altre.length > 0 && <style>{carosello.css}</style>}
+      <div className={`menu-sfondo-strati${altre.length > 0 && aspetto.sfondo_zoom !== false ? " zoom" : ""}`}>
+        <div className="menu-sfondo-immagine" style={{ backgroundImage: `url("${sfondo}")`, filter: filtro }} />
+        {altre.map((u, i) => (
+          <div key={u} className="menu-sfondo-immagine menu-sfondo-carosello" style={{ backgroundImage: `url("${u}")`, filter: filtro, animation: carosello.animazione(i + 1) }} />
+        ))}
+      </div>
       {/* Velo del colore di sfondo: più la foto è «visibile», più il velo è trasparente */}
       <div className="menu-sfondo-velo" style={{ opacity: 1 - visibile }} />
     </div>

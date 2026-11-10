@@ -175,6 +175,27 @@ describe("pagina statica", () => {
     assert.match(html, /<a href="\.\.\/" hreflang="it" lang="it">🇮🇹 Italiano<\/a>\s*<a href="\.\.\/en\/" hreflang="en" lang="en" aria-current="page">🇬🇧 English<\/a>\s*<a href="\.\.\/es\/" hreflang="es" lang="es">🇪🇸 Español<\/a>/);
   });
 
+  test("sfondo a carosello: foto principale ferma, le altre sfumano a turno e si caricano dopo la pagina", () => {
+    const m = menuEsempio(); m.aspetto = { ...(m.aspetto ?? {}), sfondo_intervallo: 8, sfondo_zoom: true };
+    const html = pub.pagina(m, "ora", null, ["sfondo.aaa.webp", "sfondo-2.bbb.webp", "sfondo-3.ccc.webp"], {}, "v1");
+    assert.match(html, /<div class="sfondo-menu-img" style="background-image:url\('sfondo\.aaa\.webp'\)/);
+    assert.match(html, /data-sfondo="sfondo-2\.bbb\.webp" style="[^"]*animation:carosello1 24s linear infinite"/);
+    assert.match(html, /data-sfondo="sfondo-3\.ccc\.webp" style="[^"]*animation:carosello2 24s linear infinite"/);
+    assert.doesNotMatch(html, /url\('sfondo-2/, "le altre foto non si scaricano prima della pagina");
+    assert.match(html, /sfondo-menu-strati zoom/);
+    assert.match(html, /prefers-reduced-motion:reduce\)\{\.sfondo-carosello\{display:none\}/);
+    // Con una foto sola nessuna animazione
+    assert.doesNotMatch(pub.pagina(m, "ora", null, "sfondo.aaa.webp", {}, "v1"), /sfondo-carosello"|class="sfondo-menu-strati zoom/);
+  });
+
+  test("animazioni del carosello: ogni foto visibile nel suo turno, con la sfumatura", () => {
+    const { css, animazione } = pub.animazioniCarosello(3, 8);
+    assert.equal(animazione(1), "carosello1 24s linear infinite");
+    assert.match(css, /@keyframes carosello1\{0%,25\.000%\{opacity:0\}33\.333%,58\.333%\{opacity:1\}66\.667%,100%\{opacity:0\}\}/);
+    assert.match(css, /@keyframes carosello2\{0%,58\.333%\{opacity:0\}66\.667%,91\.667%\{opacity:1\}100%\{opacity:0\}\}/);
+    assert.equal(pub.animazioniCarosello(1, 8).css, "");
+  });
+
   test("pagina in spagnolo: testi del locale in spagnolo, interfaccia e allergeni in spagnolo", () => {
     const m = menuEsempio();
     m.categorie[0].nome_es = "Pinsas"; m.categorie[0].prodotti[0].descrizione_es = "Albahaca y piñones";

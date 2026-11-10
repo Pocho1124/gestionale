@@ -19,6 +19,8 @@ export interface Aspetto {
   layout: "lista" | "griglia" | "compatto" | "elegante";
   mostra_allergeni: boolean; mostra_descrizioni: boolean; testo_piede: string;
   sfondo_dati: string | null; sfondo_path?: string | null; sfondo_opacita: number; sfondo_sfocatura: number; sfondo_bn: boolean; sfondo_modo?: "pagina" | "testata";
+  /** Carosello: altre foto oltre alla principale (al massimo 5), secondi per foto, zoom lento. */
+  sfondo_carosello?: string[]; sfondo_intervallo?: number; sfondo_zoom?: boolean;
 }
 
 export interface MenuPubblico {

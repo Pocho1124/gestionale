@@ -173,6 +173,17 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu-sfondo-testata { position: absolute; inset: 0; border-radius: 0 0 18px 18px; }
 .menu-sfondo-immagine { position: absolute; inset: 0; background-size: cover; background-position: center; transform: scale(1.08); }
 .menu-sfondo-velo { position: absolute; inset: 0; background: var(--m-sfondo); }
+/* Carosello dello sfondo: stesse regole della pagina pubblica */
+.menu-sfondo-strati { position: absolute; inset: 0; }
+.menu-sfondo-carosello { opacity: 0; }
+.menu-sfondo-strati.zoom { animation: sfondo-lento 24s ease-in-out infinite alternate; }
+@keyframes sfondo-lento { from { transform: scale(1); } to { transform: scale(1.07); } }
+@media (prefers-reduced-motion: reduce) { .menu-sfondo-carosello { display: none; } .menu-sfondo-strati.zoom { animation: none; } }
+.gruppo-interno { display: grid; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+.carosello-foto { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.carosello-foto figure { margin: 0; display: grid; gap: 4px; }
+.carosello-foto img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--bordo, #ddd); }
+.carosello-foto figcaption { display: flex; gap: 4px; justify-content: center; }
 .con-foto-pagina .menu-nav { background: color-mix(in srgb, var(--m-sfondo) 80%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .con-foto-testata .menu-testata { position: relative; isolation: isolate; padding-left: 12px; padding-right: 12px; }
 /* Foto del piatto nella scheda: intera, mai tagliata */

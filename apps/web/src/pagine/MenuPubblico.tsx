@@ -10,6 +10,7 @@ export const ASPETTO_PREDEFINITO: Aspetto = {
   font_titoli: "Young Serif", font_testo: "Figtree", logo_url: null, logo_dati: null, mostra_nome: true, layout: "lista",
   mostra_allergeni: true, mostra_descrizioni: true, testo_piede: "",
   sfondo_dati: null, sfondo_opacita: 22, sfondo_sfocatura: 3, sfondo_bn: false, sfondo_modo: "pagina",
+  sfondo_carosello: [], sfondo_intervallo: 8, sfondo_zoom: true,
 };
 
 /** Pagina aperta dal QR: legge solo i dati pubblici e si aggiorna da sola ogni 15 secondi. */
