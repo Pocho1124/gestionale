@@ -316,6 +316,24 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .quiz-dati strong{font-family:var(--ft);font-weight:400;font-size:1.1rem}
 .quiz-info{font-size:.8rem;color:var(--p)}
 .quiz-perche{font-size:.8rem;font-style:italic;opacity:.8}
+/* Leggibilità: ogni categoria in un riquadro velato (testi pieni anche sopra la foto di sfondo), titoli grandi, descrizioni dritte */
+.menu .cat{margin-top:22px;padding:18px 18px 8px;border-radius:18px;background:color-mix(in srgb,var(--s) 90%,transparent);border:1px solid color-mix(in srgb,var(--p) 30%,transparent);box-shadow:0 10px 30px rgba(0,0,0,.2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.menu .cat h2{display:flex;align-items:center;justify-content:center;gap:14px;margin:0 0 6px;font-family:var(--ft);font-size:clamp(1.45rem,5vw,1.85rem);font-weight:400;text-transform:none;letter-spacing:.02em;color:var(--p);text-align:center}
+.menu .cat h2::before,.menu .cat h2::after{content:"";flex:1;max-width:90px;height:1px;background:linear-gradient(90deg,transparent,var(--p))}
+.menu .cat h2::after{transform:scaleX(-1)}
+.menu .cat-desc{text-align:center;font-style:italic;opacity:1;color:color-mix(in srgb,var(--t) 82%,transparent);margin:0 0 8px}
+.menu .piatto{padding:13px 0;border-bottom:1px solid color-mix(in srgb,var(--t) 12%,transparent)}
+.menu .piatti > .piatto:last-child{border-bottom:0}
+.menu .riga h3{font-size:1.14rem;line-height:1.3}
+.menu .prezzo{color:var(--p);font-weight:700}
+.menu .desc{opacity:1;font-style:normal;font-size:.96rem;line-height:1.55;margin-top:5px;color:color-mix(in srgb,var(--t) 88%,transparent)}
+.menu .vino-info{font-size:.76rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase}
+.menu .allergeni{opacity:.85}
+.menu .regione-titolo{display:flex;align-items:center;gap:10px;margin:18px 0 2px;opacity:1}
+.menu .regione-titolo::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--p) 30%,transparent)}
+.menu.griglia .piatto{border:1px solid color-mix(in srgb,var(--t) 15%,transparent);border-radius:12px;padding:10px}
+.con-sfondo header{text-shadow:0 1px 4px rgba(0,0,0,.55)}
+.con-sfondo .filtro-regioni button:not(.attiva){background:color-mix(in srgb,var(--s) 78%,transparent)}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
 </head>

@@ -37,8 +37,8 @@ export function sembraItaliano(originale, tradotto) {
   const italiane = parole.filter((p) => PAROLE_ITALIANE.has(p)).length;
   return italiane >= 2 && italiane / parole.length >= 0.2;
 }
-/** I nomi possono restare uguali (Bruschetta, Burrata); descrizioni e note devono essere in inglese. */
-const descrittivo = (campo) => campo !== "nome";
+/** I nomi dei piatti possono restare uguali (Bruschetta, Burrata); categorie, descrizioni e note devono essere in inglese. */
+const descrittivo = (tabella, campo) => campo !== "nome" || tabella === "categorie";
 
 const SISTEMA = [
   "Traduci in inglese, per il menu di un'enoteca italiana, ogni campo che ricevi e restituisci gli stessi campi tradotti.",
@@ -79,7 +79,7 @@ export async function traduciMenu({ db, chiediModello, locale, log = () => {}, l
       // ritenta una volta per avvio del bot (il registro dei tentativi evita richieste ripetute ogni minuto)
       // Traduzioni già salvate ma rimaste in italiano (modello che ricopia il testo): si rifanno
       const daFare = manuale ? campi.filter(([it, en]) => String(x[it] ?? "").trim() && !String(x[en] ?? "").trim())
-        : da !== im ? campi : campi.some(([it, en]) => descrittivo(it) && sembraItaliano(x[it], x[en])) ? campi : [];
+        : da !== im ? campi : campi.some(([it, en]) => descrittivo(t.tabella, it) && sembraItaliano(x[it], x[en])) ? campi : [];
       const chiave = `${t.tabella}:${x[t.chiave]}:${im}:${daFare.map(([it]) => it).join(",")}`;
       if (daFare.length && !tentati.has(chiave) && UUID.test(String(x[t.chiave]))) voci.push({ t, x, campi: daFare, im, manuale, chiave });
     }
@@ -111,7 +111,7 @@ export async function traduciMenu({ db, chiediModello, locale, log = () => {}, l
       const originale = String(x[it] ?? "").trim();
       if (!originale) { if (!manuale) corpo[en] = ""; continue; }
       const tradotto = String(risposta[`${it}_inglese`] ?? "").trim();
-      if (traduzioneValida(originale, tradotto, massimo) && !(descrittivo(it) && sembraItaliano(originale, tradotto))) { corpo[en] = tradotto; buoni++; }
+      if (traduzioneValida(originale, tradotto, massimo) && !(descrittivo(t.tabella, it) && sembraItaliano(originale, tradotto))) { corpo[en] = tradotto; buoni++; }
       else { scartati++; if (!manuale) corpo[en] = ""; log(`Traduzione scartata (${t.tabella}.${it} «${originale.slice(0, 40)}»): rimasta in italiano, numeri o lunghezza non corrispondono`); }
     }
     if (!manuale) corpo.traduzione_da = buoni || !scartati ? im : im + SCARTATA;

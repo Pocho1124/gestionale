@@ -133,6 +133,13 @@ describe("traduzione del menu", () => {
     assert.equal(modifiche[0].corpo.descrizione_en, "Cured meats and cheeses for 2");
   });
 
+  test("nome della categoria ricopiato in italiano: scartato; nome del piatto uguale: accettato", async () => {
+    const { db, modifiche } = dbFinto({ categorie: [riga(12, "Carta dei vini")], prodotti: [riga(13, "Bruschetta")] });
+    await traduciMenu({ db, chiediModello: async ({ utente }) => ({ nome_inglese: JSON.parse(utente).nome }), locale: LOCALE });
+    assert.equal(modifiche[0].corpo.nome_en, "");
+    assert.equal(modifiche[1].corpo.nome_en, "Bruschetta");
+  });
+
   test("al massimo «limite» voci per giro", async () => {
     const { db, modifiche } = dbFinto({ prodotti: Array.from({ length: 30 }, (_, i) => riga(100 + i, `Piatto ${i}`, "")) });
     await traduciMenu({ db, chiediModello: async ({ utente }) => ({ nome_inglese: `Dish ${JSON.parse(utente).nome.split(" ")[1]}` }), locale: LOCALE, limite: 15 });
