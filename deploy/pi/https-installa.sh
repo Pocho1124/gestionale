@@ -70,6 +70,16 @@ if [ -n "$DOMINIO" ]; then
     --dns.resolvers 1.1.1.1:53 --dns.propagation-wait 90s --domains "$DOMINIO" --path /.lego $AZIONE \
     || { echo "Certificato non ottenuto: controlla token e dominio, poi rilancia"; exit 1; }
   [ -s "$CERT/certificates/$DOMINIO.crt" ] || { echo "Certificato non trovato dopo la richiesta"; exit 1; }
+  # La chiave di lego è leggibile solo da root: se ne fa una copia per l'utente con cui gira il gateway
+  GWID=$(cd /opt/supabase && docker compose ps -q gateway)
+  UG=$(docker exec "$GWID" sh -c 'echo "$(id -u):$(id -g)"' 2>/dev/null || echo 0:0)
+  echo "$UG" | grep -Eq '^[0-9]+:[0-9]+$' || UG=0:0
+  copia_certificato() {
+    install -d -m 750 -o "${UG%:*}" -g "${UG#*:}" "$CERT/gateway"
+    install -m 644 -o "${UG%:*}" -g "${UG#*:}" "$CERT/certificates/$DOMINIO.crt" "$CERT/gateway/$DOMINIO.crt"
+    install -m 600 -o "${UG%:*}" -g "${UG#*:}" "$CERT/certificates/$DOMINIO.key" "$CERT/gateway/$DOMINIO.key"
+  }
+  copia_certificato
 
   echo "== Rinnovo automatico ogni notte"
   cat > /opt/gestionale/rinnova-certificato.sh <<RINNOVO
@@ -81,7 +91,11 @@ PRIMA=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
 docker run --rm --env-file $ENVH -v "$CERT:/.lego" $LEGO_IMMAGINE --accept-tos --email "\$LEGO_EMAIL" --dns cloudflare \\
   --dns.resolvers 1.1.1.1:53 --dns.propagation-wait 90s --domains "\$DOMINIO" --path /.lego renew --days 30
 DOPO=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
-if [ "\$PRIMA" != "\$DOPO" ]; then (cd /opt/supabase && docker compose restart gateway >/dev/null); echo "Certificato rinnovato"; fi
+if [ "\$PRIMA" != "\$DOPO" ]; then
+  install -m 644 -o ${UG%:*} -g ${UG#*:} "$CERT/certificates/\$DOMINIO.crt" "$CERT/gateway/\$DOMINIO.crt"
+  install -m 600 -o ${UG%:*} -g ${UG#*:} "$CERT/certificates/\$DOMINIO.key" "$CERT/gateway/\$DOMINIO.key"
+  (cd /opt/supabase && docker compose restart gateway >/dev/null); echo "Certificato rinnovato"
+fi
 RINNOVO
   chmod 700 /opt/gestionale/rinnova-certificato.sh
   cat > /etc/systemd/system/gestionale-certificato.service <<UNIT
@@ -122,7 +136,7 @@ GW=$(cd /opt/supabase && docker compose ps -q gateway)
 DATI=""
 docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' "$GW" | tr ' ' '\n' | grep -qx /data || DATI="      - /opt/gestionale/caddy-dati:/data"
 [ -z "$DOMINIO" ] || DATI="$DATI
-      - $CERT/certificates:/certificati:ro"
+      - $CERT/gateway:/certificati:ro"
 cat > "$OVR" <<YML
 # Gestito da installa-pi.sh e https-installa.sh: backoffice sulle porte 80 e 443
 services:
@@ -236,18 +250,23 @@ fi
 
 echo "== 4/5 Riavvio del gateway"
 (cd /opt/supabase && docker compose up -d gateway >/dev/null) || { ripristina; exit 1; }
-sleep 8
 GW=$(cd /opt/supabase && docker compose ps -q gateway)
+log_gateway() { echo "Ultime righe del gateway:"; docker logs --tail 25 "$GW" 2>&1 | sed 's/^/   /' || true; }
+CODICE=000
+for _ in 1 2 3 4 5 6 7 8; do
+  sleep 5
+  CODICE=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' "https://$IP/" || true)
+  [ "$CODICE" = "200" ] && break
+done
 if [ "$(docker inspect -f '{{.State.Running}}' "$GW" 2>/dev/null)" != "true" ] || [ "$(docker inspect -f '{{.State.Restarting}}' "$GW")" = "true" ]; then
-  echo "Il gateway non parte con la nuova configurazione. Ultime righe:"; docker logs --tail 15 "$GW" 2>&1 || true
+  echo "Il gateway non parte con la nuova configurazione."; log_gateway
   ripristina; exit 1
 fi
-CODICE=$(curl -sk -o /dev/null -w '%{http_code}' "https://$IP/" || true)
-[ "$CODICE" = "200" ] || { echo "Il backoffice in HTTPS non risponde (HTTP $CODICE)"; ripristina; exit 1; }
+[ "$CODICE" = "200" ] || { echo "Il backoffice in HTTPS non risponde (HTTP $CODICE)"; log_gateway; ripristina; exit 1; }
 if [ -n "$DOMINIO" ]; then
   # Senza -k: il certificato deve risultare valido
   CODICE=$(curl -s --resolve "$DOMINIO:443:$IP" -o /dev/null -w '%{http_code}' "https://$DOMINIO/" || true)
-  [ "$CODICE" = "200" ] || { echo "https://$DOMINIO non risponde con un certificato valido (HTTP $CODICE)"; ripristina; exit 1; }
+  [ "$CODICE" = "200" ] || { echo "https://$DOMINIO non risponde con un certificato valido (HTTP $CODICE)"; log_gateway; ripristina; exit 1; }
 fi
 REDIR=$(curl -s -o /dev/null -w '%{http_code}' "http://$IP/" || true)
 
