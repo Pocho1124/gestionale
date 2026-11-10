@@ -660,3 +660,21 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .tavolo-prenotato rect { fill: #3D7DD8; stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 .tavolo-prenotato text { text-anchor: middle; font: 700 11px var(--corpo); fill: #fff; pointer-events: none; }
 .pallino.stato-prenotato { background: #3D7DD8; }
+
+/* Schermo cucina */
+.cucina:fullscreen { background: var(--sfondo); padding: 16px; overflow: auto; }
+.cucina-colonne { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 900px) { .cucina-colonne { grid-template-columns: 1fr; } }
+.cucina-colonna { background: color-mix(in srgb, var(--superficie) 70%, transparent); border: 1px solid var(--linea); border-radius: 14px; padding: 10px; display: grid; gap: 10px; }
+.cucina-colonna h2 { margin: 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+.colonna-confermato { border-top: 5px solid #3D7DD8; } .colonna-in_preparazione { border-top: 5px solid #D79A32; } .colonna-pronto { border-top: 5px solid var(--ok); }
+.comanda-cucina { background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
+.comanda-cucina header { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.15rem; }
+.comanda-tempo { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--muto); }
+.comanda-cucina.attenzione { border-color: #D79A32; } .comanda-cucina.attenzione .comanda-tempo { color: #B87A12; }
+.comanda-cucina.ritardo { border-color: var(--pericolo); animation: pronti 1.6s ease-in-out infinite; } .comanda-cucina.ritardo .comanda-tempo { color: var(--pericolo); }
+.comanda-cucina ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 1.1rem; }
+.comanda-scelte { display: block; font-size: .9rem; color: var(--muto); padding-left: 1.6em; }
+.comanda-nota-cucina { display: block; font-size: .95rem; font-weight: 700; color: var(--pericolo); margin: 0; padding-left: 1.6em; }
+.comanda-cucina .btn-pieno { padding: 10px; font-size: 1.05rem; }
+@media (prefers-reduced-motion: reduce) { .comanda-cucina.ritardo { animation: none; } }

@@ -46,6 +46,7 @@ export function Guscio() {
         </div>
         <nav className="barra-nav">
           <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>
+          {puo(ruolo, "cucina.avanza") && <NavLink to="/cucina">Cucina</NavLink>}
           <NavLink to="/catalogo">Catalogo</NavLink>
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
           {puo(ruolo, "catalogo") && <NavLink to="/enciclopedia">Vini</NavLink>}
