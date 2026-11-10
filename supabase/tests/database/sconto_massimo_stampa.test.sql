@@ -9,7 +9,7 @@ begin
   perform set_config('request.jwt.claim.sub', p_uid, true);
 end $$;
 create temp table ctx (chiave text primary key, valore text);
-grant all on ctx to authenticated, servizio_stampa;
+grant all on ctx to authenticated;
 create function pg_temp.v(p text) returns uuid language sql as $$ select valore::uuid from ctx where chiave = p $$;
 
 select plan(7);
@@ -45,15 +45,17 @@ select is((public.imposta_sconto(pg_temp.v('s'), 800) ->> 'sconto_cent')::int, 8
 select pg_temp.come('f8222222-2222-2222-2222-222222222222');
 select is((public.imposta_sconto(pg_temp.v('s'), null, 50) ->> 'sconto_cent')::int, 2000, 'Il responsabile non ha il tetto');
 
--- 2. Servizio di stampa: solo le colonne della comanda
+-- 2. Servizio di stampa: solo le colonne della comanda (controllo dei permessi senza cambiare ruolo:
+--    il ruolo del servizio non ha accesso allo schema delle funzioni di test)
 reset role;
-set local role servizio_stampa;
-select throws_ok($$ select qr_token from public.tavoli $$, '42501', null, 'Il servizio di stampa non legge il QR dei tavoli');
-select throws_ok($$ select codice from public.sessioni_tavolo $$, '42501', null, 'Né i codici dei tavoli');
-select lives_ok($$ select o.nota, o.origine, t.nome from public.ordini o join public.tavoli t on t.id = o.tavolo_id and t.locale_id = o.locale_id $$,
-                'Legge ciò che stampa: tavolo, nota e origine dell''ordine');
-select lives_ok($$ select nome, quantita, nota, opzioni from public.righe_ordine where ordine_id is not null and reparto_id is null $$,
-                'E le righe della comanda');
+select ok(not has_column_privilege('servizio_stampa', 'public.tavoli', 'qr_token', 'select'), 'Il servizio di stampa non legge il QR dei tavoli');
+select ok(not has_table_privilege('servizio_stampa', 'public.sessioni_tavolo', 'select'), 'Né i codici dei tavoli');
+select ok(has_column_privilege('servizio_stampa', 'public.tavoli', 'nome', 'select') and has_column_privilege('servizio_stampa', 'public.ordini', 'nota', 'select')
+          and has_column_privilege('servizio_stampa', 'public.ordini', 'origine', 'select') and has_column_privilege('servizio_stampa', 'public.ordini', 'tavolo_id', 'select'),
+          'Legge ciò che stampa: tavolo, nota e origine dell''ordine');
+select ok(has_column_privilege('servizio_stampa', 'public.righe_ordine', 'opzioni', 'select') and has_column_privilege('servizio_stampa', 'public.righe_ordine', 'reparto_id', 'select')
+          and has_column_privilege('servizio_stampa', 'public.stampanti', 'indirizzo', 'select') and not has_column_privilege('servizio_stampa', 'public.righe_ordine', 'prezzo_cent', 'select'),
+          'E le righe della comanda, senza i prezzi');
 
 select * from finish();
 rollback;
