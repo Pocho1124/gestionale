@@ -3,7 +3,7 @@
 // Database e modello simulati.
 import { test, describe, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { dimenticaTentativi, impronta, traduciMenu, traduzioneValida } from "../traduttore.mjs";
+import { dimenticaTentativi, impronta, sembraItaliano, traduciMenu, traduzioneValida } from "../traduttore.mjs";
 
 const LOCALE = "00000000-0000-4000-8000-000000000001";
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -26,7 +26,7 @@ const dizionario = { Taglieri: "Boards", "Tagliere misto": "Mixed board", "Salum
   "Rosso strutturato": "Full-bodied red", "Affinato 24 mesi in botte": "Aged 24 months in barrel", "Pinsa bianca": "White pinsa" };
 const modello = async ({ utente }) => {
   const x = JSON.parse(utente); delete x.tipo;
-  return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, dizionario[v] ?? `EN ${v}`]));
+  return Object.fromEntries(Object.entries(x).map(([k, v]) => [`${k}_inglese`, dizionario[v] ?? `EN ${v}`]));
 };
 
 beforeEach(() => dimenticaTentativi());
@@ -42,6 +42,12 @@ describe("controllo delle traduzioni", () => {
     assert.ok(traduzioneValida("", "", 500), "descrizione vuota resta vuota");
     assert.ok(traduzioneValida("Affinato 24,5 mesi", "Aged 24.5 months", 500), "virgola e punto decimale equivalenti");
   });
+  test("riconosce il testo rimasto in italiano", () => {
+    assert.ok(sembraItaliano("Pane e pomodoro", "Pane e pomodoro"), "ricopiato");
+    assert.ok(sembraItaliano("Salumi misti", "Salumi misti con formaggi della casa e miele"), "italiano");
+    assert.ok(!sembraItaliano("Salumi misti con miele", "Mixed cured meats with honey"));
+    assert.ok(!sembraItaliano("Affinato in botte", "Aged in barrel"));
+  });
 });
 
 describe("traduzione del menu", () => {
@@ -55,7 +61,7 @@ describe("traduzione del menu", () => {
 
   test("campi indipendenti: il nome scartato non blocca la descrizione", async () => {
     const { db, modifiche } = dbFinto({ prodotti: [riga(3, "Calice 15 cl", "Rosso strutturato")] });
-    await traduciMenu({ db, chiediModello: async () => ({ nome: "Glass 20 cl", descrizione: "Full-bodied red" }), locale: LOCALE });
+    await traduciMenu({ db, chiediModello: async () => ({ nome_inglese: "Glass 20 cl", descrizione_inglese: "Full-bodied red" }), locale: LOCALE });
     assert.deepEqual(modifiche[0].corpo, { nome_en: "", descrizione_en: "Full-bodied red", traduzione_da: impronta("Calice 15 cl", "Rosso strutturato") });
   });
 
@@ -99,7 +105,7 @@ describe("traduzione del menu", () => {
   test("tutto scartato: si segna e non si ritenta nello stesso avvio", async () => {
     const prodotti = [riga(8, "Calice 15 cl", "")];
     const { db, modifiche } = dbFinto({ prodotti });
-    await traduciMenu({ db, chiediModello: async () => ({ nome: "Glass 20 cl" }), locale: LOCALE });
+    await traduciMenu({ db, chiediModello: async () => ({ nome_inglese: "Glass 20 cl" }), locale: LOCALE });
     assert.deepEqual(modifiche[0].corpo, { nome_en: "", descrizione_en: "", traduzione_da: impronta("Calice 15 cl", "") + ":scartata" });
     let chiamate = 0;
     await traduciMenu({ db, chiediModello: async () => { chiamate++; return {}; }, locale: LOCALE });
@@ -114,9 +120,22 @@ describe("traduzione del menu", () => {
     assert.equal(await traduciMenu({ db, chiediModello: modello, locale: LOCALE }), 1);
   });
 
+  test("descrizione ricopiata in italiano: scartata, il nome tradotto resta", async () => {
+    const { db, modifiche } = dbFinto({ prodotti: [riga(10, "Tagliere misto", "Salumi e formaggi della casa")] });
+    await traduciMenu({ db, chiediModello: async () => ({ nome_inglese: "Mixed board", descrizione_inglese: "Salumi e formaggi della casa" }), locale: LOCALE });
+    assert.deepEqual(modifiche[0].corpo, { nome_en: "Mixed board", descrizione_en: "", traduzione_da: impronta("Tagliere misto", "Salumi e formaggi della casa") });
+  });
+
+  test("traduzione già salvata ma in italiano: si rifà", async () => {
+    const im = impronta("Tagliere misto", "Salumi e formaggi per 2");
+    const { db, modifiche } = dbFinto({ prodotti: [riga(11, "Tagliere misto", "Salumi e formaggi per 2", { traduzione_da: im, nome_en: "Mixed board", descrizione_en: "Salumi e formaggi per 2" })] });
+    await traduciMenu({ db, chiediModello: modello, locale: LOCALE });
+    assert.equal(modifiche[0].corpo.descrizione_en, "Cured meats and cheeses for 2");
+  });
+
   test("al massimo «limite» voci per giro", async () => {
     const { db, modifiche } = dbFinto({ prodotti: Array.from({ length: 30 }, (_, i) => riga(100 + i, `Piatto ${i}`, "")) });
-    await traduciMenu({ db, chiediModello: async ({ utente }) => ({ nome: `Dish ${JSON.parse(utente).nome.split(" ")[1]}` }), locale: LOCALE, limite: 15 });
+    await traduciMenu({ db, chiediModello: async ({ utente }) => ({ nome_inglese: `Dish ${JSON.parse(utente).nome.split(" ")[1]}` }), locale: LOCALE, limite: 15 });
     assert.equal(modifiche.length, 15);
   });
 });
