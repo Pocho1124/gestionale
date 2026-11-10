@@ -642,3 +642,4 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .piatti-nome { flex: 1; display: grid; gap: 1px; text-align: left; border: 0; background: none; color: inherit; font: 600 .98rem var(--corpo); cursor: pointer; padding: 4px 0; min-height: 40px; }
 .piatti-nome:disabled { cursor: default; }
 .piatti-q { min-width: 22px; text-align: center; font-size: 1.1rem; }
+.avviso-codice { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: .9rem; color: var(--pericolo); }

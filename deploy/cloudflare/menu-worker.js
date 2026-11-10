@@ -7,8 +7,13 @@ const SICUREZZA = {
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
-  "strict-transport-security": "max-age=31536000",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  // La pagina ha script e stili incorporati (generati dal server, valori sempre «escapati») e i font di Google
+  "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; "
+    + "font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 };
+/** Le pagine restano nella cache del nodo Cloudflare pochi secondi: una raffica di richieste non consuma il database. */
+const CACHE_SECONDI = 5;
 
 export default {
   async fetch(richiesta, env) {
@@ -17,18 +22,27 @@ export default {
     let chiave = url.pathname.replace(/^\/+/, "");
     try { chiave = decodeURIComponent(chiave); } catch { return nonTrovato(); }
     // Indirizzo principale: si va al menu del locale predefinito
-    if (chiave === "") return Response.redirect(new URL(`/${env.PREDEFINITO}/`, url).toString(), 302);
+    if (chiave === "") return rimanda(new URL(`/${env.PREDEFINITO}/`, url), 302);
     // Solo percorsi semplici: lettere, numeri, trattini, punti e barre (niente «..»)
     if (!/^[a-z0-9][a-z0-9._/-]*$/i.test(chiave) || chiave.includes("..")) return nonTrovato();
     if (chiave.endsWith("/")) chiave += "index.html";
-    else if (!/\.[a-z0-9]+$/i.test(chiave)) return Response.redirect(new URL(`/${chiave}/`, url).toString(), 301);
+    else if (!/\.[a-z0-9]+$/i.test(chiave)) return rimanda(new URL(`/${chiave}/`, url), 301);
 
     const pagina = /\.(html|json)$/.test(chiave);
     let corpo, tipo;
     if (pagina) {
+      // Cache del nodo per percorso (senza query: «versione.json?t=…» non deve aggirarla), anche per le pagine inesistenti
+      const cache = typeof caches !== "undefined" ? caches.default : null;
+      const chiaveCache = new Request(new URL(`/${chiave}`, url).toString());
+      const inCache = cache ? await cache.match(chiaveCache) : undefined;
+      if (inCache) return richiesta.method === "HEAD" ? new Response(null, inCache) : inCache;
       const riga = await env.DB.prepare("select contenuto, tipo from pagine where chiave = ?").bind(chiave).first();
-      if (!riga) return nonTrovato();
-      corpo = riga.contenuto; tipo = riga.tipo;
+      const risposta = riga
+        ? new Response(riga.contenuto, { headers: { ...SICUREZZA, "content-type": riga.tipo || "text/html; charset=utf-8", "cache-control": "no-cache" } })
+        : nonTrovato();
+      if (cache) await cache.put(chiaveCache, new Response(risposta.clone().body, {
+        status: risposta.status, headers: { ...Object.fromEntries(risposta.headers), "cache-control": `public, max-age=${CACHE_SECONDI}` } }));
+      return richiesta.method === "HEAD" ? new Response(null, risposta) : risposta;
     } else {
       const { value, metadata } = await env.MENU.getWithMetadata(chiave, { type: "arrayBuffer", cacheTtl: 3600 });
       if (value === null) return nonTrovato();
@@ -44,4 +58,5 @@ export default {
   },
 };
 
+const rimanda = (dove, stato) => new Response(null, { status: stato, headers: { ...SICUREZZA, location: dove.toString() } });
 const nonTrovato = () => new Response("Pagina non trovata", { status: 404, headers: { ...SICUREZZA, "content-type": "text/plain; charset=utf-8" } });

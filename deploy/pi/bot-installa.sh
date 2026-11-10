@@ -15,7 +15,8 @@ PSQL=(docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1
 
 # 1. Token del bot (non viene mai mostrato né salvato nei log)
 read -rsp "Incolla il token del bot (da @BotFather) e premi Invio: " TOKEN; echo
-NOME=$(curl -s "https://api.telegram.org/bot${TOKEN}/getMe" | grep -o '"username":"[^"]*"' | cut -d'"' -f4 || true)
+# I segreti passano a curl da un descrittore di file, non dalla riga di comando (visibile con «ps»)
+NOME=$(curl -s -K <(printf 'url = "https://api.telegram.org/bot%s/getMe"\n' "$TOKEN") | grep -o '"username":"[^"]*"' | cut -d'"' -f4 || true)
 [[ -n "$NOME" ]] || { echo "Token non valido o Telegram non raggiungibile."; exit 1; }
 echo "Bot riconosciuto: @$NOME"
 
@@ -40,12 +41,12 @@ ID_BOT=$("${PSQL[@]}" -c "select id from auth.users where email = '$EMAIL'")
 if [[ -z "$ID_BOT" ]]; then
   RISPOSTA=$(printf '{"email":"%s","password":"%s","email_confirm":true,"user_metadata":{"nome":"Assistente Telegram"}}' "$EMAIL" "$PASSWORD" |
     curl -s -X POST http://localhost:8000/auth/v1/admin/users \
-      -H "apikey: $SERVICE" -H "Authorization: Bearer $SERVICE" -H "Content-Type: application/json" --data @-)
+      -H @<(printf 'apikey: %s\nAuthorization: Bearer %s\n' "$SERVICE" "$SERVICE") -H "Content-Type: application/json" --data @-)
   ID_BOT=$(printf '%s' "$RISPOSTA" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4 || true)
 else
   printf '{"password":"%s"}' "$PASSWORD" |
     curl -s -o /dev/null -X PUT "http://localhost:8000/auth/v1/admin/users/$ID_BOT" \
-      -H "apikey: $SERVICE" -H "Authorization: Bearer $SERVICE" -H "Content-Type: application/json" --data @-
+      -H @<(printf 'apikey: %s\nAuthorization: Bearer %s\n' "$SERVICE" "$SERVICE") -H "Content-Type: application/json" --data @-
 fi
 [[ -n "$ID_BOT" ]] || { echo "Creazione dell'account del bot non riuscita."; exit 1; }
 "${PSQL[@]}" -c "insert into public.membri (organizzazione_id, user_id, ruolo, locale_id)
@@ -80,6 +81,8 @@ services:
     restart: unless-stopped
     user: node
     read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     mem_limit: 256m
     command: ["node", "/app/bot.mjs"]
     env_file: /opt/gestionale/bot.env

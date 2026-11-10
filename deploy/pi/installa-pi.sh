@@ -73,12 +73,16 @@ printf '{"anonKey":"%s"}\n' "$ANON" > "$SITO/conf/config.json"
 chmod 644 "$SITO/conf/config.json"
 
 # ---------- 3. Gateway: porta 80 con backoffice + API sullo stesso indirizzo ----------
-cat > /opt/supabase/docker-compose.override.yml <<'YML'
-# Aggiunto da installa-pi.sh: backoffice del gestionale sulla porta 80
+# La porta si pubblica solo sull'indirizzo del server nella rete del locale: Docker scavalca le regole di ufw,
+# quindi «80:80» (tutte le interfacce, IPv6 compreso) la renderebbe raggiungibile anche da altre reti
+IP_LAN=$(hostname -I | awk '{print $1}')
+echo "$IP_LAN" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo "Indirizzo del server non trovato"; exit 1; }
+cat > /opt/supabase/docker-compose.override.yml <<YML
+# Aggiunto da installa-pi.sh: backoffice del gestionale sulla porta 80, solo sulla rete del locale
 services:
   gateway:
     ports:
-      - "80:80"
+      - "$IP_LAN:80:80"
     volumes:
       - /opt/gestionale/sito:/srv:ro
 YML

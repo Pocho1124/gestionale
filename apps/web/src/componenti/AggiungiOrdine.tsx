@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { centesimi, daEuro, formatta } from "@gest/core";
+import { daEuro } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
 import type { GruppoScelte, Scelta } from "../lib/tipi";
 import { Componi, chiaveRiga, conAggiunte, prezzoComposto } from "./Componi";
 import type { CategoriaBreve, ProdottoBreve } from "./ServizioSala";
+import { euro } from "../lib/formato";
 
-const euro = (c: number) => formatta(centesimi(c));
 /** Riga della comanda: stesso piatto con scelte o note diverse = righe distinte (in cucina arrivano separate). */
 interface Riga { id: string; prodotto: ProdottoBreve; scelte: Scelta[]; q: number; nota: string; supplemento: string }
 /** Supplemento della nota in centesimi (null se scritto male); il database accetta da 0 a 100 €. */

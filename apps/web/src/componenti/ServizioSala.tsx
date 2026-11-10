@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
@@ -10,17 +9,17 @@ import type { GruppoScelte, Scelta } from "../lib/tipi";
 import { descriviScelte, prezzoComposto } from "./Componi";
 import { Pagamento } from "./Pagamento";
 import { AggiungiOrdine } from "./AggiungiOrdine";
+import { euro } from "../lib/formato";
 
-export interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: { nome: string }[] }
+interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: { nome: string }[] }
 export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string; stato: string; origine: string; nota: string; motivo: string; creato_at: string; righe_ordine: RigaOrdine[] }
 export interface RichiestaSala { id: string; tavolo_id: string; righe: { prodotto_id: string; quantita: number; nota?: string; opzioni?: string[] }[]; nota: string; creato_at: string; nomi_clienti?: { nome: string } | { nome: string }[] | null }
 export interface ProdottoBreve { id: string; nome: string; prezzo_cent: number; disponibile: boolean; visibile: boolean; categoria_id: string; gruppi: GruppoScelte[]; aggiunte: Scelta[] }
 export interface CategoriaBreve { id: string; nome: string }
-export interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; nomi_clienti?: { nome: string }[] }
+interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; nomi_clienti?: { nome: string }[] }
 export interface ComandaStampa { id: string; ordine_id: string | null; stato: string; tipo: string; errore: string; reparti: { nome: string } | null }
 interface TavoloBreve { id: string; nome: string; posti: number }
 
-const euro = (c: number) => formatta(centesimi(c));
 const ora = (iso: string) => new Date(iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 const totale = (righe: { quantita: number; prezzo_cent: number }[]) => righe.reduce((n, r) => n + r.quantita * r.prezzo_cent, 0);
 export const NOMI_STATO: Record<string, string> = {
@@ -179,6 +178,11 @@ export function PannelloTavolo(props: {
           <p>Aperto alle {ora(sessione.aperta_at)} · {sessione.coperti} coperti</p>
           {!!sessione.nomi_clienti?.length && <p>👤 {sessione.nomi_clienti.map((n) => n.nome).join(", ")}</p>}
           <div className="codice-tavolo"><span className="muto piccolo">Codice del tavolo</span><strong>{sessione.codice}</strong></div>
+          {(sessione.codice_errati ?? 0) >= 10 && (
+            <p className="avviso-codice">⚠️ Codice sbagliato {sessione.codice_errati} volte: i telefoni sono bloccati.
+              <button className="btn btn-piccolo" disabled={attesa}
+                onClick={() => void esegui(() => sb().rpc("sblocca_codice_tavolo", { p_tavolo: tavolo.id }), "Codice sbloccato")}>Sblocca codice</button></p>
+          )}
 
           <h3 className="pannello-titolo">Ordini <span className="muto piccolo">totale {euro(conto)}</span></h3>
           {ordiniTavolo.length === 0 ? <p className="muto piccolo">Nessun ordine ancora.</p> : ordiniTavolo.map((o) => (

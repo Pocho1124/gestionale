@@ -28,7 +28,7 @@ export const puo = (ruolo: Ruolo | null | undefined, c: Capacita) => !!ruolo && 
 export const NOMI_RUOLO: Record<Ruolo, string> = {
   owner: "Amministratore", manager: "Responsabile", caposala: "Caposala", cameriere: "Cameriere", cucina: "Cucina / reparto",
 };
-export const LIVELLO: Record<Ruolo, number> = { owner: 4, manager: 3, caposala: 2, cameriere: 1, cucina: 1 };
+const LIVELLO: Record<Ruolo, number> = { owner: 4, manager: 3, caposala: 2, cameriere: 1, cucina: 1 };
 
 /** Ruoli che chi ha il ruolo indicato può assegnare: solo inferiori al proprio, mai l'amministratore. */
 export const ruoliAssegnabili = (mio: Ruolo | null) =>

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { centesimi, daEuro, dividiAllaRomana, formatta } from "@gest/core";
+import { centesimi, daEuro, dividiAllaRomana } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
 import { stampaConto } from "../lib/conto";
 import { useSessione } from "../lib/sessione";
 import { puo } from "../lib/permessi";
+import { euro } from "../lib/formato";
 
 type Metodo = "contanti" | "carta" | "altro";
 interface PagamentoConto {
@@ -23,7 +24,6 @@ interface RigaConto { id: string; nome: string; quantita: number; prezzo_cent: n
 interface Terminale { id: string; nome: string }
 type Modo = "tutto" | "piatti" | "romana" | "parte";
 
-const euro = (c: number) => formatta(centesimi(c));
 const NOMI_METODO: Record<Metodo, string> = { contanti: "💶 Contanti", carta: "💳 POS", altro: "🎟️ Altro" };
 const NOMI_STATO: Record<PagamentoConto["stato"], string> = { in_attesa: "in attesa del POS", approvato: "incassato", rifiutato: "rifiutato", annullato: "annullato" };
 const euroOZero = (t: string) => { try { return t.trim() ? daEuro(t) : 0; } catch { return null; } };

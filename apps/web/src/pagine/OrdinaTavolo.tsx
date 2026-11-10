@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useParams } from "react-router-dom";
-import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { caricaFont, pilaFont } from "../lib/font";
 import type { GruppoScelte, MenuPubblico, PiattoMenu, Scelta } from "../lib/tipi";
 import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from "../componenti/Componi";
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
+import { euro } from "../lib/formato";
 
 interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean; chiedi_nome?: boolean; nome_obbligatorio?: boolean }
 interface RigaCarrello { chiave: string; piatto: PiattoMenu; quantita: number; nota: string; scelte: Scelta[]; prezzo: number }
@@ -18,7 +18,6 @@ const STATI: Record<string, { testo: string; icona: string }> = {
   servito: { testo: "Servito", icona: "🍽️" }, rifiutato: { testo: "Non accettato", icona: "❌" },
 };
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
-const euro = (c: number) => formatta(centesimi(c));
 const leggi = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
 const scrivi = (k: string, v: string) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* memoria non disponibile */ } };
 /** Segreto di questo telefono: solo lui potrà ricevere il codice del tavolo quando lo staff accetta. */

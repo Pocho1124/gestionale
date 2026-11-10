@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { centesimi, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useSessione } from "../lib/sessione";
 import { useAvviso } from "../componenti/Avviso";
 import { messaggioErrore } from "../lib/errori";
 import { puo } from "../lib/permessi";
+import { euro } from "../lib/formato";
+import { POPUP_BLOCCATO, apriStampa } from "../lib/stampa";
 
 interface Resoconto {
   numero?: number; dal: string | null; al: string; conti: number; coperti: number; totale_cent: number;
@@ -12,7 +13,6 @@ interface Resoconto {
   piu_venduti: { nome: string; quantita: number; totale_cent: number }[]; annullati: { ordini: number; totale_cent: number }; tavoli_aperti: number;
 }
 interface Chiusura { id: string; numero: number; dal: string; al: string; riepilogo: Resoconto }
-const euro = (c: number) => formatta(centesimi(c ?? 0));
 const METODI: Record<string, string> = { contanti: "Contanti", carta: "Carta / POS", altro: "Altro", misto: "Misto (conti precedenti)", "non indicato": "Non indicato" };
 const data = (iso: string | null) => (iso ? new Date(iso).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "inizio attività");
 
@@ -43,7 +43,7 @@ export function Cassa() {
     const { data: r, error } = await sb().rpc("chiudi_cassa", { p_locale: locale!.id });
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
     avvisa(`Chiusura n. ${(r as Resoconto).numero} registrata`);
-    stampaResoconto(r as Resoconto, locale!.nome);
+    if (!stampaResoconto(r as Resoconto, locale!.nome)) avvisa(`${POPUP_BLOCCATO} Puoi ristamparla dall'elenco delle chiusure.`, "errore");
     await carica();
   }
 
@@ -52,7 +52,7 @@ export function Cassa() {
       <div className="pagina-testa riga-form" style={{ justifyContent: "space-between" }}>
         <h1>Cassa</h1>
         <span className="riga-form">
-          <button className="btn" disabled={!resoconto} onClick={() => resoconto && stampaResoconto(resoconto, locale.nome)}>🖨️ Stampa resoconto</button>
+          <button className="btn" disabled={!resoconto} onClick={() => { if (resoconto && !stampaResoconto(resoconto, locale.nome)) avvisa(POPUP_BLOCCATO, "errore"); }}>🖨️ Stampa resoconto</button>
           <button className="btn btn-pericolo" disabled={!resoconto || resoconto.tavoli_aperti > 0} onClick={() => void chiudi()}>Chiudi cassa</button>
         </span>
       </div>
@@ -67,7 +67,7 @@ export function Cassa() {
             <thead><tr><th>N.</th><th>Periodo</th><th>Conti</th><th>Incasso</th><th /></tr></thead>
             <tbody>{storico.map((c) => (
               <tr key={c.id}><td>{c.numero}</td><td>{data(c.dal)} → {data(c.al)}</td><td>{c.riepilogo.conti}</td><td className="numero">{euro(c.riepilogo.totale_cent)}</td>
-                <td><button className="btn btn-piccolo" onClick={() => stampaResoconto(c.riepilogo, locale.nome)}>Ristampa</button></td></tr>
+                <td><button className="btn btn-piccolo" onClick={() => { if (!stampaResoconto(c.riepilogo, locale.nome)) avvisa(POPUP_BLOCCATO, "errore"); }}>Ristampa</button></td></tr>
             ))}</tbody>
           </table>
         </section>
@@ -95,16 +95,12 @@ function VistaResoconto({ r }: { r: Resoconto }) {
   );
 }
 
-/** Stampa del resoconto: pagina costruita con nodi DOM e testo, senza script, con CSP restrittiva. */
-function stampaResoconto(r: Resoconto, localeNome: string) {
-  const f = window.open("", "_blank", "width=420,height=700");
-  if (!f) return;
-  const d = f.document;
-  d.open(); d.write("<!doctype html><html lang=\"it\"><head></head><body></body></html>"); d.close();
-  const el = (tag: string, testo?: string, stile?: string) => { const e = d.createElement(tag); if (testo !== undefined) e.textContent = testo; if (stile) e.setAttribute("style", stile); return e; };
-  const csp = d.createElement("meta"); csp.httpEquiv = "Content-Security-Policy"; csp.content = "default-src 'none'; style-src 'unsafe-inline'";
-  const st = el("style", "@page{size:80mm auto;margin:4mm}body{font:13px/1.4 ui-monospace,monospace;width:72mm;margin:0 auto}h1{font-size:16px;text-align:center;margin:0}p{margin:0;display:flex;justify-content:space-between;gap:8px}.c{justify-content:center}hr{border:0;border-top:1px dashed #000}");
-  d.head.append(csp, st); d.title = "Resoconto di cassa";
+/** Stampa del resoconto (pagina di stampa condivisa, senza script); false se il browser blocca la finestra. */
+function stampaResoconto(r: Resoconto, localeNome: string): boolean {
+  const pagina = apriStampa({ larghezza: 420, altezza: 700, titolo: "Resoconto di cassa",
+    stile: "@page{size:80mm auto;margin:4mm}body{font:13px/1.4 ui-monospace,monospace;width:72mm;margin:0 auto}h1{font-size:16px;text-align:center;margin:0}p{margin:0;display:flex;justify-content:space-between;gap:8px}.c{justify-content:center}hr{border:0;border-top:1px dashed #000}" });
+  if (!pagina) return false;
+  const { d, el } = pagina;
   const riga = (a: string, b: string) => { const p = el("p"); p.append(el("span", a), el("b", b)); return p; };
   d.body.append(el("h1", localeNome), el("p", r.numero ? `Chiusura di cassa n. ${r.numero}` : "Resoconto (cassa non chiusa)"), el("p", `${data(r.dal)} → ${data(r.al)}`), el("hr"),
     riga("Conti", String(r.conti)), riga("Coperti", String(r.coperti)), riga("TOTALE", euro(r.totale_cent)), el("hr"),
@@ -113,5 +109,6 @@ function stampaResoconto(r: Resoconto, localeNome: string) {
     ...r.per_reparto.map((x) => riga(x.reparto, euro(x.totale_cent))), el("hr"),
     riga(`Annullati (${r.annullati.ordini})`, euro(r.annullati.totale_cent)), el("hr"),
     el("p", "Documento gestionale non fiscale"));
-  f.focus(); f.print(); f.close();
+  pagina.stampa();
+  return true;
 }

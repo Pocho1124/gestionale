@@ -1,7 +1,6 @@
-import { centesimi, formatta } from "@gest/core";
 import { sb } from "./supabase";
-
-const euro = (c: number) => formatta(centesimi(c));
+import { euro } from "./formato";
+import { POPUP_BLOCCATO, apriStampa } from "./stampa";
 
 // Stile fisso della ricevuta: nessun dato dinamico qui dentro
 const STILE = `
@@ -13,20 +12,16 @@ const STILE = `
   .linea { border-top: 1px dashed #000; margin: 6px 0; } .tot td { font-weight: 700; font-size: 15px; padding-top: 4px; }
   .piede { margin-top: 10px; font-size: 11px; }`;
 
-/**
- * Preconto del tavolo (non fiscale), su carta da 80 mm o A4: righe uguali raggruppate, totale.
- * La pagina di stampa è costruita solo con nodi DOM e textContent (mai HTML da stringhe con dati)
- * e ha una CSP che vieta qualsiasi script: anche un nome di piatto malevolo resta testo.
- */
+/** Preconto del tavolo (non fiscale), su carta da 80 mm o A4: righe uguali raggruppate, sconto, totale. */
 export async function stampaConto(sessioneId: string, localeNome: string): Promise<string | null> {
   // La finestra si apre subito (nel clic), altrimenti il browser la blocca come popup
-  const finestra = window.open("", "_blank", "width=420,height=640");
-  if (!finestra) return "Il browser ha bloccato la finestra di stampa: consenti i popup per questo indirizzo.";
+  const pagina = apriStampa({ larghezza: 420, altezza: 640, titolo: "Preconto", stile: STILE });
+  if (!pagina) return POPUP_BLOCCATO;
   const [s, o] = await Promise.all([
     sb().from("sessioni_tavolo").select("coperti, aperta_at, sconto_cent, tavoli(nome)").eq("id", sessioneId).single(),
-    sb().from("ordini").select("stato, righe_ordine(nome, quantita, prezzo_cent, opzioni)").eq("sessione_id", sessioneId).neq("stato", "rifiutato"),
+    sb().from("ordini").select("stato, righe_ordine(nome, quantita, prezzo_cent, opzioni)").eq("sessione_id", sessioneId).not("stato", "in", "(rifiutato,annullato)"),
   ]);
-  if (s.error || o.error) { finestra.close(); return (s.error ?? o.error)!.message; }
+  if (s.error || o.error) { pagina.chiudi(); return (s.error ?? o.error)!.message; }
 
   const righe = new Map<string, { nome: string; quantita: number; prezzo_cent: number }>();
   for (const ord of o.data as unknown as { righe_ordine: { nome: string; quantita: number; prezzo_cent: number; opzioni?: { nome: string }[] }[] }[]) {
@@ -44,18 +39,7 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
   const sconto = Math.min(Number(sess.sconto_cent ?? 0), totale);
   const tavolo = String(sess.tavoli?.nome ?? "");
 
-  const d = finestra.document;
-  d.open(); d.write("<!doctype html><html lang=\"it\"><head></head><body></body></html>"); d.close();   // solo struttura vuota, fissa
-  const el = <K extends keyof HTMLElementTagNameMap>(tag: K, testo?: string, classe?: string) => {
-    const e = d.createElement(tag);
-    if (testo !== undefined) e.textContent = testo;
-    if (classe) e.className = classe;
-    return e;
-  };
-  const csp = el("meta"); csp.httpEquiv = "Content-Security-Policy"; csp.content = "default-src 'none'; style-src 'unsafe-inline'";
-  const charset = el("meta"); charset.setAttribute("charset", "utf-8");
-  const stile = el("style", STILE);
-  d.head.append(charset, csp, stile);
+  const { d, el } = pagina;
   d.title = `Conto tavolo ${tavolo}`;
 
   const tabella = el("table");
@@ -82,9 +66,6 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
     tabella,
     el("p", "Preconto — documento non fiscale", "piede"),
   );
-  // Stampa avviata da qui: nella pagina di stampa non c'è nessuno script
-  finestra.focus();
-  finestra.print();
-  finestra.close();
+  pagina.stampa();
   return null;
 }

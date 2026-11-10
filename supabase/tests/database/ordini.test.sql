@@ -77,7 +77,7 @@ select throws_ok($$ select public.avanza_ordine('b5000000-0000-0000-0000-0000000
 set local role anon; select pg_temp.anonimo();
 select public.invia_ordine('token-di-prova-tavolo-7', 'zzzz', '[]') from generate_series(1, 10);
 select is(public.invia_ordine('token-di-prova-tavolo-7', (select codice from ctx), '[{"prodotto_id":"b4000000-0000-0000-0000-000000000001","quantita":1}]') ->> 'errore',
-          'Troppi codici errati: chiedi al personale', 'Dopo 10 codici sbagliati il tavolo si blocca anche con il codice giusto');
+          'Troppi tentativi: riprova tra qualche minuto o chiedi al personale', 'Dopo 10 codici sbagliati il codice si blocca per qualche minuto, anche quello giusto');
 
 select * from finish();
 rollback;

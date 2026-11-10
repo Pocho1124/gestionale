@@ -42,6 +42,8 @@ def trascrivi(percorso, prompt, filtro_voce):
 
 
 class Gestore(BaseHTTPRequestHandler):
+    # Una connessione lenta o ferma non tiene occupato un thread per sempre
+    timeout = 30
     def _rispondi(self, codice, dati):
         corpo = json.dumps(dati, ensure_ascii=False).encode("utf-8")
         self.send_response(codice)
@@ -58,7 +60,10 @@ class Gestore(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/trascrivi":
             return self._rispondi(404, {"errore": "percorso sconosciuto"})
-        lunghezza = int(self.headers.get("Content-Length") or 0)
+        try:
+            lunghezza = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._rispondi(400, {"errore": "Content-Length non valido"})
         if lunghezza <= 0 or lunghezza > MAX_BYTE:
             return self._rispondi(413, {"errore": "audio vuoto o troppo grande"})
         audio = self.rfile.read(lunghezza)

@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
-import { centesimi, formatta } from "@gest/core";
 import type { GruppoScelte, Scelta } from "../lib/tipi";
+import { euro } from "../lib/formato";
 
-const euro = (c: number) => formatta(centesimi(c));
 export const prezzoComposto = (base: number, scelte: Scelta[]) => base + scelte.reduce((n, s) => n + s.sovrapprezzo_cent, 0);
 export const chiaveRiga = (prodotto: string, scelte: Scelta[]) => `${prodotto}|${scelte.map((s) => s.id).sort().join(",")}`;
 /** Gruppo «Aggiunte» in coda alle scelte del piatto: sempre facoltativo, massimo 10 (stesso limite del database). */
-export const ID_AGGIUNTE = "aggiunte";
+const ID_AGGIUNTE = "aggiunte";
 export const conAggiunte = (gruppi: GruppoScelte[], aggiunte: Scelta[] | undefined): GruppoScelte[] =>
   aggiunte?.length ? [...gruppi, { id: ID_AGGIUNTE, nome: "Aggiunte", min: 0, max: Math.min(10, aggiunte.length), scelte: aggiunte }] : gruppi;
 export const descriviScelte = (scelte: { nome: string }[]) => (scelte.length ? ` (${scelte.map((s) => s.nome).join(", ")})` : "");

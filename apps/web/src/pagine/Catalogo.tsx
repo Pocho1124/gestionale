@@ -12,8 +12,8 @@ import { preparaImmagine } from "../lib/immagini";
 import { EditorComposizione } from "../componenti/EditorComposizione";
 import { GestioneAggiunte } from "../componenti/GestioneAggiunte";
 import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
+import { euroTesto } from "../lib/formato";
 
-const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
 export function Catalogo() {
   const { locale, puoModificare } = useSessione();

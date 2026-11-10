@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { centesimi, daEuro, formatta } from "@gest/core";
+import { daEuro } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useSessione } from "../lib/sessione";
 import { useAvviso } from "../componenti/Avviso";
 import { messaggioErrore } from "../lib/errori";
 import { puo } from "../lib/permessi";
 import { nomeCliente, scaricaXml, stampaFattura, type Fattura } from "../lib/fatture";
+import { euro } from "../lib/formato";
 
-const euro = (c: number) => formatta(centesimi(c ?? 0));
 interface DatiFiscali { denominazione: string; partita_iva: string; codice_fiscale: string; regime_fiscale: string; indirizzo: string; cap: string; comune: string; provincia: string }
 const DATI_VUOTI: DatiFiscali = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "" };
 const REGIMI: Record<string, string> = { RF01: "Ordinario", RF02: "Contribuenti minimi", RF19: "Forfettario" };

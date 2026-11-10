@@ -33,11 +33,11 @@ read -rp "Indirizzo del menu [menu.$DOMINIO]: " HOST; HOST=${HOST:-menu.$DOMINIO
 [[ "$HOST" =~ ^[a-z0-9.-]+$ ]] || { echo "Indirizzo non valido"; exit 1; }
 read -rsp "Token di CONFIGURAZIONE (non viene salvato): " TCONF; echo
 read -rsp "Token di PUBBLICAZIONE (solo KV e D1): " TPUB; echo
-cf() { local metodo=$1 percorso=$2; shift 2; curl -sS --max-time 30 -X "$metodo" "$API$percorso" -H "Authorization: Bearer $TCONF" "$@"; }
+cf() { local metodo=$1 percorso=$2; shift 2; curl -sS --max-time 30 -X "$metodo" "$API$percorso" -H @<(printf 'Authorization: Bearer %s\n' "$TCONF") "$@"; }
 
 echo "== 1/6 Verifica dei token"
-curl -sS "$API/user/tokens/verify" -H "Authorization: Bearer $TCONF" | ok || { echo "Token di configurazione non valido"; exit 1; }
-curl -sS "$API/user/tokens/verify" -H "Authorization: Bearer $TPUB" | ok || { echo "Token di pubblicazione non valido"; exit 1; }
+curl -sS "$API/user/tokens/verify" -H @<(printf 'Authorization: Bearer %s\n' "$TCONF") | ok || { echo "Token di configurazione non valido"; exit 1; }
+curl -sS "$API/user/tokens/verify" -H @<(printf 'Authorization: Bearer %s\n' "$TPUB") | ok || { echo "Token di pubblicazione non valido"; exit 1; }
 
 echo "== 2/6 Zona del dominio"
 ZONA=$(cf GET "/zones?name=$DOMINIO" | json "d['result'][0]['id'] if d.get('result') else ''")
@@ -68,10 +68,10 @@ cf PUT "/accounts/$ACCOUNT/workers/domains" -H "Content-Type: application/json" 
   || { echo "Collegamento di $HOST non riuscito (se esiste già un record DNS «${HOST%%.*}», eliminalo e riprova)"; exit 1; }
 
 echo "== 6/6 Pubblicatore"
-curl -sS -X PUT "$API/accounts/$ACCOUNT/storage/kv/namespaces/$KV/values/prova-scrittura" -H "Authorization: Bearer $TPUB" \
+curl -sS -X PUT "$API/accounts/$ACCOUNT/storage/kv/namespaces/$KV/values/prova-scrittura" -H @<(printf 'Authorization: Bearer %s\n' "$TPUB") \
   -F value=ok -F 'metadata={"tipo":"text/plain"}' | ok || { echo "Il token di pubblicazione non può scrivere nell'archivio KV"; exit 1; }
-curl -sS -X DELETE "$API/accounts/$ACCOUNT/storage/kv/namespaces/$KV/values/prova-scrittura" -H "Authorization: Bearer $TPUB" >/dev/null
-curl -sS -X POST "$API/accounts/$ACCOUNT/d1/database/$D1/query" -H "Authorization: Bearer $TPUB" -H "Content-Type: application/json" \
+curl -sS -X DELETE "$API/accounts/$ACCOUNT/storage/kv/namespaces/$KV/values/prova-scrittura" -H @<(printf 'Authorization: Bearer %s\n' "$TPUB") >/dev/null
+curl -sS -X POST "$API/accounts/$ACCOUNT/d1/database/$D1/query" -H @<(printf 'Authorization: Bearer %s\n' "$TPUB") -H "Content-Type: application/json" \
   --data '{"sql":"select count(*) from pagine"}' | ok || { echo "Il token di pubblicazione non può usare il database D1 (permesso Account: D1 - Edit)"; exit 1; }
 [[ -f "$ENVF" ]] && cp "$ENVF" "$ENVF.precedente"
 umask 077
@@ -101,6 +101,8 @@ services:
     restart: unless-stopped
     user: node
     read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     mem_limit: 128m
     command: ["node", "/app/pubblicatore.mjs"]
     env_file: /opt/gestionale/pubblicatore.env

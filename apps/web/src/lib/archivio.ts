@@ -1,12 +1,12 @@
 import { sb } from "./supabase";
 
-export type Cartella = "logo" | "sfondo" | "sale" | "piatti";
+type Cartella = "logo" | "sfondo" | "sale" | "piatti";
 const CONTENITORE = "immagini";
 /**
  * UUID v4 con getRandomValues: crypto.randomUUID esiste solo in contesti sicuri (HTTPS o localhost),
  * mentre il backoffice nella rete del locale è servito in HTTP.
  */
-export function nuovoUuid(): string {
+function nuovoUuid(): string {
   const b = crypto.getRandomValues(new Uint8Array(16));
   b[6] = (b[6]! & 0x0f) | 0x40;   // versione 4
   b[8] = (b[8]! & 0x3f) | 0x80;   // variante RFC 4122
@@ -33,6 +33,6 @@ export async function eliminaImmagine(percorso: string | null | undefined) {
   if (percorso) await sb().storage.from(CONTENITORE).remove([percorso]).catch(() => undefined);
 }
 
-/** Sorgente da mostrare: archivio se presente, altrimenti il vecchio formato incorporato. */
+/** Sorgente da mostrare: archivio se presente, altrimenti il vecchio formato incorporato; solo https, percorsi interni o immagini incorporate. */
 export const sorgenteImmagine = (percorso?: string | null, dati?: string | null, url?: string | null) =>
-  urlImmagine(percorso) ?? dati ?? url ?? null;
+  urlImmagine(percorso) ?? (dati && /^data:image\/(jpeg|png|webp);base64,/.test(dati) ? dati : null) ?? (url && /^(https?:\/\/|\/(?!\/))/i.test(url) ? url : null);

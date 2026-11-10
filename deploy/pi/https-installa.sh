@@ -33,8 +33,8 @@ cat > "$OVR" <<YML
 services:
   gateway:
     ports:
-      - "80:80"
-      - "443:443"
+      - "$IP:80:80"
+      - "$IP:443:443"
     volumes:
       - /opt/gestionale/sito:/srv:ro
 $DATI

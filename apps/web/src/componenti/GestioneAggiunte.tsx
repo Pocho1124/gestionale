@@ -4,9 +4,9 @@ import { sb } from "../lib/supabase";
 import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
 import type { Categoria } from "../lib/tipi";
+import { euroTesto } from "../lib/formato";
 
 interface Aggiunta { id: string; locale_id: string; nome: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
-const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 
 /**
  * Elenco delle aggiunte del locale (es. «Mozzarella di bufala» + 2 €) e categorie su cui valgono.

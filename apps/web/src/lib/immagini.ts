@@ -6,18 +6,18 @@
  * - ricodifica che elimina i metadati (EXIF, posizione GPS).
  */
 
-export const PESO_MASSIMO = 15 * 1024 * 1024;        // file originale
-export const PIXEL_MASSIMI = 40_000_000;              // 40 megapixel
+const PESO_MASSIMO = 15 * 1024 * 1024;        // file originale
+const PIXEL_MASSIMI = 40_000_000;              // 40 megapixel
 const FORMATI = ["image/jpeg", "image/png", "image/webp"];
 
-export interface Opzioni {
+interface Opzioni {
   lato: number;              // lato lungo massimo in uscita
   limite: number;            // peso massimo in uscita (byte)
   trasparenza?: boolean;     // true per i loghi: WebP o PNG invece di JPEG
 }
 
 /** Larghezza e altezza lette dai primi byte del file; null se il formato non è riconosciuto o è malformato. */
-export async function dimensioniDaIntestazione(file: Blob): Promise<{ w: number; h: number } | null> {
+async function dimensioniDaIntestazione(file: Blob): Promise<{ w: number; h: number } | null> {
   const b = new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer());
   const u16 = (i: number) => (b[i]! << 8) | b[i + 1]!;
   const u32 = (i: number) => ((b[i]! << 24) | (b[i + 1]! << 16) | (b[i + 2]! << 8) | b[i + 3]!) >>> 0;
@@ -50,7 +50,7 @@ export async function dimensioniDaIntestazione(file: Blob): Promise<{ w: number;
 }
 
 /** Controlli prima di qualsiasi decodifica. */
-export async function verificaFile(file: File): Promise<{ w: number; h: number }> {
+async function verificaFile(file: File): Promise<{ w: number; h: number }> {
   if (!FORMATI.includes(file.type)) throw new Error("Formato non supportato: usa JPG, PNG o WebP.");
   if (file.size > PESO_MASSIMO) throw new Error("File troppo pesante: massimo 15 MB.");
   const d = await dimensioniDaIntestazione(file);

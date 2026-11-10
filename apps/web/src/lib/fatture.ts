@@ -1,4 +1,5 @@
-import { centesimi, formatta } from "@gest/core";
+import { euro } from "./formato";
+import { POPUP_BLOCCATO, apriStampa } from "./stampa";
 
 /** Fattura come la restituisce il database (importi e scorporo IVA già calcolati lì). */
 export interface Fattura {
@@ -13,7 +14,6 @@ export interface Fattura {
   imponibile_cent: number; imposta_cent: number; totale_cent: number; modalita: "MP01" | "MP08" | null;
 }
 
-const euro = (c: number) => formatta(centesimi(c));
 const importo = (c: number) => (c / 100).toFixed(2);
 const aliquota = (a: number) => Number(a).toFixed(2);
 export const nomeCliente = (f: Fattura) => f.cliente.denominazione || `${f.cliente.nome} ${f.cliente.cognome}`.trim();
@@ -28,13 +28,13 @@ const seC = (nome: string, valore: string) => (valore ? tag(nome, valore) : "");
 
 /** Progressivo di invio (5 caratteri): ultime due cifre dell'anno + numero in base 36. */
 const progressivo = (f: Fattura) => `${String(f.anno).slice(-2)}${f.numero.toString(36).toUpperCase().padStart(3, "0")}`;
-export const nomeFileXml = (f: Fattura) => `IT${f.cedente.partita_iva}_${progressivo(f)}.xml`;
+const nomeFileXml = (f: Fattura) => `IT${f.cedente.partita_iva}_${progressivo(f)}.xml`;
 
 const sede = (s: { indirizzo: string; cap: string; comune: string; provincia: string }, nazione = "IT") =>
   `<Sede>${tag("Indirizzo", s.indirizzo)}${tag("CAP", s.cap)}${tag("Comune", s.comune)}${seC("Provincia", s.provincia)}${tag("Nazione", nazione)}</Sede>`;
 
 /** XML FatturaPA 1.2 (FPR12, fattura TD01) da caricare sul portale «Fatture e Corrispettivi» o da dare all'intermediario. */
-export function xmlFattura(f: Fattura): string {
+function xmlFattura(f: Fattura): string {
   const c = f.cliente, e = f.cedente;
   const destinatario = c.codice_destinatario || "0000000";
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -77,17 +77,9 @@ const STILE = `
 
 /** Copia di cortesia in A4. Come per il preconto: solo nodi DOM e textContent, CSP che vieta gli script. */
 export function stampaFattura(f: Fattura): string | null {
-  const finestra = window.open("", "_blank", "width=820,height=900");
-  if (!finestra) return "Il browser ha bloccato la finestra di stampa: consenti i popup per questo indirizzo.";
-  const d = finestra.document;
-  d.open(); d.write("<!doctype html><html lang=\"it\"><head></head><body></body></html>"); d.close();
-  const el = <K extends keyof HTMLElementTagNameMap>(nome: K, testo?: string, classe?: string) => {
-    const x = d.createElement(nome); if (testo !== undefined) x.textContent = testo; if (classe) x.className = classe; return x;
-  };
-  const csp = el("meta"); csp.httpEquiv = "Content-Security-Policy"; csp.content = "default-src 'none'; style-src 'unsafe-inline'";
-  const charset = el("meta"); charset.setAttribute("charset", "utf-8");
-  d.head.append(charset, csp, el("style", STILE));
-  d.title = `Fattura ${f.numero}/${f.anno}`;
+  const pagina = apriStampa({ larghezza: 820, altezza: 900, titolo: `Fattura ${f.numero}/${f.anno}`, stile: STILE });
+  if (!pagina) return POPUP_BLOCCATO;
+  const { d, el } = pagina;
 
   const e = f.cedente, c = f.cliente;
   const anagrafica = (titolo: string, righe: string[]) => { const b = el("div", undefined, "blocco"); b.append(el("h2", titolo), ...righe.filter(Boolean).map((r) => el("div", r))); return b; };
@@ -120,6 +112,6 @@ export function stampaFattura(f: Fattura): string | null {
     el("p", f.modalita === "MP01" ? "Pagamento: contanti" : f.modalita === "MP08" ? "Pagamento: carta" : "", "nota"),
     el("p", "Copia di cortesia: il documento fiscale è il file XML trasmesso al Sistema di Interscambio.", "nota"),
   );
-  finestra.focus(); finestra.print(); finestra.close();
+  pagina.stampa();
   return null;
 }

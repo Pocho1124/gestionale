@@ -18,7 +18,7 @@ type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pia
 type Lato = "sinistra" | "destra" | "sopra" | "sotto";
 interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoElemento; x: number; y: number; w: number; h: number; rotazione: number; etichetta: string }
 type Selezione = { tipo: "tavolo" | "elemento"; id: string } | null;
-interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; nomi_clienti?: { nome: string }[] }
+interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; nomi_clienti?: { nome: string }[] }
 interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "nopass"; password: string; nascosta: boolean; url_ordini: string }
 
 /** Prodotto letto dal database con gruppi e voci, nel formato usato dalla composizione. */
@@ -114,7 +114,7 @@ export function Sala() {
     const [s, t, x, e, o, r, p, c] = await Promise.all([
       sb().from("sale").select("*").eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("tavoli").select("*").eq("locale_id", locale.id).order("nome"),
-      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at, nomi_clienti(nome)").eq("locale_id", locale.id).is("chiusa_at", null),
+      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at, codice_errati, nomi_clienti(nome)").eq("locale_id", locale.id).is("chiusa_at", null),
       sb().from("elementi_sala").select("*").eq("locale_id", locale.id),
       sb().from("ordini").select("id, tavolo_id, sessione_id, stato, origine, nota, motivo, creato_at, righe_ordine(nome, quantita, prezzo_cent, nota, opzioni)")
         .eq("locale_id", locale.id).gte("creato_at", new Date(Date.now() - 24 * 3600_000).toISOString()).order("creato_at", { ascending: false }),

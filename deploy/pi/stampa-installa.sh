@@ -33,7 +33,10 @@ services:
     env_file: $ENVF
     volumes:
       - /opt/gestionale/bot:/app:ro
+    user: node
     read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     mem_limit: 128m
     networks: [supabase_default]
 networks:

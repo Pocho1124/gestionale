@@ -3,7 +3,7 @@ import { centesimi, daEuro, formatta } from "@gest/core";
 import { sb } from "../lib/supabase";
 import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
-const euroTesto = (c: number) => (c / 100).toFixed(2).replace(".", ",");
+import { euroTesto } from "../lib/formato";
 
 interface Voce { id: string; nome: string; sovrapprezzo_cent: number; disponibile: boolean; posizione: number }
 interface Gruppo { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number; opzioni: Voce[] }

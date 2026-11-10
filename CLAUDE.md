@@ -83,7 +83,7 @@ migrazioni + test pgTAP su `supabase/postgres`, poi immagine `ghcr.io/pocho1124/
 apps/web/            Backoffice React + Vite (TypeScript), anche menu interno /m/<slug> e pagina tavolo /t/<token>
   src/pagine/        Sala, Catalogo, Aspetto, Magazzino, Cassa, Fatture, Impostazioni, Enciclopedia (voce «Vini»), MenuPubblico, OrdinaTavolo, Accesso
   src/componenti/    MenuVista (menu), SchedaPiatto, TrovaVino (quiz), MappaRegioni, ServizioSala, Componi, ...
-  src/lib/           supabase, sessione, permessi, tipi, immagini (+worker), archivio, regioni.ts, mappaItalia.ts, conto (preconto), fatture (XML FatturaPA, copia di cortesia)
+  src/lib/           supabase, sessione, permessi, tipi, formato (euro), stampa (finestra di stampa sicura), immagini (+worker), archivio, regioni.ts, mappaItalia.ts, conto (preconto), fatture (XML FatturaPA, copia di cortesia)
 apps/bot/            Servizi Node 22 senza dipendenze esterne
   bot.mjs            bot Telegram (@Enotechiabot)
   pubblicatore.mjs   genera la pagina statica del menu e la pubblica su Cloudflare
@@ -96,8 +96,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 28 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (311 test)
+supabase/migrations/ 29 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (321 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -128,6 +128,7 @@ deploy/pi/           installer per il server
 |`aggiunte\_tutte\_supplemento`|aggiunta senza categorie = valida su tutte (`aggiunta\_vale()`); `supplemento\_cent` sulla riga (nota con costo, 0-100 €) solo dalle comande del personale, salvato come «+ Supplemento» nelle scelte|
 |`arredi\_sala`|nuovi oggetti della piantina: botte, bottigliera, divano, poltrona, sgabello, tappeto, camino, scala, cucina, vetrina, fioriera|
 |`conto\_per\_piatti`|`pagamenti\_righe` (pezzi pagati per riga), `quantita\_pagata()`, `stato\_conto` con le righe, `registra\_pagamento(…, p\_righe)`: importo dei pezzi con sconto in proporzione, saldo esatto con l'ultimo pezzo; annullo o rifiuto del POS liberano i pezzi|
+|`rinforzi\_analisi`|il locale non cambia organizzazione; chi gestisce un solo locale non gestisce account di tutta l'organizzazione; codice del tavolo bloccato 15 min ogni 10 errori (max 30, poi `sblocca\_codice\_tavolo`); niente ordini su tavolo in chiusura; audit senza note/righe dei clienti (`audit\_senza\_testi`) e con pagamenti, dati fiscali, POS (`deciso\_da`); fatture `on delete restrict`; niente TRUNCATE/REFERENCES/TRIGGER ai ruoli API|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -178,7 +179,7 @@ Vini (enciclopedia), Magazzino, Cassa e Fatture (solo titolare), Impostazioni (p
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 311 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 321 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite). **Core**: `vitest` in `packages/core`.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
 jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
@@ -201,6 +202,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_T
 6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; report incassi avanzati; menu multilingua.
 7. Test automatici del servizio di stampa (`stampa.mjs`).
 8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.
+9. Sicurezza (analisi del 10/11/2026), ancora aperti: firma dell'immagine con cosign e verifica in `aggiorna.sh`; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito); tetto agli sconti per ruolo; ruolo `servizio\_stampa` senza accesso a `qr\_token`.
 
 ## Note pratiche
 
