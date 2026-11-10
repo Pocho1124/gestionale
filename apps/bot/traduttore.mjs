@@ -15,7 +15,7 @@ const tentati = new Set();
 export const dimenticaTentativi = () => tentati.clear();
 
 /** Versione delle regole di traduzione: se cambia, le traduzioni automatiche si rifanno (quelle a mano restano). */
-const VERSIONE = "2";
+const VERSIONE = "3";
 /** Impronta dei testi italiani da cui nasce la traduzione: cambia se cambia uno qualsiasi dei testi. */
 export const impronta = (...testi) => createHash("sha256").update([VERSIONE, ...testi.map((t) => t ?? "")].join("\u0000")).digest("hex").slice(0, 16);
 
@@ -93,6 +93,39 @@ export async function traduciMenu({ db, chiediModello, locale, log = () => {}, l
   return salvate;
 }
 
+/** Nomi ricorrenti delle categorie: traduzione fissa, senza modello (sempre uguale, anche quando resta uguale all'italiano). */
+const CATEGORIE_FISSE = {
+  "carta dei vini": ["Wine list", "Carta de vinos"], "vini": ["Wines", "Vinos"], "vini al calice": ["Wines by the glass", "Vinos por copas"],
+  "vini rossi": ["Red wines", "Vinos tintos"], "vini bianchi": ["White wines", "Vinos blancos"], "vini rosati": ["Rosé wines", "Vinos rosados"],
+  "bollicine": ["Sparkling wines", "Espumosos"], "vini dolci": ["Dessert wines", "Vinos dulces"], "taglieri": ["Platters", "Tablas"],
+  "tagliere": ["Platter", "Tabla"], "pinse": ["Pinsa", "Pinsas"], "pinsa": ["Pinsa", "Pinsa"], "birre": ["Beers", "Cervezas"],
+  "birre artigianali": ["Craft beers", "Cervezas artesanales"], "antipasti": ["Starters", "Entrantes"], "primi": ["First courses", "Primeros platos"],
+  "secondi": ["Main courses", "Segundos platos"], "contorni": ["Side dishes", "Guarniciones"], "dolci": ["Desserts", "Postres"],
+  "formaggi": ["Cheeses", "Quesos"], "salumi": ["Cured meats", "Embutidos"], "bevande": ["Drinks", "Bebidas"], "bibite": ["Soft drinks", "Refrescos"],
+  "analcolici": ["Non-alcoholic drinks", "Bebidas sin alcohol"], "caffetteria": ["Coffee", "Cafetería"], "amari": ["Digestifs", "Digestivos"],
+  "distillati": ["Spirits", "Destilados"], "cocktail": ["Cocktails", "Cócteles"], "aperitivi": ["Aperitifs", "Aperitivos"],
+};
+export const categoriaFissa = (lingua, nome) => CATEGORIE_FISSE[String(nome ?? "").trim().toLowerCase()]?.[lingua === "en" ? 0 : 1] ?? "";
+
+/** Colori dei vini: sempre la stessa parola (in spagnolo il vino rosso è «tinto», mai «rojo»), mai l'italiano rimasto. */
+const COLORI = {
+  en: [[/\brosso\b/gi, "red"], [/\bbianco\b/gi, "white"], [/\brosato\b/gi, "rosé"]],
+  es: [[/\bvino rojo\b/gi, "vino tinto"], [/\brojo\b/gi, "tinto"], [/\brosso\b/gi, "tinto"], [/\bbianco\b/gi, "blanco"], [/\brosato\b/gi, "rosado"]],
+};
+/** Sostituisce le parole dei colori, ma non dentro i nomi propri (Rosso di Montalcino, Bianco di Custoza, nome del vino). */
+export function coloriVino(lingua, testo, nome = "") {
+  let t = String(testo ?? "");
+  for (const [re, al] of COLORI[lingua] ?? []) {
+    t = t.replace(re, (parola, pos) => {
+      const dopo = t.slice(pos + parola.length);
+      if (/^ (?:di |del |dei |della )?[A-ZÀ-Ý]/.test(dopo) || new RegExp(`\\b${parola}\\b`, "i").test(nome)) return parola;   // nome proprio
+      const maiuscola = parola[0] === parola[0].toUpperCase();
+      return maiuscola ? al[0].toUpperCase() + al.slice(1) : al;
+    });
+  }
+  return t;
+}
+
 /**
  * Lo spagnolo si traduce dall'inglese già controllato quando c'è (il modello piccolo traduce molto meglio dall'inglese);
  * numeri e italiano rimasto si controllano sempre sul testo italiano.
@@ -127,7 +160,9 @@ async function traduciLingua({ L, lingua, righe, db, chiediModello, log, limite 
   let salvate = 0;
   for (const v of voci.slice(0, limite)) {
     const { t, x, campi, im, manuale } = v;
-    const daTradurre = campi.filter(([it]) => String(x[it] ?? "").trim());
+    const fisse = Object.fromEntries(campi.filter(([it]) => t.tabella === "categorie" && it === "nome" && categoriaFissa(lingua, x[it]))
+      .map(([it]) => [it, categoriaFissa(lingua, x[it])]));
+    const daTradurre = campi.filter(([it]) => String(x[it] ?? "").trim() && !fisse[it]);
     const fonti = Object.fromEntries(daTradurre.map(([it]) => [it, ponte(lingua, t, x, it, im)]));
     const dallInglese = daTradurre.length > 0 && daTradurre.every(([it]) => fonti[it]);
     let risposta = {};
@@ -151,7 +186,9 @@ async function traduciLingua({ L, lingua, righe, db, chiediModello, log, limite 
     for (const [it, en, massimo] of campi) {
       const originale = String(x[it] ?? "").trim();
       if (!originale) { if (!manuale) corpo[en] = ""; continue; }
-      const tradotto = String(risposta[`${it}_${L.nome}`] ?? "").trim();
+      if (fisse[it]) { corpo[en] = fisse[it]; buoni++; continue; }
+      const grezzo = String(risposta[`${it}_${L.nome}`] ?? "").trim();
+      const tradotto = it === "nome" ? grezzo : coloriVino(lingua, grezzo, t.tabella === "prodotti" ? x.nome : "");
       const copiaInglese = dallInglese && descrittivo(t.tabella, it) && tradotto.toLowerCase() === fonti[it].toLowerCase();
       if (traduzioneValida(originale, tradotto, massimo) && !copiaInglese && !(descrittivo(t.tabella, it) && sembraItaliano(originale, tradotto))) { corpo[en] = tradotto; buoni++; }
       else { scartati++; if (!manuale) corpo[en] = ""; log(`Traduzione ${L.nome} scartata (${t.tabella}.${it} «${originale.slice(0, 40)}»): rimasta in italiano, numeri o lunghezza non corrispondono`); }

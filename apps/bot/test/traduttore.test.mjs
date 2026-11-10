@@ -3,7 +3,7 @@
 // Database e modello simulati.
 import { test, describe, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { dimenticaTentativi, impronta, sembraItaliano, traduciMenu, traduzioneValida } from "../traduttore.mjs";
+import { categoriaFissa, coloriVino, dimenticaTentativi, impronta, sembraItaliano, traduciMenu, traduzioneValida } from "../traduttore.mjs";
 
 const LOCALE = "00000000-0000-4000-8000-000000000001";
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -55,7 +55,7 @@ describe("traduzione del menu", () => {
     const { db, modifiche } = dbFinto({ categorie: [riga(1, "Taglieri")], prodotti: [riga(2, "Tagliere misto", "Salumi e formaggi per 2")] });
     assert.equal(await traduciMenu({ lingue: ["en"], db, chiediModello: modello, locale: LOCALE }), 2);
     assert.deepEqual(modifiche[0], { percorso: `categorie?id=eq.${id(1)}&traduzione_da=neq.manuale`,
-      corpo: { nome_en: "Boards", descrizione_en: "", traduzione_da: impronta("Taglieri", "") } });
+      corpo: { nome_en: "Platters", descrizione_en: "", traduzione_da: impronta("Taglieri", "") } });   // categoria ricorrente: traduzione fissa
     assert.deepEqual(modifiche[1].corpo, { nome_en: "Mixed board", descrizione_en: "Cured meats and cheeses for 2", traduzione_da: impronta("Tagliere misto", "Salumi e formaggi per 2") });
   });
 
@@ -134,7 +134,7 @@ describe("traduzione del menu", () => {
   });
 
   test("nome della categoria ricopiato in italiano: scartato; nome del piatto uguale: accettato", async () => {
-    const { db, modifiche } = dbFinto({ categorie: [riga(12, "Carta dei vini")], prodotti: [riga(13, "Bruschetta")] });
+    const { db, modifiche } = dbFinto({ categorie: [riga(12, "Le nostre etichette")], prodotti: [riga(13, "Bruschetta")] });
     await traduciMenu({ lingue: ["en"], db, chiediModello: async ({ utente }) => ({ nome_inglese: JSON.parse(utente).nome }), locale: LOCALE });
     assert.equal(modifiche[0].corpo.nome_en, "");
     assert.equal(modifiche[1].corpo.nome_en, "Bruschetta");
@@ -173,6 +173,26 @@ describe("traduzione del menu", () => {
     assert.deepEqual(modifiche.find((m) => m.corpo.nome_es)?.corpo.descrizione_es, "Embutidos y quesos para 2");
     const calice = modifiche.filter((m) => m.percorso.includes(id(16)) && "descrizione_es" in m.corpo)[0];
     assert.equal(calice.corpo.descrizione_es, "", "«Full-bodied red» ricopiato in spagnolo: scartato");
+  });
+
+  test("categorie ricorrenti: traduzione fissa senza modello, anche in spagnolo", async () => {
+    const { db, modifiche } = dbFinto({ categorie: [riga(17, "Carta dei vini"), riga(18, "Pinsa")] });
+    let chiamate = 0;
+    await traduciMenu({ db, locale: LOCALE, chiediModello: async () => { chiamate++; return {}; } });
+    assert.equal(chiamate, 0);
+    assert.deepEqual(modifiche.map((m) => m.corpo.nome_en ?? m.corpo.nome_es), ["Wine list", "Pinsa", "Carta de vinos", "Pinsa"]);
+    assert.equal(categoriaFissa("es", " Birre "), "Cervezas");
+  });
+
+  test("colori dei vini sempre uguali; i nomi propri restano", async () => {
+    assert.equal(coloriVino("es", "Rosso de buena estructura, vino rojo"), "Tinto de buena estructura, vino tinto");
+    assert.equal(coloriVino("es", "Bianco fresco y ligero"), "Blanco fresco y ligero");
+    assert.equal(coloriVino("en", "Rosato fresh and delicate"), "Rosé fresh and delicate");
+    assert.equal(coloriVino("es", "Rosso di Montalcino de gran cuerpo"), "Rosso di Montalcino de gran cuerpo");
+    assert.equal(coloriVino("en", "Rosso Conero, intense", "Rosso Conero"), "Rosso Conero, intense");
+    const { db, modifiche } = dbFinto({ prodotti: [riga(19, "Aglianico", "Rosso strutturato", { vini: { prodotto_id: id(19) } })] });
+    await traduciMenu({ db, locale: LOCALE, lingue: ["es"], chiediModello: async () => ({ descrizione_spagnolo: "Rojo con cuerpo" }) });
+    assert.equal(modifiche[0].corpo.descrizione_es, "Tinto con cuerpo");
   });
 
   test("al massimo «limite» voci per giro", async () => {
