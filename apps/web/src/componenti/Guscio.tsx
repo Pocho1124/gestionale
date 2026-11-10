@@ -29,9 +29,26 @@ function useDaConfermare(localeId?: string) {
 
 import { NOMI_RUOLO, puo } from "../lib/permessi";
 
+/** Articoli di magazzino sotto la scorta minima (solo quelli con una scorta impostata), ricontati ogni due minuti. */
+function useSottoScorta(localeId: string | undefined, attivo: boolean) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!localeId || !attivo) return;
+    const conta = async () => {
+      const { data } = await sb().from("articoli").select("giacenza, scorta_minima").eq("locale_id", localeId).gt("scorta_minima", 0);
+      setN(((data ?? []) as { giacenza: number; scorta_minima: number }[]).filter((a) => Number(a.giacenza) <= Number(a.scorta_minima)).length);
+    };
+    void conta();
+    const t = setInterval(() => void conta(), 120_000);
+    return () => clearInterval(t);
+  }, [localeId, attivo]);
+  return n;
+}
+
 export function Guscio() {
   const { locale, locali, ruolo, puoModificare, scegliLocale, esci, sessione } = useSessione();
   const daConfermare = useDaConfermare(locale?.id);
+  const sottoScorta = useSottoScorta(locale?.id, puo(ruolo, "magazzino"));
   if (!locale) return null;
   return (
     <div className="guscio">
@@ -50,7 +67,8 @@ export function Guscio() {
           <NavLink to="/catalogo">Catalogo</NavLink>
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
           {puo(ruolo, "catalogo") && <NavLink to="/enciclopedia">Vini</NavLink>}
-          {puo(ruolo, "magazzino") && <NavLink to="/magazzino">Magazzino</NavLink>}
+          {puo(ruolo, "magazzino") && <NavLink to="/magazzino" title={sottoScorta ? `${sottoScorta} articoli sotto la scorta minima` : undefined}>
+            Magazzino{sottoScorta > 0 && <span className="contatore contatore-scorta" aria-label={`${sottoScorta} sotto scorta`}>{sottoScorta}</span>}</NavLink>}
           {puo(ruolo, "cassa") && <NavLink to="/cassa">Cassa</NavLink>}
           {puo(ruolo, "cassa") && <NavLink to="/fatture">Fatture</NavLink>}
           {puo(ruolo, "utenti") && <NavLink to="/impostazioni">Impostazioni</NavLink>}

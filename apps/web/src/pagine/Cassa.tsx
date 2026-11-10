@@ -6,6 +6,7 @@ import { messaggioErrore } from "../lib/errori";
 import { puo } from "../lib/permessi";
 import { euro } from "../lib/formato";
 import { POPUP_BLOCCATO, apriStampa } from "../lib/stampa";
+import { ReportIncassi } from "../componenti/ReportIncassi";
 
 interface Resoconto {
   numero?: number; dal: string | null; al: string; conti: number; coperti: number; totale_cent: number;
@@ -72,6 +73,7 @@ export function Cassa() {
           </table>
         </section>
       )}
+      <ReportIncassi locale={locale.id} />
     </div>
   );
 }

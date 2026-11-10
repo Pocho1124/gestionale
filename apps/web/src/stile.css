@@ -678,3 +678,16 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .comanda-nota-cucina { display: block; font-size: .95rem; font-weight: 700; color: var(--pericolo); margin: 0; padding-left: 1.6em; }
 .comanda-cucina .btn-pieno { padding: 10px; font-size: 1.05rem; }
 @media (prefers-reduced-motion: reduce) { .comanda-cucina.ritardo { animation: none; } }
+.contatore-scorta { background: #D79A32; }
+
+/* Report incassi */
+.report-incassi { gap: 14px; }
+.report-griglia { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.report-griglia h3 { margin: 0 0 6px; font-size: .95rem; }
+.barre { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.barre li { display: grid; grid-template-columns: minmax(80px, 34%) 1fr auto; gap: 8px; align-items: center; font-size: .85rem; }
+.barre-etichetta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barre-traccia { height: 12px; background: var(--linea); border-radius: 999px; overflow: hidden; }
+.barre-traccia i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primario), color-mix(in srgb, var(--primario) 60%, #fff)); }
+.barre-valore { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.variazione { font-weight: 700; } .variazione.su { color: var(--ok); } .variazione.giu { color: var(--pericolo); }
