@@ -96,8 +96,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 26 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (296 test)
+supabase/migrations/ 27 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (300 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -126,6 +126,7 @@ deploy/pi/           installer per il server
 |`aggiunte`|aggiunte del locale (nome, prezzo, disponibile) attive sulle categorie scelte (`aggiunte\_categorie`); `prezzo\_riga()` le accetta nelle `opzioni` della riga (max 10, gruppo «Aggiunte», nome con «+ »); `menu\_pubblico` le espone per categoria|
 |`pagamenti\_fatture`|`pagamenti` (parti del conto: contanti con resto, carta via POS `in\_attesa` → `esito\_pos`, altro; importo o % calcolati dal DB), `sconto\_cent` sul conto, `terminali\_pos`, `chiudi\_tavolo` solo a conto saldato al centesimo, `resoconto\_cassa` per metodo e sconti; `dati\_fiscali`, `fatture` immutabili numerate per anno (`emetti\_fattura`: scorporo IVA per riga, sconto ripartito per aliquota), solo capacità `cassa`|
 |`aggiunte\_tutte\_supplemento`|aggiunta senza categorie = valida su tutte (`aggiunta\_vale()`); `supplemento\_cent` sulla riga (nota con costo, 0-100 €) solo dalle comande del personale, salvato come «+ Supplemento» nelle scelte|
+|`arredi\_sala`|nuovi oggetti della piantina: botte, bottigliera, divano, poltrona, sgabello, tappeto, camino, scala, cucina, vetrina, fioriera|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -176,7 +177,7 @@ Vini (enciclopedia), Magazzino, Cassa e Fatture (solo titolare), Impostazioni (p
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 296 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 300 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite). **Core**: `vitest` in `packages/core`.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
 jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`

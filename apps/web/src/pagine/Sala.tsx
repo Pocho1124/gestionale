@@ -12,7 +12,10 @@ import { CodaRichieste, PannelloTavolo, suona, type CategoriaBreve, type Comanda
 interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_path: string | null; sfondo_opacita: number; pavimento: Pavimento }
 type Pavimento = "parquet" | "cotto" | "marmo" | "cemento" | "nessuno";
 interface Tavolo { id: string; locale_id: string; sala_id: string; nome: string; posti: number; forma: "tondo" | "quadrato" | "rettangolo"; x: number; y: number; rotazione: number; qr_token: string; attivo: boolean }
-type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pianta" | "zona" | "testo" | "cassa" | "bagni";
+type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pianta" | "zona" | "testo" | "cassa" | "bagni"
+  | "botte" | "scaffale" | "divano" | "poltrona" | "sgabello" | "tappeto" | "camino" | "scala" | "cucina" | "vetrina" | "fioriera";
+/** Lato trascinato per ridimensionare: il lato opposto resta fermo. */
+type Lato = "sinistra" | "destra" | "sopra" | "sotto";
 interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoElemento; x: number; y: number; w: number; h: number; rotazione: number; etichetta: string }
 type Selezione = { tipo: "tavolo" | "elemento"; id: string } | null;
 interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; nomi_clienti?: { nome: string }[] }
@@ -46,7 +49,17 @@ const ARREDI: Record<TipoElemento, { nome: string; w: number; h: number; etichet
   colonna: { nome: "Colonna", w: 40, h: 40 }, pianta: { nome: "Pianta", w: 40, h: 40 },
   zona: { nome: "Zona", w: 300, h: 200, etichetta: "Dehors" }, testo: { nome: "Scritta", w: 160, h: 40, etichetta: "Ingresso" },
   cassa: { nome: "Cassa", w: 90, h: 50, etichetta: "Cassa" }, bagni: { nome: "Bagni", w: 90, h: 70, etichetta: "WC" },
+  botte: { nome: "Botte", w: 54, h: 54 }, scaffale: { nome: "Bottigliera", w: 220, h: 32, etichetta: "" },
+  divano: { nome: "Divano", w: 170, h: 64 }, poltrona: { nome: "Poltrona", w: 62, h: 62 }, sgabello: { nome: "Sgabello", w: 26, h: 26 },
+  tappeto: { nome: "Tappeto", w: 240, h: 150 }, camino: { nome: "Camino", w: 130, h: 42 }, scala: { nome: "Scala", w: 90, h: 170 },
+  cucina: { nome: "Cucina", w: 240, h: 120, etichetta: "Cucina" }, vetrina: { nome: "Vetrina", w: 150, h: 50, etichetta: "" },
+  fioriera: { nome: "Fioriera", w: 170, h: 30 },
 };
+/** Elementi sottili (muri, porte, finestre): si allungano dai due capi, lo spessore si cambia dal pannello. */
+const SOTTILI = new Set<TipoElemento>(["muro", "porta", "finestra"]);
+/** Elementi a terra, disegnati sotto tutto il resto. */
+const A_TERRA = new Set<TipoElemento>(["zona", "tappeto"]);
+const lati = (tipo: TipoElemento): Lato[] => (SOTTILI.has(tipo) ? ["sinistra", "destra"] : ["sinistra", "destra", "sopra", "sotto"]);
 const dimensioni = (t: Tavolo) => {
   const base = 34 + Math.min(t.posti, 12) * 3;
   return t.forma === "rettangolo" ? { w: base * 1.8, h: base } : { w: base, h: base };
@@ -288,7 +301,7 @@ export function Piantina(props: {
   const svg = useRef<SVGSVGElement>(null);
   const H = altezza(props.sala);
   // Trascinamento o ridimensionamento in corso: posizione/misure provvisorie, salvate al rilascio
-  const [azione, setAzione] = useState<{ modo: "sposta" | "ridimensiona"; tipo: "tavolo" | "elemento"; id: string; x: number; y: number; w?: number; h?: number } | null>(null);
+  const [azione, setAzione] = useState<{ modo: "sposta" | "ridimensiona"; lato?: Lato; tipo: "tavolo" | "elemento"; id: string; x: number; y: number; w?: number; h?: number } | null>(null);
   const punto = (e: PE) => {
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.current!.getScreenCTM()!.inverse());
     return { x: Math.min(W, Math.max(0, p.x)), y: Math.min(H, Math.max(0, p.y)) };
@@ -300,10 +313,17 @@ export function Piantina(props: {
     const p = punto(e);
     if (azione.modo === "sposta") { setAzione({ ...azione, x: scatto(p.x), y: scatto(p.y) }); return; }
     const el = props.elementi.find((z) => z.id === azione.id); if (!el) return;
-    // Ridimensiona nel sistema dell'elemento (tiene conto della rotazione)
-    const r = (-el.rotazione * Math.PI) / 180, dx = p.x - el.x, dy = p.y - el.y;
-    const lx = dx * Math.cos(r) - dy * Math.sin(r), ly = dx * Math.sin(r) + dy * Math.cos(r);
-    setAzione({ ...azione, w: Math.max(10, scatto(Math.abs(lx) * 2)), h: Math.max(4, scatto(Math.abs(ly) * 2)) });
+    // Ridimensiona nel sistema dell'elemento (tiene conto della rotazione): si sposta solo il lato trascinato
+    const a = (el.rotazione * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a), dx = p.x - el.x, dy = p.y - el.y;
+    const lx = dx * cos + dy * sin, ly = -dx * sin + dy * cos;
+    let w = el.w, h = el.h, sx = 0, sy = 0;   // nuove misure e spostamento del centro (coordinate dell'elemento)
+    if (azione.lato === "destra") { w = Math.min(1000, Math.max(10, scatto(lx + el.w / 2))); sx = (w - el.w) / 2; }
+    if (azione.lato === "sinistra") { w = Math.min(1000, Math.max(10, scatto(el.w / 2 - lx))); sx = -(w - el.w) / 2; }
+    if (azione.lato === "sotto") { h = Math.min(2000, Math.max(4, scatto(ly + el.h / 2))); sy = (h - el.h) / 2; }
+    if (azione.lato === "sopra") { h = Math.min(2000, Math.max(4, scatto(el.h / 2 - ly))); sy = -(h - el.h) / 2; }
+    const x = Math.round(Math.min(W, Math.max(0, el.x + sx * cos - sy * sin)));
+    const y = Math.round(Math.min(H, Math.max(0, el.y + sx * sin + sy * cos)));
+    setAzione({ ...azione, x, y, w, h });
   }
   function rilascia() {
     if (!azione) return;
@@ -313,16 +333,17 @@ export function Piantina(props: {
     } else {
       const el = props.elementi.find((z) => z.id === azione.id);
       if (el && azione.modo === "sposta" && (el.x !== azione.x || el.y !== azione.y)) props.onElemento(el, { x: azione.x, y: azione.y });
-      if (el && azione.modo === "ridimensiona" && azione.w && azione.h) props.onElemento(el, { w: Math.min(1000, azione.w), h: Math.min(2000, azione.h) });
+      if (el && azione.modo === "ridimensiona" && azione.w && azione.h && (azione.w !== el.w || azione.h !== el.h))
+        props.onElemento(el, { x: azione.x, y: azione.y, w: azione.w, h: azione.h });
     }
     setAzione(null);
   }
-  const inizia = (e: PE, modo: "sposta" | "ridimensiona", tipo: "tavolo" | "elemento", z: { id: string; x: number; y: number }) => {
+  const inizia = (e: PE, modo: "sposta" | "ridimensiona", tipo: "tavolo" | "elemento", z: { id: string; x: number; y: number }, lato?: Lato) => {
     if (!props.modificabile) return;
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     props.onSeleziona({ tipo, id: z.id });
-    setAzione({ modo, tipo, id: z.id, x: z.x, y: z.y });
+    setAzione({ modo, lato, tipo, id: z.id, x: z.x, y: z.y });
   };
 
   return (
@@ -372,6 +393,12 @@ export function Piantina(props: {
         <radialGradient id="foglia" cx=".5" cy=".2" r=".9"><stop offset="0" stopColor="#7FC46F" /><stop offset="1" stopColor="#2E6E2A" /></radialGradient>
         <linearGradient id="metallo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#4A4D52" /><stop offset="1" stopColor="#222427" /></linearGradient>
         <linearGradient id="schermo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#5FD0FF" /><stop offset="1" stopColor="#1C6E9C" /></linearGradient>
+        <radialGradient id="botte" cx=".4" cy=".35" r=".8"><stop offset="0" stopColor="#B07A45" /><stop offset="1" stopColor="#6E4120" /></radialGradient>
+        <linearGradient id="tessuto" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#97A884" /><stop offset="1" stopColor="#6E7F5E" /></linearGradient>
+        <pattern id="trama" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="#8E2E3A" /><path d="M7 1L13 7L7 13L1 7Z" fill="none" stroke="#D9B45A" strokeWidth=".8" opacity=".7" /></pattern>
+        <linearGradient id="pietra" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#B4ACA0" /><stop offset="1" stopColor="#7E766B" /></linearGradient>
+        <radialGradient id="fuoco" cx=".5" cy=".8" r=".8"><stop offset="0" stopColor="#FFF1A8" /><stop offset=".35" stopColor="#FFB43C" /><stop offset=".75" stopColor="#E8501C" stopOpacity=".9" /><stop offset="1" stopColor="#8A1E0A" stopOpacity="0" /></radialGradient>
+        <linearGradient id="acciaio" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#E6E9EC" /><stop offset=".5" stopColor="#B9BFC5" /><stop offset="1" stopColor="#D5D9DD" /></linearGradient>
         <filter id="ombra" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="2" dy="6" stdDeviation="5" floodColor="#2A1606" floodOpacity=".38" /></filter>
         <filter id="ombra-lieve" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="1" dy="2" stdDeviation="1.6" floodColor="#2A1606" floodOpacity=".4" /></filter>
         <filter id="ombra-muro" x="-10%" y="-60%" width="120%" height="220%"><feDropShadow dx="0" dy="4" stdDeviation="3.5" floodColor="#000" floodOpacity=".45" /></filter>
@@ -382,17 +409,24 @@ export function Piantina(props: {
       <rect width={W} height={H} fill="url(#luce-ambiente)" pointerEvents="none" />
       {props.modificabile && <rect width={W} height={H} fill="url(#griglia)" pointerEvents="none" />}
 
-      {[...props.elementi].sort((a, b) => Number(b.tipo === "zona") - Number(a.tipo === "zona")).map((el) => {
+      {[...props.elementi].sort((a, b) => Number(A_TERRA.has(b.tipo)) - Number(A_TERRA.has(a.tipo))).map((el) => {
         const pos = azione?.tipo === "elemento" && azione.id === el.id ? { ...el, x: azione.x, y: azione.y, w: azione.w ?? el.w, h: azione.h ?? el.h } : el;
         return (
           <g key={el.id} transform={`translate(${pos.x} ${pos.y}) rotate(${el.rotazione})`}
             className={`arredo arredo-${el.tipo}${selez("elemento", el.id) ? " selezionato" : ""}${props.modificabile ? "" : " fisso"}`}
             onPointerDown={(e) => inizia(e, "sposta", "elemento", el)}>
             <Arredo tipo={el.tipo} w={pos.w} h={pos.h} etichetta={el.etichetta} />
-            {props.modificabile && selez("elemento", el.id) && (
-              <rect className="maniglia" x={pos.w / 2 - 8} y={pos.h / 2 - 8} width={16} height={16}
-                onPointerDown={(e) => inizia(e, "ridimensiona", "elemento", el)} />
-            )}
+            {/* Una maniglia per lato: trascinandola si allunga solo da quella parte */}
+            {props.modificabile && selez("elemento", el.id) && lati(el.tipo).map((l) => {
+              const cx = l === "sinistra" ? -pos.w / 2 : l === "destra" ? pos.w / 2 : 0, cy = l === "sopra" ? -pos.h / 2 : l === "sotto" ? pos.h / 2 : 0;
+              return (
+                <g key={l} className={`maniglia maniglia-${l === "sinistra" || l === "destra" ? "orizzontale" : "verticale"}`}
+                  onPointerDown={(e) => inizia(e, "ridimensiona", "elemento", el, l)}>
+                  <circle cx={cx} cy={cy} r={18} className="maniglia-presa" />
+                  <circle cx={cx} cy={cy} r={8} className="maniglia-punto" />
+                </g>
+              );
+            })}
           </g>
         );
       })}
@@ -495,10 +529,90 @@ function Arredo({ tipo, w, h, etichetta }: { tipo: TipoElemento; w: number; h: n
       <rect x={-w / 2 + 5} y={-h / 2 + 5} width={Math.max(0, w - 10)} height={Math.max(6, h * 0.32)} rx={3} className="cassa-schermo" />
       {etichetta && <text className="arredo-testo" y={h / 2 - 7}>{etichetta}</text>}</g>;
     case "bagni": return <><rect {...r} rx={6} className="bagni" />{scritta}</>;
+    case "botte": return (
+      <g filter="url(#ombra)">
+        <ellipse rx={w / 2} ry={h / 2} className="botte" />
+        {[0.82, 0.55].map((k) => <ellipse key={k} rx={(w / 2) * k} ry={(h / 2) * k} className="botte-cerchio" />)}
+        {[-0.5, -0.25, 0, 0.25, 0.5].map((k) => <line key={k} x1={(w / 2) * k} y1={-(h / 2) * Math.sqrt(1 - k * k) * 0.95} x2={(w / 2) * k} y2={(h / 2) * Math.sqrt(1 - k * k) * 0.95} className="botte-doga" />)}
+        <ellipse rx={w * 0.08} ry={h * 0.08} className="botte-tappo" />
+      </g>
+    );
+    case "scaffale": {
+      // Bottigliera vista dall'alto: fondi delle bottiglie in file, colori da vino rosso, bianco e rosato
+      const col = Math.max(1, Math.min(60, Math.floor((w - 8) / 10))), righe = Math.max(1, Math.min(10, Math.floor((h - 6) / 10)));
+      const colori = ["#4A1020", "#2F4A22", "#6B1A2A", "#C9B458", "#3B0F1A", "#B85C6E"];
+      return <g filter="url(#ombra)"><rect {...r} rx={3} className="scaffale" />
+        {Array.from({ length: col * righe }, (_, i) => (
+          <circle key={i} cx={-w / 2 + 4 + ((w - 8) / col) * ((i % col) + 0.5)} cy={-h / 2 + 3 + ((h - 6) / righe) * (Math.floor(i / col) + 0.5)} r={3.6}
+            fill={colori[(i * 7 + Math.floor(i / col) * 3) % colori.length]} className="bottiglia" />
+        ))}{scritta}</g>;
+    }
+    case "divano": case "poltrona": {
+      const sch = Math.min(16, h * 0.28), bracc = Math.min(14, w * 0.12), posti = tipo === "poltrona" ? 1 : Math.max(1, Math.round((w - 2 * bracc) / 55));
+      return <g filter="url(#ombra)">
+        <rect {...r} rx={10} className="divano" />
+        <rect x={-w / 2} y={-h / 2} width={w} height={sch} rx={8} className="divano-schienale" />
+        <rect x={-w / 2} y={-h / 2} width={bracc} height={h} rx={7} className="divano-schienale" /><rect x={w / 2 - bracc} y={-h / 2} width={bracc} height={h} rx={7} className="divano-schienale" />
+        {Array.from({ length: posti }, (_, i) => {
+          const lw = (w - 2 * bracc) / posti;
+          return <rect key={i} x={-w / 2 + bracc + lw * i + 2} y={-h / 2 + sch + 2} width={lw - 4} height={h - sch - 6} rx={6} className="divano-cuscino" />;
+        })}
+      </g>;
+    }
+    case "sgabello": return <g filter="url(#ombra-lieve)"><circle r={Math.min(w, h) / 2} className="sgabello" /><circle r={Math.min(w, h) / 2 - 3} className="sgabello-seduta" /></g>;
+    case "tappeto": return <g>
+      <rect {...r} rx={4} className="tappeto" /><rect x={-w / 2 + 8} y={-h / 2 + 8} width={Math.max(0, w - 16)} height={Math.max(0, h - 16)} rx={3} className="tappeto-bordo" />
+      <rect x={-w / 2 + 18} y={-h / 2 + 18} width={Math.max(0, w - 36)} height={Math.max(0, h - 36)} rx={2} className="tappeto-centro" />
+      <path d={Array.from({ length: Math.max(0, Math.floor(h / 6)) }, (_, i) => { const y = -h / 2 + 3 + i * 6; return `M${-w / 2} ${y}h-5M${w / 2} ${y}h5`; }).join("")} className="tappeto-frange" />
+    </g>;
+    case "camino": return <g filter="url(#ombra)">
+      <rect {...r} rx={3} className="camino-pietra" />
+      <rect x={-w * 0.3} y={-h / 2 + 4} width={w * 0.6} height={h - 8} rx={4} className="camino-bocca" />
+      <ellipse cx={0} cy={h * 0.08} rx={w * 0.24} ry={h * 0.32} className="camino-fuoco" />
+      <ellipse cx={0} cy={h * 0.1} rx={w * 0.12} ry={h * 0.18} className="camino-brace" />
+    </g>;
+    case "scala": {
+      const gradini = Math.max(3, Math.min(30, Math.floor(h / 14)));
+      return <g filter="url(#ombra-lieve)"><rect {...r} rx={2} className="scala" />
+        {Array.from({ length: gradini - 1 }, (_, i) => <line key={i} x1={-w / 2} x2={w / 2} y1={-h / 2 + (h / gradini) * (i + 1)} y2={-h / 2 + (h / gradini) * (i + 1)} className="scala-gradino" />)}
+        <path d={`M0 ${h / 2 - 10}V${-h / 2 + 12}M-7 ${-h / 2 + 22}L0 ${-h / 2 + 12}L7 ${-h / 2 + 22}`} className="scala-freccia" /></g>;
+    }
+    case "cucina": {
+      const fuochi = Math.max(1, Math.min(8, Math.floor(w / 50)));
+      return <g filter="url(#ombra)"><rect {...r} rx={4} className="cucina" />
+        <rect x={-w / 2 + 6} y={-h / 2 + 6} width={Math.max(0, w - 12)} height={Math.min(40, h * 0.4)} rx={3} className="cucina-piano" />
+        {Array.from({ length: fuochi }, (_, i) => <circle key={i} cx={-w / 2 + 6 + ((w - 12) / fuochi) * (i + 0.5)} cy={-h / 2 + 6 + Math.min(40, h * 0.4) / 2} r={Math.min(11, h * 0.12)} className="fuoco" />)}
+        {etichetta && <text className="arredo-testo" y={h / 4 + 8}>{etichetta}</text>}</g>;
+    }
+    case "vetrina": return <g filter="url(#ombra)">
+      <rect {...r} rx={4} className="vetrina" /><rect x={-w / 2 + 4} y={-h / 2 + 4} width={Math.max(0, w - 8)} height={Math.max(0, h - 8)} rx={2} className="vetrina-vetro" />
+      <line x1={-w / 2 + 10} y1={-h / 2 + 8} x2={-w / 2 + 30} y2={h / 2 - 8} className="vetro-riflesso" />{scritta}</g>;
+    case "fioriera": {
+      const n = Math.max(2, Math.min(20, Math.floor(w / 22)));
+      return <g filter="url(#ombra-lieve)"><rect {...r} rx={4} className="fioriera" />
+        {Array.from({ length: n }, (_, i) => <circle key={i} cx={-w / 2 + (w / n) * (i + 0.5)} cy={(i % 2 ? -1 : 1) * h * 0.12} r={Math.min(h * 0.42, w / n / 1.6)} className="foglia" />)}</g>;
+    }
     case "zona": return <><rect {...r} rx={12} /><text className="arredo-testo zona-testo" y={-h / 2 + 22}>{etichetta}</text></>;
     case "testo": return <><rect {...r} className="testo-area" />{scritta}</>;
     default: return <><rect {...r} rx={4} />{scritta}</>;
   }
+}
+
+/** Misure dell'elemento in metri: lunghezza e spessore (muri) o larghezza e profondità; il centro resta fermo. */
+function MisureElemento({ elemento, metri, onCambia }: { elemento: Elemento; metri: number; onCambia: (p: Partial<Elemento>) => void }) {
+  const inMetri = (v: number) => (v * metri).toFixed(2);
+  const daMetri = (t: string, max: number) => { const v = Number(t.replace(",", ".")); return v > 0 ? Math.min(max, Math.max(4, Math.round(v / metri))) : null; };
+  const sottile = SOTTILI.has(elemento.tipo);
+  return (
+    <div className="riga-form" key={`${elemento.id}-${elemento.w}-${elemento.h}`}>
+      <label className="campo" style={{ flex: 1 }}>{sottile ? "Lunghezza (m)" : "Larghezza (m)"}
+        <input inputMode="decimal" defaultValue={inMetri(elemento.w)} onBlur={(e) => { const v = daMetri(e.target.value, 1000); if (v && v !== elemento.w) onCambia({ w: v }); }} />
+      </label>
+      <label className="campo" style={{ flex: 1 }}>{sottile ? "Spessore (m)" : "Profondità (m)"}
+        <input inputMode="decimal" defaultValue={inMetri(elemento.h)} onBlur={(e) => { const v = daMetri(e.target.value, 2000); if (v && v !== elemento.h) onCambia({ h: v }); }} />
+      </label>
+    </div>
+  );
 }
 
 function NuovaSala({ locale, onFatto }: { locale: string; onFatto: () => Promise<void> }) {
@@ -611,7 +725,7 @@ function PannelloPiantina(props: {
       {elemento && (
         <div className="campi-tavolo" key={elemento.id}>
           <h2>{ARREDI[elemento.tipo].nome}</h2>
-          {["bancone", "zona", "testo", "cassa", "bagni"].includes(elemento.tipo) && (
+          {["bancone", "zona", "testo", "cassa", "bagni", "cucina", "vetrina", "scaffale"].includes(elemento.tipo) && (
             <label className="campo">Scritta
               <input defaultValue={elemento.etichetta} maxLength={40} onBlur={(e) => { if (e.target.value !== elemento.etichetta) aggiornaElemento({ etichetta: e.target.value.trim() }); }} />
             </label>
@@ -621,7 +735,8 @@ function PannelloPiantina(props: {
             <button className="btn btn-icona" onClick={() => aggiornaElemento({ rotazione: ruota(elemento.rotazione, 15) })} aria-label="Ruota a destra">↻</button>
             <button className="btn btn-icona" onClick={() => aggiornaElemento({ rotazione: ruota(elemento.rotazione, 90) })}>90°</button>
           </div>
-          <p className="muto piccolo">Trascina per spostare, usa il quadratino nell'angolo per allungare o allargare.</p>
+          <MisureElemento elemento={elemento} metri={Number(sala.larghezza_m) / W} onCambia={aggiornaElemento} />
+          <p className="muto piccolo">Trascina per spostare. Tira i pallini sui lati per allungare o allargare solo da quella parte.</p>
           <div className="riga-form">
             <button className="btn btn-piccolo" onClick={() => void aggiungiElemento(elemento.tipo, elemento)}>Duplica</button>
             <button className="btn btn-pericolo" onClick={async () => {

@@ -329,7 +329,10 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .porta-arco { fill: none; stroke: rgba(60,45,30,.55); stroke-dasharray: 5 4; stroke-width: 1.5; }
 .porta-anta { stroke: #6B4A2B; stroke-width: 3.5; stroke-linecap: round; }
 .arredo.selezionato { filter: drop-shadow(0 0 2px var(--accento)) drop-shadow(0 0 4px var(--accento)); }
-.maniglia { fill: var(--accento) !important; stroke: var(--superficie) !important; stroke-width: 2; cursor: nwse-resize; }
+.maniglia { cursor: ew-resize; } .maniglia-verticale { cursor: ns-resize; }
+.maniglia-presa { fill: transparent; }
+.maniglia-punto { fill: var(--accento); stroke: #fff; stroke-width: 2.5; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.maniglia:hover .maniglia-punto { fill: #fff; stroke: var(--accento); }
 
 .pavimento-chip { background-size: 40px; }
 .pav-parquet { background: repeating-linear-gradient(0deg, #D8B88A 0 8px, #CFAE7E 8px 16px); color: #3A2E22; }
@@ -599,3 +602,33 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .luce-tavolo { animation: lampada 7s ease-in-out infinite; }
 .tavolo:nth-child(3n) .luce-tavolo { animation-delay: -2.3s; } .tavolo:nth-child(3n+1) .luce-tavolo { animation-delay: -4.6s; }
 @keyframes lampada { 0%, 100% { opacity: .95; } 50% { opacity: .78; } }
+
+/* Nuovi oggetti della sala */
+.arredo-botte .botte { fill: url(#botte); stroke: #4A2A12; stroke-width: 1.5; }
+.arredo-botte .botte-cerchio { fill: none; stroke: #2B2B2B; stroke-width: 2.2; opacity: .8; }
+.arredo-botte .botte-doga { stroke: #5A3417; stroke-width: .8; opacity: .55; }
+.arredo-botte .botte-tappo { fill: #3B2210; }
+.arredo-scaffale .scaffale { fill: url(#legno); stroke: #3B2210; stroke-width: 1.2; }
+.arredo-scaffale .bottiglia { stroke: rgba(255,255,255,.35); stroke-width: .8; }
+.arredo-scaffale .arredo-testo, .arredo-vetrina .arredo-testo { fill: #FFF6E8; font-size: 12px; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
+.arredo-divano .divano, .arredo-poltrona .divano { fill: #6E7F5E; stroke: #45523A; stroke-width: 1; }
+.arredo-divano .divano-schienale, .arredo-poltrona .divano-schienale { fill: #5A6A4B; }
+.arredo-divano .divano-cuscino, .arredo-poltrona .divano-cuscino { fill: url(#tessuto); stroke: rgba(0,0,0,.18); stroke-width: .8; }
+.arredo-sgabello .sgabello { fill: #2E2E2E; } .arredo-sgabello .sgabello-seduta { fill: url(#seduta); }
+.arredo-tappeto .tappeto { fill: #7A2430; } .arredo-tappeto .tappeto-bordo { fill: none; stroke: #D9B45A; stroke-width: 3; }
+.arredo-tappeto .tappeto-centro { fill: url(#trama); stroke: #D9B45A; stroke-width: 1; opacity: .9; }
+.arredo-tappeto .tappeto-frange { stroke: #E8D7B0; stroke-width: 1.4; }
+.arredo-camino .camino-pietra { fill: url(#pietra); stroke: #5E5850; stroke-width: 1.2; }
+.arredo-camino .camino-bocca { fill: #1C1410; }
+.arredo-camino .camino-fuoco { fill: url(#fuoco); animation: fuoco 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+.arredo-camino .camino-brace { fill: #FFE08A; opacity: .85; }
+@keyframes fuoco { 0%, 100% { transform: scale(1, 1); opacity: .95; } 40% { transform: scale(1.06, .92); opacity: .8; } 70% { transform: scale(.96, 1.06); opacity: 1; } }
+.arredo-scala .scala { fill: #B9A58A; stroke: #7A6A55; stroke-width: 1.2; } .arredo-scala .scala-gradino { stroke: #8A785F; stroke-width: 1.2; }
+.arredo-scala .scala-freccia { fill: none; stroke: #4A3E30; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.arredo-cucina .cucina { fill: url(#acciaio); stroke: #7C8389; stroke-width: 1.2; } .arredo-cucina .cucina-piano { fill: #2A2D30; }
+.arredo-cucina .fuoco { fill: none; stroke: #9AA0A6; stroke-width: 2; } .arredo-cucina .arredo-testo { fill: #2A2D30; }
+.arredo-vetrina .vetrina { fill: url(#acciaio); stroke: #6E757B; } .arredo-vetrina .vetrina-vetro { fill: url(#vetro); opacity: .85; }
+.arredo-vetrina .vetro-riflesso { stroke: rgba(255,255,255,.85); stroke-width: 2; }
+.arredo-fioriera .fioriera { fill: url(#terracotta); stroke: #6E3519; stroke-width: 1; }
+.arredo-fioriera .foglia { fill: url(#foglia); stroke: #23561F; stroke-width: .6; }
+@media (prefers-reduced-motion: reduce) { .arredo-camino .camino-fuoco { animation: none; } }
