@@ -83,9 +83,10 @@ migrazioni + test pgTAP su `supabase/postgres`, poi immagine `ghcr.io/pocho1124/
 
 ```
 apps/web/            Backoffice React + Vite (TypeScript), anche menu interno /m/<slug> e pagina tavolo /t/<token>
-  src/pagine/        Sala, Catalogo, Aspetto, Magazzino, Cassa, Fatture, Impostazioni, Enciclopedia (voce «Vini»), MenuPubblico, OrdinaTavolo, Accesso
-  src/componenti/    MenuVista (menu), SchedaPiatto, TrovaVino (quiz), MappaRegioni, ServizioSala, Componi, ...
-  src/lib/           supabase, sessione, permessi, tipi, formato (euro), stampa (finestra di stampa sicura), immagini (+worker), archivio, regioni.ts, mappaItalia.ts, conto (preconto), fatture (XML FatturaPA, copia di cortesia)
+  src/pagine/        Sala, Cucina, Catalogo, Aspetto, Magazzino, Cassa, Fatture, Impostazioni, Enciclopedia (voce «Vini»), MenuPubblico, OrdinaTavolo, Accesso
+  src/componenti/    MenuVista (menu), SchedaPiatto, TrovaVino (quiz), MappaRegioni, ServizioSala, Componi, Piantina, PannelloPiantina,
+                     Cartoncini, Cruscotto, Pagamento, AggiungiOrdine, Prenotazioni, ReportIncassi, GestioneAggiunte, ...
+  src/lib/           supabase, sessione, permessi, tipi, formato (euro), stampa (finestra di stampa sicura), piantina (modello della sala), lingua/traduzioni (pagina del tavolo IT/EN), immagini (+worker), archivio, regioni.ts, mappaItalia.ts, conto (preconto), fatture (XML FatturaPA, copia di cortesia)
 apps/bot/            Servizi Node 22 senza dipendenze esterne
   bot.mjs            bot Telegram (@Enotechiabot)
   pubblicatore.mjs   genera la pagina statica del menu e la pubblica su Cloudflare
@@ -98,8 +99,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 29 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (321 test)
+supabase/migrations/ 34 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (362 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -131,6 +132,11 @@ deploy/pi/           installer per il server
 |`arredi\_sala`|nuovi oggetti della piantina: botte, bottigliera, divano, poltrona, sgabello, tappeto, camino, scala, cucina, vetrina, fioriera|
 |`conto\_per\_piatti`|`pagamenti\_righe` (pezzi pagati per riga), `quantita\_pagata()`, `stato\_conto` con le righe, `registra\_pagamento(…, p\_righe)`: importo dei pezzi con sconto in proporzione, saldo esatto con l'ultimo pezzo; annullo o rifiuto del POS liberano i pezzi|
 |`rinforzi\_analisi`|il locale non cambia organizzazione; chi gestisce un solo locale non gestisce account di tutta l'organizzazione; codice del tavolo bloccato 15 min ogni 10 errori (max 30, poi `sblocca\_codice\_tavolo`); niente ordini su tavolo in chiusura; audit senza note/righe dei clienti (`audit\_senza\_testi`) e con pagamenti, dati fiscali, POS (`deciso\_da`); fatture `on delete restrict`; niente TRUNCATE/REFERENCES/TRIGGER ai ruoli API|
+|`coperto\_sposta\_unisci`|coperto a persona (impostazioni, fissato all'apertura, `imposta\_coperti`, `imposta\_coperto`), `totale\_sessione` con il coperto, riga «Coperto» in fattura; `sposta\_tavolo`, `unisci\_tavoli`|
+|`prenotazioni`|prenotazioni (nome, telefono facoltativo, persone, ora, tavolo): niente sovrapposizioni, niente audit, cancellate dopo 30 giorni; `arriva\_prenotazione` apre il tavolo|
+|`report\_incassi`|`report\_incassi(locale, dal, al)`: totali, medie, per giorno/ora/categoria/metodo, più venduti, confronto col periodo precedente (solo cassa)|
+|`menu\_inglese`|`nome\_en`, `descrizione\_en` su categorie e prodotti, esposti da `menu\_pubblico` (pagina pubblica `<slug>/en/`)|
+|`sconto\_massimo\_stampa`|tetto allo sconto per chi non ha `impostazioni` (`sconto\_max\_pct`); `servizio\_stampa` con permessi solo sulle colonne stampate|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -176,12 +182,12 @@ strutturato, Campania, vitigno …», «descrivi / riscrivi le descrizioni dei v
 ### Backoffice
 
 `http://192.168.111.183` (in loco `https://gestionale.enotechiasantalucia.it`) – Sala (servizio con cruscotto e modalità monitor, piantina, cartoncini QR), Catalogo (anche componibili e aggiunte), Aspetto,
-Vini (enciclopedia), Magazzino, Cassa e Fatture (solo titolare), Impostazioni (personale, reparti/stampanti, bot).
+Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report e Fatture (solo titolare), Impostazioni (personale, reparti/stampanti, POS, coperto, bot).
 
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 321 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 362 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
   **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 11 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
@@ -202,9 +208,9 @@ jsdom solo come dipendenza di sviluppo). Atteso: 79 test superati. Usano `BOT\_T
 3. QR stampabili con il nuovo dominio (non ancora stampato nulla).
 4. Verifiche sul posto: accesso di un utente creato dal pannello, stampa di prova su stampante reale.
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
-6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; report incassi avanzati; menu multilingua.
+6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; testi in inglese anche nella composizione dei piatti (Componi) e nel menu interno /m/.
 8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.
-9. Sicurezza (analisi del 10/11/2026), ancora aperti: firma dell'immagine con cosign e verifica in `aggiorna.sh`; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito); tetto agli sconti per ruolo; ruolo `servizio\_stampa` senza accesso a `qr\_token`.
+9. Sicurezza (analisi del 10/11/2026), ancora aperti: firma dell'immagine con cosign e verifica in `aggiorna.sh`; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito).
 
 ## Note pratiche
 

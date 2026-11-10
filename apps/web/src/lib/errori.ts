@@ -5,7 +5,8 @@ export function messaggioErrore(e: unknown): string {
     case "23505": return "Questo valore è già in uso (ad esempio l'indirizzo del locale).";
     case "23514": return "Valore non valido: controlla prezzi, colori o lunghezza dei testi.";
     case "23503": return "Elemento collegato non valido.";
-    case "42501": return "Non hai i permessi per questa operazione.";
+    // I messaggi scritti apposta dal database (es. tetto allo sconto) si mostrano; quelli tecnici no
+    case "42501": return err.message && !/permission denied|row-level security|Permesso negato/i.test(err.message) ? err.message : "Non hai i permessi per questa operazione.";
     case "22023": return err.message ?? "Valore non valido.";
   }
   if (err.message?.includes("Invalid login credentials")) return "Email o password errate.";

@@ -143,8 +143,8 @@ function SezionePos() {
   );
 }
 
-interface ImpostazioniTavolo { chiedi_nome: boolean; nome_obbligatorio: boolean; coperto_cent: number }
-const TAVOLO_PREDEFINITO: ImpostazioniTavolo = { chiedi_nome: false, nome_obbligatorio: false, coperto_cent: 0 };
+interface ImpostazioniTavolo { chiedi_nome: boolean; nome_obbligatorio: boolean; coperto_cent: number; sconto_max_pct: number }
+const TAVOLO_PREDEFINITO: ImpostazioniTavolo = { chiedi_nome: false, nome_obbligatorio: false, coperto_cent: 0, sconto_max_pct: 100 };
 
 /** Personalizzazioni della pagina del tavolo (QR): ognuna si attiva o disattiva qui. */
 function SezioneTavolo() {
@@ -154,7 +154,7 @@ function SezioneTavolo() {
 
   const carica = useCallback(async () => {
     if (!locale) return;
-    const { data, error } = await sb().from("impostazioni_tavolo").select("chiedi_nome, nome_obbligatorio, coperto_cent").eq("locale_id", locale.id).maybeSingle();
+    const { data, error } = await sb().from("impostazioni_tavolo").select("chiedi_nome, nome_obbligatorio, coperto_cent, sconto_max_pct").eq("locale_id", locale.id).maybeSingle();
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
     setImp((data as ImpostazioniTavolo | null) ?? TAVOLO_PREDEFINITO);
   }, [locale, avvisa]);
@@ -196,6 +196,16 @@ function SezioneTavolo() {
             } catch { e.target.value = euroTesto(imp.coperto_cent); avvisa("Coperto da 0 a 20 € (es. 2,50)", "errore"); }
           }} />
         <span className="muto piccolo">si aggiunge da solo ai tavoli aperti da ora in poi (0 = niente coperto)</span>
+      </label>
+      <label className="riga-form" key={`sconto-${imp.sconto_max_pct}`}>
+        Sconto massimo del caposala %
+        <input className="input-prezzo" type="number" min={0} max={100} defaultValue={imp.sconto_max_pct} aria-label="Sconto massimo per il caposala in percentuale"
+          onBlur={(e) => {
+            const v = Math.round(Number(e.target.value));
+            if (!(v >= 0 && v <= 100)) { e.target.value = String(imp.sconto_max_pct); avvisa("Da 0 a 100", "errore"); return; }
+            if (v !== imp.sconto_max_pct) void salva({ sconto_max_pct: v });
+          }} />
+        <span className="muto piccolo">titolare e responsabile non hanno limiti</span>
       </label>
     </section>
   );
