@@ -7,16 +7,13 @@ import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
 import { euro } from "../lib/formato";
+import { TESTI_TAVOLO, allergeniIn, descrizioneIn, nomeIn, useLingua } from "../lib/lingua";
 
 interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean; chiedi_nome?: boolean; nome_obbligatorio?: boolean }
 interface RigaCarrello { chiave: string; piatto: PiattoMenu; quantita: number; nota: string; scelte: Scelta[]; prezzo: number }
 interface OrdineCliente { id: string; stato: string; motivo: string; creato_at: string; righe: { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: string[] }[] }
 
-const STATI: Record<string, { testo: string; icona: string }> = {
-  da_confermare: { testo: "In attesa di conferma", icona: "⏳" }, confermato: { testo: "Inviato in cucina", icona: "✅" },
-  in_preparazione: { testo: "In preparazione", icona: "👨‍🍳" }, pronto: { testo: "Pronto, sta arrivando", icona: "🛎️" },
-  servito: { testo: "Servito", icona: "🍽️" }, rifiutato: { testo: "Non accettato", icona: "❌" },
-};
+const ICONE: Record<string, string> = { da_confermare: "⏳", confermato: "✅", in_preparazione: "👨‍🍳", pronto: "🛎️", servito: "🍽️", rifiutato: "❌" };
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 const leggi = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
 const scrivi = (k: string, v: string) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* memoria non disponibile */ } };
@@ -51,6 +48,8 @@ export function OrdinaTavolo() {
   const [notaConto, setNotaConto] = useState("");
   const [messaggio, setMessaggio] = useState<{ testo: string; errore?: boolean } | null>(null);
   const [invio, setInvio] = useState(false);
+  const [lingua, setLingua] = useLingua();
+  const T = TESTI_TAVOLO[lingua];
 
   const carica = useCallback(async () => {
     const { data } = await sb().rpc("tavolo_cliente", { p_token: token });
@@ -84,17 +83,17 @@ export function OrdinaTavolo() {
         scrivi(`richiesta-${token}`, ""); setRichiesta("");
         if (e.codice) { setCodice(e.codice); scrivi(chiaveCodice, e.codice); }
         setVista("ordini");
-        setMessaggio({ testo: `Tavolo aperto e ordine inviato in cucina! Codice del tavolo: ${e.codice ?? "—"} — d'ora in poi gli ordini vanno diretti in cucina; condividilo con chi è con te.` });
+        setMessaggio({ testo: TESTI_TAVOLO[lingua].aperto(e.codice ?? "—") });
         void carica();
       } else if (e.stato === "rifiutata" || e.stato === "scaduta") {
         scrivi(`richiesta-${token}`, ""); setRichiesta("");
-        setMessaggio({ testo: e.stato === "scaduta" ? "Nessuno ha ancora risposto: chiama il personale al tavolo." : `Il personale non ha accettato la richiesta${e.motivo ? `: ${e.motivo}` : ""}.`, errore: true });
+        setMessaggio({ testo: e.stato === "scaduta" ? TESTI_TAVOLO[lingua].scaduta : `${TESTI_TAVOLO[lingua].rifiutata}${e.motivo ? `: ${e.motivo}` : ""}.`, errore: true });
       }
     };
     void controlla();
     const t = setInterval(() => void controlla(), 4_000);
     return () => clearInterval(t);
-  }, [richiesta, token, chiaveCodice, carica]);
+  }, [richiesta, token, chiaveCodice, carica, lingua]);
 
   const aspetto = menu?.aspetto ?? ASPETTO_PREDEFINITO;
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); }, [aspetto.font_titoli, aspetto.font_testo]);
@@ -122,7 +121,7 @@ export function OrdinaTavolo() {
 
   async function inviaRichiesta() {
     if (info !== null && info !== "assente" && info.nome_obbligatorio && !nome.trim()) {
-      setMessaggio({ testo: "Scrivi il tuo nome per chiedere l'apertura del tavolo", errore: true }); return;
+      setMessaggio({ testo: T.scriviNome, errore: true }); return;
     }
     const { data, error } = await sb().rpc("richiedi_tavolo", {
       p_token: token, p_segreto: segretoDispositivo(token), p_nota: nota.trim(),
@@ -130,10 +129,10 @@ export function OrdinaTavolo() {
       p_righe: righe.map((r) => ({ prodotto_id: r.piatto.id, quantita: r.quantita, nota: r.nota.trim(), opzioni: r.scelte.map((x) => x.id) })),
     });
     const e = data as { richiesta?: string; errore?: string } | null;
-    if (error || !e?.richiesta) { setMessaggio({ testo: e?.errore ?? error?.message ?? "Invio non riuscito", errore: true }); void carica(); return; }
+    if (error || !e?.richiesta) { setMessaggio({ testo: e?.errore ?? error?.message ?? T.invioFallito, errore: true }); void carica(); return; }
     scrivi(`richiesta-${token}`, e.richiesta); setRichiesta(e.richiesta);
     setCarrello({}); setNota(""); setNome("");
-    setMessaggio({ testo: "Richiesta inviata! Il personale sta arrivando a confermare il tuo ordine." });
+    setMessaggio({ testo: T.richiestaOk });
   }
 
   async function invia() {
@@ -149,64 +148,65 @@ export function OrdinaTavolo() {
       if (esito?.codice_errato || esito?.errore?.includes("non è ancora aperto")) {
         setCodice(""); scrivi(chiaveCodice, ""); await inviaRichiesta(); return;
       }
-      if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? "Invio non riuscito", errore: true }); if (error) void carica(); return; }
+      if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? T.invioFallito, errore: true }); if (error) void carica(); return; }
       setCarrello({}); setNota(""); setVista("ordini");
-      setMessaggio({ testo: "Ordine inviato in cucina! 🍽️" });
+      setMessaggio({ testo: T.ordineOk });
       void caricaOrdini();
     } finally { setInvio(false); }
   }
 
-  if (info === null) return <p className="centrato muto">Caricamento…</p>;
-  if (info === "assente") return <p className="centrato muto">QR non valido: inquadra il codice sul tuo tavolo o chiedi al personale.</p>;
+  if (info === null) return <p className="centrato muto">{T.caricamento}</p>;
+  if (info === "assente") return <p className="centrato muto">{T.qrNonValido}</p>;
 
   return (
     <div className="menu ordina" style={stile}>
       <header className="menu-testata">
         {sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url)
           ? <img className="menu-logo" src={sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url)!} alt={info.locale} /> : <h1>{info.locale}</h1>}
-        <p className="ordina-tavolo">Tavolo {info.tavolo}</p>
+        <p className="ordina-tavolo">{T.tavolo} {info.tavolo}</p>
+        <button className="ordina-lingua" onClick={() => setLingua(lingua === "it" ? "en" : "it")} lang={lingua === "it" ? "en" : "it"}>{T.altraLingua}</button>
       </header>
-      {richiesta && <p className="ordina-avviso" role="status">⏳ Richiesta inviata: il personale sta arrivando a confermare il tuo ordine…</p>}
+      {richiesta && <p className="ordina-avviso" role="status">{T.richiestaInviata}</p>}
       {messaggio && <p className={`ordina-avviso${messaggio.errore ? " errore" : " ok"}`} role="status">{messaggio.testo}</p>}
 
-      <nav className="ordina-schede" aria-label="Sezioni">
-        <button className={vista === "menu" ? "attiva" : ""} onClick={() => setVista("menu")}>Menu</button>
-        <button className={vista === "carrello" ? "attiva" : ""} onClick={() => setVista("carrello")}>Il tuo ordine{pezzi ? ` (${pezzi})` : ""}</button>
-        <button className={vista === "ordini" ? "attiva" : ""} onClick={() => setVista("ordini")}>Ordini e conto{inAttesa ? " ⏳" : ""}</button>
+      <nav className="ordina-schede" aria-label={T.sezioni}>
+        <button className={vista === "menu" ? "attiva" : ""} onClick={() => setVista("menu")}>{T.menu}</button>
+        <button className={vista === "carrello" ? "attiva" : ""} onClick={() => setVista("carrello")}>{T.ilTuoOrdine}{pezzi ? ` (${pezzi})` : ""}</button>
+        <button className={vista === "ordini" ? "attiva" : ""} onClick={() => setVista("ordini")}>{T.ordiniConto}{inAttesa ? " ⏳" : ""}</button>
       </nav>
 
       {vista === "menu" && menu?.categorie.map((c) => (
         <section key={c.id} className="menu-categoria">
-          <h2>{c.nome}</h2>
+          <h2>{nomeIn(lingua, c)}</h2>
           {c.prodotti.map((p) => (
             <article key={p.id} className={`menu-piatto ordina-piatto${p.disponibile ? "" : " esaurito"}`}>
               <div className="menu-riga">
-                <h3>{p.nome}</h3>
-                <span className="menu-prezzo">{componibile(p) ? "da " : ""}{euro(p.prezzo_cent)}</span>
+                <h3>{nomeIn(lingua, p)}</h3>
+                <span className="menu-prezzo">{componibile(p) ? T.da : ""}{euro(p.prezzo_cent)}</span>
               </div>
-              {p.descrizione && <p className="menu-desc">{p.descrizione}</p>}
-              {componibile(p) && <p className="menu-allergeni">Componi a piacere: {p.opzioni.map((g) => g.nome).join(", ")}</p>}
+              {descrizioneIn(lingua, p) && <p className="menu-desc">{descrizioneIn(lingua, p)}</p>}
+              {componibile(p) && <p className="menu-allergeni">{T.componiPiacere}{p.opzioni.map((g) => g.nome).join(", ")}</p>}
               {p.disponibile && (c.aggiunte?.length ?? 0) > 0 && nelCarrello(p) > (carrello[chiaveRiga(p.id, [])]?.quantita ?? 0) && !componibile(p) && (
-                <p className="menu-allergeni">{nelCarrello(p) - (carrello[chiaveRiga(p.id, [])]?.quantita ?? 0)} con aggiunte nel tuo ordine</p>
+                <p className="menu-allergeni">{nelCarrello(p) - (carrello[chiaveRiga(p.id, [])]?.quantita ?? 0)} {T.conAggiunte}</p>
               )}
-              {p.allergeni.length > 0 && <p className="menu-allergeni">Allergeni: {p.allergeni.join(", ")}</p>}
+              {p.allergeni.length > 0 && <p className="menu-allergeni">{T.allergeni}{allergeniIn(lingua, p.allergeni).join(", ")}</p>}
               <div className="ordina-quantita">
                 {p.disponibile ? (componibile(p) ? (
                   <>
-                    {nelCarrello(p) > 0 && <strong>{nelCarrello(p)} nel tuo ordine</strong>}
-                    <button onClick={() => setComponendo({ p, gruppi: conAggiunte(p.opzioni, c.aggiunte) })} aria-label={`Componi ${p.nome}`}>Componi</button>
+                    {nelCarrello(p) > 0 && <strong>{nelCarrello(p)} {T.nelTuoOrdine}</strong>}
+                    <button onClick={() => setComponendo({ p, gruppi: conAggiunte(p.opzioni, c.aggiunte) })} aria-label={`${T.componi} ${nomeIn(lingua, p)}`}>{T.componi}</button>
                   </>
                 ) : (
                   <>
-                    {carrello[chiaveRiga(p.id, [])] && <button onClick={() => cambia(p, -1)} aria-label={`Togli ${p.nome}`}>−</button>}
+                    {carrello[chiaveRiga(p.id, [])] && <button onClick={() => cambia(p, -1)} aria-label={`${T.togli} ${nomeIn(lingua, p)}`}>−</button>}
                     {carrello[chiaveRiga(p.id, [])] && <strong>{carrello[chiaveRiga(p.id, [])]!.quantita}</strong>}
-                    <button onClick={() => cambia(p, 1)} aria-label={`Aggiungi ${p.nome}`}>{carrello[chiaveRiga(p.id, [])] ? "+" : "Aggiungi"}</button>
+                    <button onClick={() => cambia(p, 1)} aria-label={`${T.aggiungi} ${nomeIn(lingua, p)}`}>{carrello[chiaveRiga(p.id, [])] ? "+" : T.aggiungi}</button>
                     {(c.aggiunte?.length ?? 0) > 0 && (
                       <button className="ordina-aggiunte" onClick={() => setComponendo({ p, gruppi: conAggiunte([], c.aggiunte) })}
-                        aria-label={`Aggiunte per ${p.nome}`}>＋ Aggiunte</button>
+                        aria-label={`${T.aggiuntePer} ${nomeIn(lingua, p)}`}>{T.aggiunte}</button>
                     )}
                   </>
-                )) : <span className="menu-badge">Esaurito</span>}
+                )) : <span className="menu-badge">{T.esaurito}</span>}
               </div>
             </article>
           ))}
@@ -215,45 +215,45 @@ export function OrdinaTavolo() {
 
       {vista === "carrello" && (
         <section className="menu-categoria">
-          <h2>Il tuo ordine</h2>
-          {righe.length === 0 ? <p className="menu-desc">Non hai ancora aggiunto nulla.</p> : (
+          <h2>{T.ilTuoOrdine}</h2>
+          {righe.length === 0 ? <p className="menu-desc">{T.vuoto}</p> : (
             <>
               {righe.map((r) => (
                 <article key={r.chiave} className="menu-piatto">
-                  <div className="menu-riga"><h3>{r.quantita} × {r.piatto.nome}</h3><span className="menu-prezzo">{euro(r.quantita * r.prezzo)}</span></div>
+                  <div className="menu-riga"><h3>{r.quantita} × {nomeIn(lingua, r.piatto)}</h3><span className="menu-prezzo">{euro(r.quantita * r.prezzo)}</span></div>
                   {r.scelte.length > 0 && <p className="menu-desc">{r.scelte.map((x) => x.nome).join(", ")}</p>}
                   <div className="ordina-quantita">
-                    <button onClick={() => cambiaRiga(r.piatto, r.scelte, -1)} aria-label="Meno">−</button><strong>{r.quantita}</strong>
-                    <button onClick={() => cambiaRiga(r.piatto, r.scelte, 1)} aria-label="Più">+</button>
-                    <input className="ordina-nota" placeholder="Nota (es. senza cipolla)" maxLength={120} value={r.nota}
+                    <button onClick={() => cambiaRiga(r.piatto, r.scelte, -1)} aria-label={T.meno}>−</button><strong>{r.quantita}</strong>
+                    <button onClick={() => cambiaRiga(r.piatto, r.scelte, 1)} aria-label={T.piu}>+</button>
+                    <input className="ordina-nota" placeholder={T.notaRiga} maxLength={120} value={r.nota}
                       onChange={(e) => setCarrello((c) => ({ ...c, [r.chiave]: { ...r, nota: e.target.value } }))} />
                   </div>
                 </article>
               ))}
-              <label className="ordina-campo">Nota per il personale
-                <input maxLength={200} value={nota} placeholder="Facoltativa" onChange={(e) => setNota(e.target.value)} />
+              <label className="ordina-campo">{T.notaPersonale}
+                <input maxLength={200} value={nota} placeholder={T.facoltativa} onChange={(e) => setNota(e.target.value)} />
               </label>
               {info.chiedi_nome && !/^\d{4}$/.test(codice) && (
                 <>
-                  <label className="ordina-campo">Il tuo nome{info.nome_obbligatorio ? "" : " (facoltativo)"}
+                  <label className="ordina-campo">{T.tuoNome}{info.nome_obbligatorio ? "" : T.facoltativo}
                     <input maxLength={40} value={nome} autoComplete="given-name" required={info.nome_obbligatorio}
-                      placeholder="Così il personale sa chi cercare" onChange={(e) => setNome(e.target.value)} />
+                      placeholder={T.chiCercare} onChange={(e) => setNome(e.target.value)} />
                   </label>
-                  <p className="menu-allergeni">Il nome serve solo al personale per riconoscerti e viene cancellato quando il tavolo si chiude.</p>
+                  <p className="menu-allergeni">{T.infoNome}</p>
                 </>
               )}
               {mostraCodice || codice ? (
-                <label className="ordina-campo">Codice del tavolo (facoltativo)
-                  <input inputMode="numeric" pattern="[0-9]*" maxLength={4} value={codice} placeholder="4 cifre"
+                <label className="ordina-campo">{T.codiceTavolo}
+                  <input inputMode="numeric" pattern="[0-9]*" maxLength={4} value={codice} placeholder={T.quattroCifre}
                     onChange={(e) => setCodice(e.target.value.replace(/\D/g, "").slice(0, 4))} />
                 </label>
               ) : (
-                <button className="ordina-link" onClick={() => setMostraCodice(true)}>Hai già il codice del tavolo? Inseriscilo</button>
+                <button className="ordina-link" onClick={() => setMostraCodice(true)}>{T.haiCodice}</button>
               )}
               <button className="ordina-invia" disabled={invio || !!richiesta} onClick={() => void invia()}>
-                {invio ? "Invio…" : `Invia ordine · ${euro(totale)}`}
+                {invio ? T.invio : `${T.inviaOrdine} · ${euro(totale)}`}
               </button>
-              <p className="menu-allergeni">{codice ? "L'ordine va diretto in cucina." : "Il personale riceve la tua richiesta, apre il tavolo e da lì gli ordini vanno diretti in cucina."}</p>
+              <p className="menu-allergeni">{codice ? T.direttoCucina : T.spiegazione}</p>
             </>
           )}
         </section>
@@ -261,47 +261,47 @@ export function OrdinaTavolo() {
 
       {vista === "ordini" && (
         <section className="menu-categoria">
-          <h2>Ordini inviati</h2>
-          {/^\d{4}$/.test(codice) && <p className="ordina-codice">Codice del tavolo: <strong>{codice}</strong> · condividilo con chi è con te</p>}
+          <h2>{T.ordiniInviati}</h2>
+          {/^\d{4}$/.test(codice) && <p className="ordina-codice">{T.codice} <strong>{codice}</strong> · {T.condividi}</p>}
           {/^\d{4}$/.test(codice) && ordini.some((o) => o.stato !== "rifiutato") && (
-            conto === "in_attesa" ? <p className="ordina-avviso ok">🧾 Conto richiesto: il personale sta arrivando.</p> : (
+            conto === "in_attesa" ? <p className="ordina-avviso ok">{T.contoRichiesto}</p> : (
               <div className="ordina-conto">
-                <input maxLength={120} value={notaConto} placeholder="Nota per il conto (es. pago con carta, conti separati)" onChange={(e) => setNotaConto(e.target.value)} />
+                <input maxLength={120} value={notaConto} placeholder={T.notaConto} onChange={(e) => setNotaConto(e.target.value)} />
                 <button className="ordina-invia" onClick={async () => {
                   const { data, error } = await sb().rpc("chiedi_conto", { p_token: token, p_codice: codice, p_nota: notaConto.trim() });
                   const esito = data as { errore?: string } | null;
-                  if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? "Richiesta non riuscita", errore: true }); return; }
-                  setConto("in_attesa"); setMessaggio({ testo: "Conto richiesto: il personale sta arrivando. 🧾" });
-                }}>🧾 Chiedi il conto · {euro(ordini.filter((o) => o.stato !== "rifiutato").reduce((n, o) => n + o.righe.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0)
+                  if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? T.richiestaFallita, errore: true }); return; }
+                  setConto("in_attesa"); setMessaggio({ testo: T.contoOk });
+                }}>{T.chiediConto} · {euro(ordini.filter((o) => o.stato !== "rifiutato").reduce((n, o) => n + o.righe.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0)
                   + (coperto ? coperto.coperti * coperto.prezzo_cent : 0))}</button>
-                {coperto && <p className="menu-allergeni">Comprende il coperto: {coperto.coperti} × {euro(coperto.prezzo_cent)}</p>}
+                {coperto && <p className="menu-allergeni">{T.comprendeCoperto} {coperto.coperti} × {euro(coperto.prezzo_cent)}</p>}
               </div>
             )
           )}
-          {!/^\d{4}$/.test(codice) ? <p className="menu-desc">{richiesta ? "In attesa della conferma del personale…" : "Qui vedrai gli ordini dopo la conferma del personale."}</p>
-            : ordini.length === 0 ? <p className="menu-desc">Nessun ordine inviato da questo tavolo.</p>
+          {!/^\d{4}$/.test(codice) ? <p className="menu-desc">{richiesta ? T.attesaConferma : T.quiVedrai}</p>
+            : ordini.length === 0 ? <p className="menu-desc">{T.nessunOrdine}</p>
             : ordini.map((o) => (
               <article key={o.id} className="menu-piatto">
                 <div className="menu-riga">
-                  <h3>{STATI[o.stato]?.icona} {STATI[o.stato]?.testo ?? o.stato}</h3>
+                  <h3>{ICONE[o.stato]} {T.stati[o.stato] ?? o.stato}</h3>
                   <span className="menu-prezzo">{euro(o.righe.reduce((n, r) => n + r.quantita * r.prezzo_cent, 0))}</span>
                 </div>
                 <p className="menu-desc">{o.righe.map((r) => `${r.quantita} × ${r.nome}${descriviScelte((r.opzioni ?? []).map((nome) => ({ nome })))}${r.nota ? ` — ${r.nota}` : ""}`).join(" · ")}</p>
-                {o.stato === "rifiutato" && o.motivo && <p className="menu-desc">Motivo: {o.motivo}</p>}
-                <p className="menu-allergeni">Inviato alle {new Date(o.creato_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</p>
+                {o.stato === "rifiutato" && o.motivo && <p className="menu-desc">{T.motivo} {o.motivo}</p>}
+                <p className="menu-allergeni">{T.inviatoAlle} {new Date(o.creato_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</p>
               </article>
             ))}
         </section>
       )}
 
       {componendo && (
-        <Componi nome={componendo.p.nome} base={componendo.p.prezzo_cent} gruppi={componendo.gruppi} variante="menu" onChiudi={() => setComponendo(null)}
-          onConferma={(scelte) => { cambiaRiga(componendo.p, scelte, 1); setComponendo(null); setMessaggio({ testo: `${componendo.p.nome} aggiunto al tuo ordine` }); }} />
+        <Componi nome={nomeIn(lingua, componendo.p)} base={componendo.p.prezzo_cent} gruppi={componendo.gruppi} variante="menu" onChiudi={() => setComponendo(null)}
+          onConferma={(scelte) => { cambiaRiga(componendo.p, scelte, 1); setComponendo(null); setMessaggio({ testo: `${nomeIn(lingua, componendo.p)} ${T.aggiuntoAlTuo}` }); }} />
       )}
 
       {vista === "menu" && pezzi > 0 && (
         <button className="ordina-barra" onClick={() => setVista("carrello")}>
-          Vedi il tuo ordine · {pezzi} {pezzi === 1 ? "piatto" : "piatti"} · {euro(totale)}
+          {T.vedi} · {pezzi} {pezzi === 1 ? T.piatto : T.piatti} · {euro(totale)}
         </button>
       )}
     </div>

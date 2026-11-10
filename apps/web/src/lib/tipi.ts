@@ -3,11 +3,11 @@ export type Ruolo = "owner" | "manager" | "caposala" | "cameriere" | "cucina";
 export interface Locale { id: string; nome: string; slug: string; organizzazione_id: string }
 
 export interface Categoria {
-  id: string; locale_id: string; nome: string; descrizione: string; posizione: number; visibile: boolean;
+  id: string; locale_id: string; nome: string; descrizione: string; posizione: number; visibile: boolean; nome_en?: string; descrizione_en?: string;
 }
 
 export interface Prodotto {
-  id: string; locale_id: string; categoria_id: string; nome: string; descrizione: string;
+  id: string; locale_id: string; categoria_id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string;
   prezzo_cent: number; aliquota_iva: number; disponibile: boolean; visibile: boolean;
   allergeni: string[]; etichette: string[]; immagine_url: string | null; posizione: number;
 }
@@ -25,11 +25,11 @@ export interface MenuPubblico {
   locale: { nome: string; indirizzo: string };
   aspetto: Aspetto | null;
   categorie: {
-    id: string; nome: string; descrizione: string;
+    id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string;
     /** Aggiunte disponibili per i piatti di questa categoria (es. «Mozzarella di bufala» + 2 €). */
     aggiunte?: Scelta[];
     prodotti: {
-      id: string; nome: string; descrizione: string; prezzo_cent: number; disponibile: boolean;
+      id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string; prezzo_cent: number; disponibile: boolean;
       allergeni: string[]; etichette: string[]; immagine_url: string | null; foto?: number | null;
       vino?: SchedaVino | null; abbinamenti?: { id: string; motivo: string }[]; foto_path?: string | null;
       opzioni: GruppoScelte[];

@@ -194,6 +194,11 @@ export function Catalogo() {
                        onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== cat.nome) void aggiornaCategoria(cat.id, { nome: v }); else e.target.value = cat.nome; }} />
               ) : <h2>{cat.nome}</h2>}
               {puoModificare && (
+                <input className="input-inglese" defaultValue={cat.nome_en ?? ""} key={`en-${cat.nome_en}`} maxLength={80} placeholder="🇬🇧 in inglese"
+                       aria-label="Nome della categoria in inglese"
+                       onBlur={(e) => { const v = e.target.value.trim(); if (v !== (cat.nome_en ?? "")) void aggiornaCategoria(cat.id, { nome_en: v }); }} />
+              )}
+              {puoModificare && (
                 <div className="azioni">
                   <label className="interruttore"><input type="checkbox" checked={cat.visibile}
                     onChange={(e) => void aggiornaCategoria(cat.id, { visibile: e.target.checked })} />Visibile</label>
@@ -328,6 +333,18 @@ function RigaProdotto(props: {
             <textarea defaultValue={p.descrizione} maxLength={500} rows={2}
                       onBlur={(e) => { if (e.target.value !== p.descrizione) onAggiorna({ descrizione: e.target.value }); }} />
           </label>
+          <details className="traduzione">
+            <summary>🇬🇧 In inglese {p.nome_en ? `· ${p.nome_en}` : "(facoltativo)"}</summary>
+            <label className="campo">Nome in inglese
+              <input defaultValue={p.nome_en ?? ""} maxLength={120} placeholder={p.nome}
+                     onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.nome_en ?? "")) onAggiorna({ nome_en: v }); }} />
+            </label>
+            <label className="campo">Descrizione in inglese
+              <textarea defaultValue={p.descrizione_en ?? ""} maxLength={1000} rows={2}
+                        onBlur={(e) => { if (e.target.value !== (p.descrizione_en ?? "")) onAggiorna({ descrizione_en: e.target.value }); }} />
+            </label>
+            <span className="muto piccolo">Compare nel menu in inglese; se lo lasci vuoto resta il testo italiano.</span>
+          </details>
           <fieldset className="chip-gruppo"><legend>Allergeni</legend>
             {ALLERGENI.map((a) => (
               <label key={a} className={`chip${p.allergeni.includes(a) ? " attivo" : ""}`}>

@@ -47,15 +47,93 @@ const PREDEFINITO = {
   sfondo_dati: null, sfondo_opacita: 22, sfondo_sfocatura: 3, sfondo_bn: false,
 };
 
+// ---------------------------------------------------------------- Lingue
+// Testi fissi della pagina in italiano e inglese. I nomi e le descrizioni in inglese li scrive il locale (nome_en,
+// descrizione_en): dove mancano resta l'italiano. Nessuna traduzione automatica.
+const TESTI = {
+  it: {
+    lang: "it", esaurito: "Esaurito", da: "da ", siAbbinaCon: "🍷 Si abbina con ", o: " o ", allergeni: "Allergeni: ",
+    viniPerRegione: "Vini per regione", mappa: "🗺️ Scegli dalla mappa", tutte: "Tutte", altreZone: "Altre zone",
+    scegliRegione: "Scegli una regione", tocca: "Tocca una regione illuminata", regioniItalia: "Regioni d'Italia", vini: "vini",
+    fonteMappa: "Confini: ISTAT (CC BY 4.0)", mappaTitolo: "Scegli la regione dalla mappa", trova: "🍷 Trova il tuo vino",
+    vuoto: "Il menu sarà disponibile a breve.", chiudi: "Chiudi", infoAllergeni: "Per informazioni sugli allergeni rivolgersi al personale.",
+    aggiornato: "Aggiornato il ", categorie: "Categorie", menuDi: "Menu di ", altraLingua: "English", linkLingua: "en/",
+    tipi: { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" },
+    allergeniNomi: {}, etichetteNomi: {},
+    c: {
+      torna: "← Torna a ", esaurito: "Esaurito", calice: "Calice ", bottiglia: " · Bottiglia ", scegli: "scegli ", da: "da ", a: " a ",
+      finoA: "fino a ", incluso: "incluso", allergeni: "Allergeni: ", idealeCon: "Ideale con", sommelier: "Il sommelier consiglia",
+      domanda: "Domanda ", di3: " di 3", qVino: "Che vino preferisci?", sorprendimi: "Sorprendimi", qCorpo: "Come lo vorresti?",
+      leggero: "Leggero e fresco", equilibrato: "Equilibrato", strutturato: "Strutturato e intenso", indifferente: "Indifferente",
+      qCibo: "Cosa mangerai?", soloVino: "Solo vino", comePreferisci: ", come preferisci", siAbbinaA: "Si abbina a ", e: " e ",
+      nonAbbiamo: "In questo momento non abbiamo un ", disponibile: " disponibile in carta", nessunVino: "Nessun vino disponibile in carta",
+      chiedi: ": chiedi al personale, saprà consigliarti.", ricomincia: "Ricomincia", vino: " vino", vini: " vini",
+      tipi: { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" },
+      corpi: { leggero: "Leggero", medio: "Equilibrato", strutturato: "Strutturato" },
+    },
+  },
+  en: {
+    lang: "en", esaurito: "Sold out", da: "from ", siAbbinaCon: "🍷 Pairs with ", o: " or ", allergeni: "Allergens: ",
+    viniPerRegione: "Wines by region", mappa: "🗺️ Choose on the map", tutte: "All", altreZone: "Other areas",
+    scegliRegione: "Choose a region", tocca: "Tap a highlighted region", regioniItalia: "Regions of Italy", vini: "wines",
+    fonteMappa: "Borders: ISTAT (CC BY 4.0)", mappaTitolo: "Choose the region on the map", trova: "🍷 Find your wine",
+    vuoto: "The menu will be available soon.", chiudi: "Close", infoAllergeni: "For allergen information, please ask our staff.",
+    aggiornato: "Updated on ", categorie: "Categories", menuDi: "Menu of ", altraLingua: "Italiano", linkLingua: "../",
+    tipi: { rosso: "Red", bianco: "White", rosato: "Rosé", bollicine: "Sparkling", dolce: "Dessert" },
+    allergeniNomi: {
+      Glutine: "Gluten", Crostacei: "Crustaceans", Uova: "Eggs", Pesce: "Fish", Arachidi: "Peanuts", Soia: "Soy", Latte: "Milk",
+      "Frutta a guscio": "Tree nuts", Sedano: "Celery", Senape: "Mustard", Sesamo: "Sesame", Solfiti: "Sulphites", Lupini: "Lupin", Molluschi: "Molluscs",
+    },
+    etichetteNomi: { Vegetariano: "Vegetarian", Vegano: "Vegan", Piccante: "Spicy", "Senza glutine": "Gluten free", "Novità": "New", Consigliato: "Recommended", Surgelato: "Frozen" },
+    c: {
+      torna: "← Back to ", esaurito: "Sold out", calice: "Glass ", bottiglia: " · Bottle ", scegli: "choose ", da: "from ", a: " to ",
+      finoA: "up to ", incluso: "included", allergeni: "Allergens: ", idealeCon: "Ideal with", sommelier: "Our sommelier suggests",
+      domanda: "Question ", di3: " of 3", qVino: "Which wine do you prefer?", sorprendimi: "Surprise me", qCorpo: "How would you like it?",
+      leggero: "Light and fresh", equilibrato: "Balanced", strutturato: "Full-bodied and intense", indifferente: "No preference",
+      qCibo: "What will you eat?", soloVino: "Just wine", comePreferisci: ", as you like", siAbbinaA: "Pairs with ", e: " and ",
+      nonAbbiamo: "Right now we have no ", disponibile: " wine available", nessunVino: "No wine available right now",
+      chiedi: ": please ask our staff, they will be happy to help.", ricomincia: "Start again", vino: " wine", vini: " wines",
+      tipi: { rosso: "Red", bianco: "White", rosato: "Rosé", bollicine: "Sparkling", dolce: "Dessert" },
+      corpi: { leggero: "Light", medio: "Balanced", strutturato: "Full-bodied" },
+    },
+  },
+};
+
+/** Menu con i testi del locale nella lingua scelta (dove manca la traduzione resta l'italiano). */
+export function menuInLingua(menu, lingua) {
+  if (lingua !== "en") return menu;
+  const t = TESTI.en;
+  return {
+    ...menu,
+    categorie: menu.categorie.map((c) => ({
+      ...c, nome: c.nome_en || c.nome, descrizione: c.descrizione_en || c.descrizione,
+      prodotti: c.prodotti.map((p) => ({
+        ...p, nome: p.nome_en || p.nome, descrizione: p.descrizione_en || p.descrizione,
+        allergeni: (p.allergeni || []).map((x) => t.allergeniNomi[x] ?? x),
+        etichette: (p.etichette || []).map((x) => t.etichetteNomi[x] ?? x),
+      })),
+    })),
+  };
+}
+
 // ---------------------------------------------------------------- Pagina statica
-/** logoFile / sfondoFile: file pubblicati accanto alla pagina (es. «logo.png?v=…»), se presenti. */
-export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fotoPiatti = {}, versione = "") {
-  const TIPI = { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" };
+/**
+ * logoFile / sfondoFile: file pubblicati accanto alla pagina (es. «logo.png?v=…»), se presenti.
+ * lingua «en»: pagina in inglese pubblicata in «<slug>/en/» (i file del menu sono nella cartella superiore).
+ */
+export function pagina(menuOriginale, aggiornato, logoFileIt = null, sfondoFileIt = null, fotoPiattiIt = {}, versione = "", lingua = "it") {
+  const L = TESTI[lingua] ?? TESTI.it;
+  const su = lingua === "en" ? "../" : "";   // percorso verso i file del menu
+  const menu = menuInLingua(menuOriginale, lingua);
+  const logoFile = logoFileIt && !/^https:\/\//.test(logoFileIt) ? su + logoFileIt : logoFileIt;
+  const sfondoFile = sfondoFileIt ? su + sfondoFileIt : sfondoFileIt;
+  const fotoPiatti = Object.fromEntries(Object.entries(fotoPiattiIt).map(([k, v]) => [k, su + v]));
+  const TIPI = L.tipi;
   const perId = new Map(menu.categorie.flatMap((c) => c.prodotti.map((p) => [p.id, p])));
   const apribile = (p) => !!(fotoPiatti[p.id] || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length);
   const numeroVini = menu.categorie.reduce((n, c) => n + c.prodotti.filter((p) => p.vino && p.disponibile).length, 0);
   // Dati per scheda e quiz: senza immagini incorporate, «<» neutralizzato per non chiudere lo <script>
-  const dati = JSON.stringify({ versione, foto: fotoPiatti, categorie: menu.categorie }).replace(/</g, "\\u003c");
+  const dati = JSON.stringify({ versione, base: su, t: L.c, foto: fotoPiatti, categorie: menu.categorie }).replace(/</g, "\\u003c");
   const a = { ...PREDEFINITO, ...(menu.aspetto ?? {}) };
   const colore = (v, d) => (COLORE.test(v) ? v : d);
   const font = (v, d) => (FONT_AMMESSI.has(v) ? v : d);
@@ -73,44 +151,44 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
       + `<div class="sfondo-menu-velo" style="opacity:${1 - entro(a.sfondo_opacita, 0, 100, 22) / 100}"></div></div>`
     : "";
 
-  const regioneVino = (p) => (p.vino ? regioneDi(p.vino.regione) || "Altre zone" : null);
+  const regioneVino = (p) => (p.vino ? regioneDi(p.vino.regione) || L.altreZone : null);
   const prodotto = (p) => `
         <article class="piatto${p.disponibile ? "" : " esaurito"}${apribile(p) ? " apribile" : ""}"${apribile(p) ? ` tabindex="0" role="button" data-id="${esc(p.id)}"` : ""}${p.vino ? ` data-regione="${esc(regioneVino(p))}"` : ""}>
           ${layout === "griglia" && /^https:\/\//.test(p.immagine_url ?? "") ? `<img class="foto" src="${esc(p.immagine_url)}" alt="" loading="lazy">` : ""}
-          <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : '<span class="badge">Esaurito</span>'}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${p.opzioni?.length ? "da " : ""}${esc(euro(p.prezzo_cent))}</span></div>
+          <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : `<span class="badge">${esc(L.esaurito)}</span>`}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${p.opzioni?.length ? esc(L.da) : ""}${esc(euro(p.prezzo_cent))}</span></div>
           ${p.vino ? `<p class="vino-info">${esc([TIPI[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · "))}</p>` : ""}
           ${a.mostra_descrizioni && p.descrizione ? `<p class="desc">${esc(p.descrizione)}</p>` : ""}
-          ${!p.vino && p.abbinamenti?.length ? `<p class="abbinamento">🍷 Si abbina con ${esc(p.abbinamenti.slice(0, 2).map((x) => perId.get(x.id)?.nome).filter(Boolean).join(" o "))}</p>` : ""}
+          ${!p.vino && p.abbinamenti?.length ? `<p class="abbinamento">${esc(L.siAbbinaCon)}${esc(p.abbinamenti.slice(0, 2).map((x) => perId.get(x.id)?.nome).filter(Boolean).join(L.o))}</p>` : ""}
           ${p.etichette?.length ? `<ul class="etichette">${p.etichette.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
-          ${a.mostra_allergeni && p.allergeni?.length ? `<p class="allergeni">Allergeni: ${esc(p.allergeni.join(", "))}</p>` : ""}
+          ${a.mostra_allergeni && p.allergeni?.length ? `<p class="allergeni">${esc(L.allergeni)}${esc(p.allergeni.join(", "))}</p>` : ""}
         </article>`;
   // Nelle categorie di vini con più regioni: vini raggruppati per regione (in ordine alfabetico, «Altre zone» in fondo)
   const corpoCategoria = (c) => {
     const vini = c.prodotti.filter((p) => p.vino);
     const regioni = [...new Set(vini.map(regioneVino))];
     if (vini.length < 2 || regioni.length < 2 || vini.length !== c.prodotti.length) return c.prodotti.map(prodotto).join("");
-    regioni.sort((x, y) => (x === "Altre zone") - (y === "Altre zone") || x.localeCompare(y, "it"));
+    regioni.sort((x, y) => (x === L.altreZone) - (y === L.altreZone) || x.localeCompare(y, "it"));
     return regioni.map((r) => `<h3 class="regione-titolo" data-regione="${esc(r)}">${esc(r)}</h3>${vini.filter((p) => regioneVino(p) === r).map(prodotto).join("")}`).join("");
   };
   const tutteLeRegioni = [...new Set(menu.categorie.flatMap((c) => c.prodotti.filter((p) => p.vino).map(regioneVino)))]
-    .sort((x, y) => (x === "Altre zone") - (y === "Altre zone") || x.localeCompare(y, "it"));
+    .sort((x, y) => (x === L.altreZone) - (y === L.altreZone) || x.localeCompare(y, "it"));
   // Mappa: le regioni con vini in carta si illuminano e si possono scegliere
   const viniPerRegione = new Map();
   for (const c of menu.categorie) for (const p of c.prodotti) if (p.vino) viniPerRegione.set(regioneVino(p), (viniPerRegione.get(regioneVino(p)) ?? 0) + 1);
   // La mappa compare solo insieme al filtro (almeno due regioni) e se almeno una regione è italiana
   const conMappa = tutteLeRegioni.length >= 2 && [...viniPerRegione.keys()].some((r) => MAPPA_ITALIA.regioni[r]);
   const mappa = conMappa ? `
-<div class="mappa-sfondo" hidden style="display:none"><div class="mappa" role="dialog" aria-modal="true" aria-label="Scegli la regione dalla mappa">
-  <button class="scheda-chiudi mappa-chiudi" aria-label="Chiudi">×</button>
-  <p class="quiz-passo">Scegli una regione</p><p class="mappa-nome" aria-live="polite">Tocca una regione illuminata</p>
-  <svg viewBox="0 0 ${MAPPA_ITALIA.larghezza} ${MAPPA_ITALIA.altezza}" role="group" aria-label="Regioni d'Italia">${Object.entries(MAPPA_ITALIA.regioni).map(([r, d]) =>
+<div class="mappa-sfondo" hidden style="display:none"><div class="mappa" role="dialog" aria-modal="true" aria-label="${esc(L.mappaTitolo)}">
+  <button class="scheda-chiudi mappa-chiudi" aria-label="${esc(L.chiudi)}">×</button>
+  <p class="quiz-passo">${esc(L.scegliRegione)}</p><p class="mappa-nome" aria-live="polite">${esc(L.tocca)}</p>
+  <svg viewBox="0 0 ${MAPPA_ITALIA.larghezza} ${MAPPA_ITALIA.altezza}" role="group" aria-label="${esc(L.regioniItalia)}">${Object.entries(MAPPA_ITALIA.regioni).map(([r, d]) =>
     viniPerRegione.has(r)
-      ? `<path d="${d}" class="con-vini" data-regione-mappa="${esc(r)}" data-quanti="${viniPerRegione.get(r)}" tabindex="0" role="button" aria-label="${esc(r)}: ${viniPerRegione.get(r)} vini"><title>${esc(r)}</title></path>`
+      ? `<path d="${d}" class="con-vini" data-regione-mappa="${esc(r)}" data-quanti="${viniPerRegione.get(r)}" tabindex="0" role="button" aria-label="${esc(r)}: ${viniPerRegione.get(r)} ${esc(L.vini)}"><title>${esc(r)}</title></path>`
       : `<path d="${d}"><title>${esc(r)}</title></path>`).join("")}</svg>
-  <p class="mappa-fonte">Confini: ISTAT (CC BY 4.0)</p>
+  <p class="mappa-fonte">${esc(L.fonteMappa)}</p>
 </div></div>` : "";
   const filtroRegioni = tutteLeRegioni.length >= 2
-    ? `<div class="filtro-regioni" role="group" aria-label="Vini per regione"><span>Vini per regione</span>${conMappa ? '<button type="button" class="apri-mappa">🗺️ Scegli dalla mappa</button>' : ""}<button type="button" class="attiva" data-filtro="" aria-pressed="true">Tutte</button>${tutteLeRegioni.map((r) => `<button type="button" data-filtro="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join("")}</div>`
+    ? `<div class="filtro-regioni" role="group" aria-label="${esc(L.viniPerRegione)}"><span>${esc(L.viniPerRegione)}</span>${conMappa ? `<button type="button" class="apri-mappa">${esc(L.mappa)}</button>` : ""}<button type="button" class="attiva" data-filtro="" aria-pressed="true">${esc(L.tutte)}</button>${tutteLeRegioni.map((r) => `<button type="button" data-filtro="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join("")}</div>`
     : "";
   const categorie = menu.categorie.map((c) => `
     <section class="cat${c.prodotti.some((p) => p.vino) ? " cat-vini" : ""}" id="c-${esc(c.id)}">
@@ -121,12 +199,12 @@ export function pagina(menu, aggiornato, logoFile = null, sfondoFile = null, fot
     </section>`).join("");
 
   return `<!doctype html>
-<html lang="it">
+<html lang="${L.lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Menu · ${esc(menu.locale.nome)}</title>
-<meta name="description" content="Menu di ${esc(menu.locale.nome)}">
+<meta name="description" content="${esc(L.menuDi)}${esc(menu.locale.nome)}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?${famiglie}&display=swap" rel="stylesheet">
 <style>
@@ -142,6 +220,7 @@ body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit
 .sfondo-menu-testata{position:absolute;inset:0;border-radius:0 0 18px 18px}
 .sfondo-menu-img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.08)}
 .sfondo-menu-velo{position:absolute;inset:0;background:var(--s)}
+.lingua{text-align:center;margin:8px 0 0;font-size:.85rem}.lingua a{color:var(--p);font-weight:700;text-decoration:none;border:1px solid currentColor;border-radius:999px;padding:3px 12px}
 .filtro-regioni{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:12px 0 0;font-size:.8rem}
 .filtro-regioni span{width:100%;text-align:center;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
 .filtro-regioni button{border:1px solid color-mix(in srgb,var(--p) 55%,transparent);background:transparent;color:var(--t);border-radius:999px;padding:5px 12px;font:600 .8rem var(--fc);cursor:pointer}
@@ -247,19 +326,20 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     ${mostraNome ? `<h1>${esc(menu.locale.nome)}</h1>` : ""}
     ${menu.locale.indirizzo ? `<p>${esc(menu.locale.indirizzo)}</p>` : ""}
   </header>
-  ${numeroVini >= 2 ? '<button class="trova-vino">🍷 Trova il tuo vino</button>' : ""}
+  <p class="lingua"><a href="${L.linkLingua}" hreflang="${lingua === "en" ? "it" : "en"}">${esc(L.altraLingua)}</a></p>
+  ${numeroVini >= 2 ? `<button class="trova-vino">${esc(L.trova)}</button>` : ""}
   ${filtroRegioni}
   ${mappa}
-  ${menu.categorie.length ? `<nav aria-label="Categorie">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
-  ${categorie || '<p class="vuoto">Il menu sarà disponibile a breve.</p>'}
+  ${menu.categorie.length ? `<nav aria-label="${esc(L.categorie)}">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
+  ${categorie || `<p class="vuoto">${esc(L.vuoto)}</p>`}
   <div class="scheda-sfondo" hidden><div class="scheda" role="dialog" aria-modal="true">
-    <button class="scheda-chiudi" aria-label="Chiudi">×</button><img class="scheda-foto" alt="" hidden>
+    <button class="scheda-chiudi" aria-label="${esc(L.chiudi)}">×</button><img class="scheda-foto" alt="" hidden>
     <div class="scheda-corpo"></div>
   </div></div>
   <footer>
     ${a.testo_piede ? `<p>${esc(a.testo_piede)}</p>` : ""}
-    <p>Per informazioni sugli allergeni rivolgersi al personale.</p>
-    <p>Aggiornato il ${esc(aggiornato)}</p>
+    <p>${esc(L.infoAllergeni)}</p>
+    <p>${esc(L.aggiornato)}${esc(aggiornato)}</p>
   </footer>
 </div>
 <script type="application/json" id="dati">${dati}</script>
@@ -268,8 +348,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
   const D = JSON.parse(document.getElementById("dati").textContent);
   const per = new Map();
   D.categorie.forEach((c) => c.prodotti.forEach((p) => per.set(p.id, Object.assign({ categoria: c.id }, p))));
-  const TIPI = { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" };
-  const CORPI = { leggero: "Leggero", medio: "Equilibrato", strutturato: "Strutturato" };
+  const T = D.t, TIPI = T.tipi, CORPI = T.corpi;
   const euro = (c) => new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
   const sfondo = document.querySelector(".scheda-sfondo"), corpo = sfondo.querySelector(".scheda-corpo"), foto = sfondo.querySelector(".scheda-foto");
   // Tutto il testo entra con textContent: niente HTML costruito da dati
@@ -300,27 +379,27 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     const n = [], r = el("div", "riga"), v = p.vino;
     if (storia.length) {
       const prec = per.get(storia[storia.length - 1]);
-      const ind = el("button", "scheda-indietro", "← Torna a " + prec.nome);
+      const ind = el("button", "scheda-indietro", T.torna + prec.nome);
       ind.addEventListener("click", () => apri(storia.pop(), "indietro"));
       n.push(ind);
     }
     r.append(el("h3", null, p.nome), el("span", "prezzo", euro(p.prezzo_cent))); n.push(r);
-    if (!p.disponibile) n.push(el("p", null, "Esaurito"));
+    if (!p.disponibile) n.push(el("p", null, T.esaurito));
     if (v) {
       n.push(el("p", "scheda-vino", [TIPI[v.tipo], CORPI[v.corpo], v.regione, v.vitigno].filter(Boolean).join(" · ")));
       if (v.cantina || v.annata) n.push(el("p", "desc", [v.cantina, v.annata].filter(Boolean).join(", ")));
-      if (v.prezzo_bottiglia_cent) n.push(el("p", null, "Calice " + euro(p.prezzo_cent) + " · Bottiglia " + euro(v.prezzo_bottiglia_cent)));
+      if (v.prezzo_bottiglia_cent) n.push(el("p", null, T.calice + euro(p.prezzo_cent) + T.bottiglia + euro(v.prezzo_bottiglia_cent)));
     }
     if (p.descrizione) n.push(el("p", "desc", p.descrizione));
     if (v && v.note) n.push(el("p", "desc", v.note));
     // Piatto componibile: gruppi con le voci e i loro prezzi (la scelta si fa al tavolo)
     (p.opzioni || []).forEach((g) => {
-      n.push(el("p", "quiz-passo", g.nome + " · " + (g.min === g.max ? "scegli " + g.max : g.min > 0 ? "da " + g.min + " a " + g.max : "fino a " + g.max)));
-      g.scelte.forEach((c) => { const r2 = el("div", "riga"); r2.append(el("span", null, c.nome), el("span", "prezzo", c.sovrapprezzo_cent ? "+ " + euro(c.sovrapprezzo_cent) : "incluso")); n.push(r2); });
+      n.push(el("p", "quiz-passo", g.nome + " · " + (g.min === g.max ? T.scegli + g.max : g.min > 0 ? T.da + g.min + T.a + g.max : T.finoA + g.max)));
+      g.scelte.forEach((c) => { const r2 = el("div", "riga"); r2.append(el("span", null, c.nome), el("span", "prezzo", c.sovrapprezzo_cent ? "+ " + euro(c.sovrapprezzo_cent) : T.incluso)); n.push(r2); });
     });
-    if (p.allergeni && p.allergeni.length) n.push(el("p", "allergeni", "Allergeni: " + p.allergeni.join(", ")));
+    if (p.allergeni && p.allergeni.length) n.push(el("p", "allergeni", T.allergeni + p.allergeni.join(", ")));
     const ab = (p.abbinamenti || []).map((a) => ({ q: per.get(a.id), m: a.motivo })).filter((x) => x.q && !storia.includes(x.q.id));
-    if (ab.length) { n.push(el("p", "quiz-passo", v ? "Ideale con" : "Il sommelier consiglia")); ab.forEach((x) => n.push(riga(x.q, x.m, 0, true))); }
+    if (ab.length) { n.push(el("p", "quiz-passo", v ? T.idealeCon : T.sommelier)); ab.forEach((x) => n.push(riga(x.q, x.m, 0, true))); }
     mostra(n, D.foto[p.id], p.nome);
   }
   function quiz() {
@@ -328,13 +407,13 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     const domanda = (passo, titolo, scelte, avanti) => {
       const box = el("div", "quiz-scelte");
       scelte.forEach(([etichetta, valore]) => { const b = el("button", "quiz-scelta", etichetta); b.addEventListener("click", () => avanti(valore)); box.append(b); });
-      mostra([el("p", "quiz-passo", "Domanda " + passo + " di 3"), el("h3", null, titolo), box], null, "");
+      mostra([el("p", "quiz-passo", T.domanda + passo + T.di3), el("h3", null, titolo), box], null, "");
     };
     const tipi = [...new Set(vini.map((v) => v.vino.tipo))];
-    domanda(1, "Che vino preferisci?", [...tipi.map((t) => [TIPI[t], t]), ["Sorprendimi", "sorpresa"]], (t) => { stato.tipo = t;
-      domanda(2, "Come lo vorresti?", [["Leggero e fresco", "leggero"], ["Equilibrato", "medio"], ["Strutturato e intenso", "strutturato"], ["Indifferente", "indifferente"]], (c) => { stato.corpo = c;
+    domanda(1, T.qVino, [...tipi.map((t) => [TIPI[t], t]), [T.sorprendimi, "sorpresa"]], (t) => { stato.tipo = t;
+      domanda(2, T.qCorpo, [[T.leggero, "leggero"], [T.equilibrato, "medio"], [T.strutturato, "strutturato"], [T.indifferente, "indifferente"]], (c) => { stato.corpo = c;
         const cibo = D.categorie.filter((c) => c.prodotti.some((p) => !p.vino));
-        domanda(3, "Cosa mangerai?", [...cibo.map((c) => [c.nome, c.id]), ["Solo vino", null]], (x) => { stato.cibo = x; risultati(vini, stato); });
+        domanda(3, T.qCibo, [...cibo.map((c) => [c.nome, c.id]), [T.soloVino, null]], (x) => { stato.cibo = x; risultati(vini, stato); });
       });
     });
   }
@@ -343,18 +422,18 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     // Il colore scelto è vincolante; il corpo opposto solo se non c'è altro
     const valutati = vini.filter((v) => s.tipo === "sorpresa" || v.vino.tipo === s.tipo).map((v) => {
       let pt = 0, d = 0; const pq = [];
-      if (s.tipo !== "sorpresa") pq.push(TIPI[v.vino.tipo] + ", come preferisci");
+      if (s.tipo !== "sorpresa") pq.push(TIPI[v.vino.tipo] + T.comePreferisci);
       if (s.corpo !== "indifferente") { d = Math.abs(O.indexOf(v.vino.corpo) - O.indexOf(s.corpo)); if (d === 0) { pt += 3; pq.push(CORPI[v.vino.corpo]); } else if (d === 1) pt += 1; }
       const piatti = (v.abbinamenti || []).map((a) => per.get(a.id)).filter((p) => p && (!s.cibo || p.categoria === s.cibo));
-      if (piatti.length) { pt += Math.min(4, piatti.length * 2); pq.push("Si abbina a " + piatti.slice(0, 2).map((p) => p.nome).join(" e ")); }
+      if (piatti.length) { pt += Math.min(4, piatti.length * 2); pq.push(T.siAbbinaA + piatti.slice(0, 2).map((p) => p.nome).join(T.e)); }
       return { v, pt, pq, d };
     });
     const vicini = valutati.filter((x) => x.d < 2);
     const r = (vicini.length ? vicini : valutati).sort((a, b) => b.pt - a.pt || a.v.prezzo_cent - b.v.prezzo_cent).slice(0, 3);
-    const n = [el("p", "quiz-passo", "Il sommelier consiglia")];
-    if (!r.length) n.push(el("p", null, (s.tipo !== "sorpresa" ? "In questo momento non abbiamo un " + TIPI[s.tipo].toLowerCase() + " disponibile in carta" : "Nessun vino disponibile in carta") + ": chiedi al personale, saprà consigliarti."));
+    const n = [el("p", "quiz-passo", T.sommelier)];
+    if (!r.length) n.push(el("p", null, (s.tipo !== "sorpresa" ? T.nonAbbiamo + TIPI[s.tipo].toLowerCase() + T.disponibile : T.nessunVino) + T.chiedi));
     r.forEach((x, i) => n.push(riga(x.v, x.pq.join(" · "), i + 1)));
-    const b = el("button", "quiz-scelta", "Ricomincia"); b.addEventListener("click", quiz); n.push(b);
+    const b = el("button", "quiz-scelta", T.ricomincia); b.addEventListener("click", quiz); n.push(b);
     mostra(n, null, "");
   }
   document.querySelectorAll(".apribile").forEach((art) => {
@@ -373,7 +452,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
     mappaS.querySelector(".mappa-chiudi")?.addEventListener("click", (e) => { e.stopPropagation(); chiudiMappa(); });
     mappaS.querySelectorAll("path.con-vini").forEach((pt) => {
       const mostra = () => { mappaS.querySelectorAll("path.acceso").forEach((x) => x.classList.remove("acceso")); pt.classList.add("acceso");
-        nome.textContent = pt.dataset.regioneMappa + " · " + pt.dataset.quanti + (pt.dataset.quanti === "1" ? " vino" : " vini"); };
+        nome.textContent = pt.dataset.regioneMappa + " · " + pt.dataset.quanti + (pt.dataset.quanti === "1" ? T.vino : T.vini); };
       const scegli = () => { chiudiMappa(); const b = [...document.querySelectorAll(".filtro-regioni button[data-filtro]")].find((x) => x.dataset.filtro === pt.dataset.regioneMappa); if (b) b.click(); };
       pt.addEventListener("mouseenter", mostra); pt.addEventListener("focus", mostra);
       pt.addEventListener("click", scegli);
@@ -395,7 +474,7 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
   sfondo.querySelector(".scheda-chiudi").addEventListener("click", chiudi);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") chiudi(); });
   // Aggiornamento rapido: se esiste una versione più recente del menu, ricarica scavalcando la cache (una sola volta per versione)
-  const controlla = () => fetch("versione.json?t=" + Date.now(), { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+  const controlla = () => fetch(D.base + "versione.json?t=" + Date.now(), { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
     if (!j || !j.versione || j.versione === D.versione) return;
     try { if (sessionStorage.getItem("menu-ricaricato") === j.versione) return; sessionStorage.setItem("menu-ricaricato", j.versione); } catch (e) {}
     location.replace(location.pathname + "?v=" + encodeURIComponent(j.versione));
@@ -588,6 +667,7 @@ export async function giro() {
       const leggero = { ...resto, aspetto: aspetto ? { ...aspetto, logo_dati: null, sfondo_dati: null, logo_path: null, sfondo_path: null } : aspetto };
       const versione = impronta.slice(0, 12);
       await pubblica(`${slug}/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti, versione), `Menu ${slug} aggiornato`);
+      await pubblica(`${slug}/en/index.html`, pagina(leggero, ora, logoFile, sfondoFile, fotoPiatti, versione, "en"), `Menu ${slug} in inglese`);
       // Dopo la pagina: chi ha il menu aperto vede la nuova versione e ricarica scavalcando la cache
       await pubblica(`${slug}/versione.json`, JSON.stringify({ versione, aggiornato: ora }), `Versione ${slug}`);
       ultimo.set(slug, impronta);

@@ -60,7 +60,7 @@ describe("pubblicazione", () => {
     assert.equal(rpc.intestazioni.Authorization, "Bearer anon-di-prova");   // solo la chiave pubblica
 
     assert.deepEqual(caricate().sort(), [`${SLUG}/foto/${ID.genovese}.${id(91).slice(0, 10)}.jpg`, `${SLUG}/logo.${id(90).slice(0, 10)}.webp`].sort());
-    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/versione.json`]);   // prima la pagina, poi la versione
+    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/versione.json`]);   // prima le pagine (italiano e inglese), poi la versione
     for (const c of rete.chiamate.filter((x) => x.url.startsWith("https://api.cloudflare.com/"))) {
       assert.equal(c.intestazioni.Authorization, "Bearer token-di-prova");
     }
@@ -68,7 +68,7 @@ describe("pubblicazione", () => {
     assert.equal(tipo, "text/html; charset=utf-8");
     assert.match(html, new RegExp(`src="logo\\.${id(90).slice(0, 10)}\\.webp"`));
     assert.doesNotMatch(html, /logo_path|data:image/);   // niente percorsi interni o immagini incorporate
-    const versione = JSON.parse(rete.trova("POST", D1)[1].corpo.params[1]).versione;
+    const versione = JSON.parse(rete.trova("POST", D1)[2].corpo.params[1]).versione;   // dopo le due pagine
     assert.match(html, new RegExp(`"versione":"${versione}"`));
   });
 
@@ -84,7 +84,7 @@ describe("pubblicazione", () => {
     const logo = `${SLUG}/logo.${id(90).slice(0, 10)}.webp`;
     chiaviKV = [logo, `${SLUG}/logo.vecchio0000.webp`, `${SLUG}/foto/${ID.margherita}.abc.jpg`, `${SLUG}/index.html`];
     await pub.giro();
-    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/versione.json`]);
+    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/versione.json`]);
     assert.equal(caricate().length, 0);
     assert.match(rete.trova("POST", D1)[0].corpo.params[1], /7,50/);
     const eliminate = rete.trova("DELETE", KV).map((c) => decodeURIComponent(c.url.split("/values/")[1]));
@@ -99,7 +99,7 @@ describe("pubblicazione", () => {
     rete.quando("POST", D1, { success: true });
     rete.azzera();
     await pub.giro();
-    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/versione.json`]);
+    assert.deepEqual(paginePubblicate(), [`${SLUG}/index.html`, `${SLUG}/en/index.html`, `${SLUG}/versione.json`]);
   });
 
   test("menu non trovato: niente pubblicazione", async () => {
@@ -148,5 +148,29 @@ describe("pagina statica", () => {
   test("regola [hidden] con !important in testa allo stile", () => {
     const html = pub.pagina(menuEsempio(), "ora");
     assert.match(html, /<style>\s*\/\*[^*]*\*\/\s*\[hidden\]\{display:none !important\}/);
+  });
+
+  test("pagina in inglese: testi del locale tradotti dove ci sono, interfaccia e allergeni in inglese, file nella cartella superiore", () => {
+    const m = menuEsempio();
+    m.categorie[0].nome_en = "Pinsas";
+    m.categorie[0].prodotti[0].nome_en = "Genoese pinsa";
+    m.categorie[0].prodotti[0].allergeni = ["Glutine", "Latte"];
+    const html = pub.pagina(m, "ora", "logo.abc.webp", null, { [m.categorie[0].prodotti[0].id]: "foto/x.jpg" }, "v1", "en");
+    assert.match(html, /<html lang="en">/);
+    assert.match(html, /<h2>Pinsas<\/h2>/);
+    assert.match(html, /Genoese pinsa/);
+    assert.match(html, /Allergens: Gluten, Milk/);
+    assert.match(html, new RegExp(m.categorie[0].prodotti[1].nome));   // senza traduzione resta il nome italiano
+    assert.match(html, /src="\.\.\/logo\.abc\.webp"/);
+    assert.match(html, /\.\.\/foto\/x\.jpg/);   // foto del piatto nella cartella superiore
+    assert.match(html, /href="\.\.\/" hreflang="it">Italiano/);
+    assert.match(html, /"base":"\.\.\/"/);
+  });
+
+  test("pagina italiana: collegamento alla versione inglese, testi invariati", () => {
+    const html = pub.pagina(menuEsempio(), "ora");
+    assert.match(html, /<html lang="it">/);
+    assert.match(html, /href="en\/" hreflang="en">English/);
+    assert.match(html, /Per informazioni sugli allergeni rivolgersi al personale/);
   });
 });

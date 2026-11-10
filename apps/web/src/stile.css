@@ -691,3 +691,7 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .barre-traccia i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primario), color-mix(in srgb, var(--primario) 60%, #fff)); }
 .barre-valore { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .variazione { font-weight: 700; } .variazione.su { color: var(--ok); } .variazione.giu { color: var(--pericolo); }
+.input-inglese { max-width: 200px; font-size: .85rem; }
+.traduzione summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
+.traduzione { display: grid; gap: 8px; }
+.ordina-lingua { margin-top: 6px; border: 1px solid var(--m-primario); color: var(--m-primario); background: transparent; border-radius: 999px; padding: 3px 12px; font: 600 .85rem var(--m-font-testo); cursor: pointer; }
