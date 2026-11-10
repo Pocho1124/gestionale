@@ -41,6 +41,7 @@ export function Componi(props: {
         return (
           <fieldset key={g.id} className={`componi-gruppo${eAggiunte(g.id) ? " componi-aggiunte" : ""}`}>
             <legend>{g.nome} <span className="componi-regola">{regola(g)} · {lista.length} scelti</span></legend>
+            {g.scelte.length === 0 && <p className="componi-vuoto">Nessuna voce disponibile: chiedi al personale.</p>}
             {g.scelte.map((s) => {
               const scelta = lista.some((x) => x.id === s.id);
               const pieno = !scelta && g.max > 1 && lista.length >= g.max;

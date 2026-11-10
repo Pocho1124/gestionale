@@ -440,6 +440,7 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .componi-base { margin: 0; opacity: .8; }
 .componi-gruppo { border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 4px; margin: 0; }
 .componi-gruppo legend { font-weight: 700; padding: 0 4px; }
+.componi-vuoto { margin: 2px 4px; font-size: .85rem; opacity: .75; font-style: italic; }
 .componi-regola { font-weight: 400; font-size: .8rem; opacity: .75; }
 .componi-voce { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 8px; cursor: pointer; }
 .componi-voce.scelta { background: color-mix(in srgb, currentColor 10%, transparent); font-weight: 600; }
