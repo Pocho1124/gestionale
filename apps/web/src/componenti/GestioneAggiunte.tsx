@@ -64,9 +64,8 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
         <div className="aggiunte-gestione">
           <p className="muto piccolo">Le aggiunte si scelgono al tavolo, dal tablet e dal telefono, con il tasto «＋ Aggiunte» sui piatti delle categorie indicate (se non ne scegli nessuna, su tutti i piatti).
             Il <strong>gruppo</strong> (es. Salumi, Formaggi) le divide nella scelta: «Aggiunte · Salumi», «Aggiunte · Formaggi»; senza gruppo vanno in «Aggiunte».</p>
-          <datalist id="gruppi-aggiunte">{gruppiNoti.map((g) => <option key={g} value={g} />)}</datalist>
           <form className="riga-form" onSubmit={aggiungi}>
-            <input placeholder="Gruppo (es. Salumi)" list="gruppi-aggiunte" value={gruppo} maxLength={40} onChange={(e) => setGruppo(e.target.value)} aria-label="Gruppo" style={{ width: 160 }} />
+            <SceltaGruppo valore={gruppo} noti={gruppiNoti} onCambia={setGruppo} etichetta="Gruppo della nuova aggiunta" />
             <input placeholder="Nuova aggiunta (es. Mozzarella di bufala)" value={nome} maxLength={60} onChange={(e) => setNome(e.target.value)} />
             <input className="input-prezzo" inputMode="decimal" placeholder="€ 0,00" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} aria-label="Prezzo" />
             <button className="btn btn-pieno" disabled={!nome.trim()}>Aggiungi</button>
@@ -76,8 +75,8 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
               <div className="riga-form">
                 <input defaultValue={a.nome} key={a.nome} maxLength={60} aria-label="Nome dell'aggiunta"
                   onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== a.nome) void esegui(() => sb().from("aggiunte").update({ nome: v }).eq("id", a.id)); else e.target.value = a.nome; }} />
-                <input placeholder="Gruppo" list="gruppi-aggiunte" defaultValue={a.gruppo ?? ""} key={`g${a.gruppo}`} maxLength={40} aria-label={`Gruppo di ${a.nome}`} style={{ width: 140 }}
-                  onBlur={(e) => { const v = e.target.value.trim(); if (v !== (a.gruppo ?? "")) void esegui(() => sb().from("aggiunte").update({ gruppo: v }).eq("id", a.id), v ? `${a.nome}: gruppo «${v}»` : `${a.nome}: senza gruppo`); }} />
+                <SceltaGruppo valore={a.gruppo ?? ""} noti={gruppiNoti} etichetta={`Gruppo di ${a.nome}`}
+                  onCambia={(v) => void esegui(() => sb().from("aggiunte").update({ gruppo: v }).eq("id", a.id), v ? `${a.nome}: gruppo «${v}»` : `${a.nome}: senza gruppo`)} />
                 <input className="input-prezzo" inputMode="decimal" defaultValue={euroTesto(a.prezzo_cent)} key={`p${a.prezzo_cent}`} aria-label={`Prezzo di ${a.nome}`}
                   onBlur={(e) => {
                     try {
@@ -107,5 +106,23 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
         </div>
       )}
     </section>
+  );
+}
+
+const NUOVO = "\u0000nuovo";
+/** Gruppo dell'aggiunta da un menu a tendina (funziona anche su tablet): nessuno, quelli noti o uno nuovo. */
+function SceltaGruppo({ valore, noti, onCambia, etichetta }: { valore: string; noti: string[]; onCambia: (v: string) => void; etichetta: string }) {
+  const voci = valore && !noti.includes(valore) ? [...noti, valore] : noti;
+  return (
+    <select value={valore} aria-label={etichetta} title="Gruppo: divide le aggiunte nella scelta (es. Salumi, Formaggi)" style={{ width: 170 }}
+      onChange={(e) => {
+        if (e.target.value !== NUOVO) { onCambia(e.target.value); return; }
+        const nome = window.prompt("Nome del nuovo gruppo (es. Salse, Verdure)")?.trim().slice(0, 40);
+        if (nome) onCambia(nome); else e.target.value = valore;
+      }}>
+      <option value="">Nessun gruppo</option>
+      {voci.map((g) => <option key={g} value={g}>{g}</option>)}
+      <option value={NUOVO}>＋ Nuovo gruppo…</option>
+    </select>
   );
 }
