@@ -92,8 +92,20 @@ describe("traduzioni della pagina del tavolo", () => {
     expect(menuInLingua(menu, "it")).toBe(menu);
     expect(Object.keys(TESTI_MENU.en).sort()).toEqual(Object.keys(TESTI_MENU.it).sort());
   });
-  it("stessi testi in tutte e due le lingue", () => {
-    expect(Object.keys(TESTI_TAVOLO.en).sort()).toEqual(Object.keys(TESTI_TAVOLO.it).sort());
-    expect(Object.keys(TESTI_TAVOLO.en.stati).sort()).toEqual(Object.keys(TESTI_TAVOLO.it.stati).sort());
+  it("stessi testi in tutte le lingue", () => {
+    for (const l of ["en", "es"] as const) {
+      expect(Object.keys(TESTI_TAVOLO[l]).sort()).toEqual(Object.keys(TESTI_TAVOLO.it).sort());
+      expect(Object.keys(TESTI_TAVOLO[l].stati).sort()).toEqual(Object.keys(TESTI_TAVOLO.it.stati).sort());
+      expect(Object.keys(TESTI_MENU[l]).sort()).toEqual(Object.keys(TESTI_MENU.it).sort());
+    }
+  });
+  it("menu interno in spagnolo; dove manca lo spagnolo resta l'italiano, non l'inglese", () => {
+    const menu = { categorie: [{ nome: "Rossi", nome_es: "Tintos", descrizione: "", prodotti: [
+      { nome: "Taurasi", descrizione: "Rosso strutturato", descrizione_en: "Full-bodied red", allergeni: ["Solfiti"], etichette: ["Vegano"],
+        vino: { note: "Affinato in botte", note_es: "Criado en barrica" } }] }] };
+    const es = menuInLingua(menu, "es");
+    expect(es.categorie[0]!.nome).toBe("Tintos");
+    expect(es.categorie[0]!.prodotti[0]).toMatchObject({ descrizione: "Rosso strutturato", allergeni: ["Sulfitos"], etichette: ["Vegano"], vino: { note: "Criado en barrica" } });
+    expect(nomeIn("es", { nome: "Tagliere", nome_es: "Tabla" })).toBe("Tabla");
   });
 });

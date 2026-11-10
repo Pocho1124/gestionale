@@ -1,20 +1,32 @@
-/** Traduzioni della pagina del tavolo (senza React: si possono provare con i test). */
-export type Lingua = "it" | "en";
+/** Traduzioni del menu e della pagina del tavolo (senza React: si possono provare con i test). */
+export type Lingua = "it" | "en" | "es";
+/** Lingue con bandierina e nome nella propria lingua (in fondo al menu e alla pagina del tavolo). */
+export const LINGUE: [Lingua, string, string][] = [["it", "🇮🇹", "Italiano"], ["en", "🇬🇧", "English"], ["es", "🇪🇸", "Español"]];
 
 const ALLERGENI_EN: Record<string, string> = {
   Glutine: "Gluten", Crostacei: "Crustaceans", Uova: "Eggs", Pesce: "Fish", Arachidi: "Peanuts", Soia: "Soy", Latte: "Milk",
   "Frutta a guscio": "Tree nuts", Sedano: "Celery", Senape: "Mustard", Sesamo: "Sesame", Solfiti: "Sulphites", Lupini: "Lupin", Molluschi: "Molluscs",
 };
 
+const ALLERGENI_ES: Record<string, string> = {
+  Glutine: "Gluten", Crostacei: "Crustáceos", Uova: "Huevos", Pesce: "Pescado", Arachidi: "Cacahuetes", Soia: "Soja", Latte: "Leche",
+  "Frutta a guscio": "Frutos de cáscara", Sedano: "Apio", Senape: "Mostaza", Sesamo: "Sésamo", Solfiti: "Sulfitos", Lupini: "Altramuces", Molluschi: "Moluscos",
+};
+const ALLERGENI: Record<Lingua, Record<string, string>> = { it: {}, en: ALLERGENI_EN, es: ALLERGENI_ES };
+
+/** Testo nella lingua scelta (colonna <campo>_en / <campo>_es), altrimenti l'italiano. */
+const tradotto = (l: Lingua, x: Record<string, unknown>, campo: string) =>
+  (l !== "it" && typeof x[`${campo}_${l}`] === "string" && x[`${campo}_${l}`] ? x[`${campo}_${l}`] : x[campo]) as string;
+
 /** Nome e descrizione nella lingua scelta. */
-export const nomeIn = (l: Lingua, x: { nome: string; nome_en?: string }) => (l === "en" && x.nome_en ? x.nome_en : x.nome);
-export const descrizioneIn = (l: Lingua, x: { descrizione: string; descrizione_en?: string }) => (l === "en" && x.descrizione_en ? x.descrizione_en : x.descrizione);
-export const allergeniIn = (l: Lingua, a: string[]) => (l === "en" ? a.map((x) => ALLERGENI_EN[x] ?? x) : a);
+export const nomeIn = (l: Lingua, x: { nome: string; nome_en?: string; nome_es?: string }) => tradotto(l, x, "nome");
+export const descrizioneIn = (l: Lingua, x: { descrizione: string; descrizione_en?: string; descrizione_es?: string }) => tradotto(l, x, "descrizione");
+export const allergeniIn = (l: Lingua, a: string[]) => a.map((x) => ALLERGENI[l][x] ?? x);
 
 /** Testi fissi della pagina del tavolo. */
 export const TESTI_TAVOLO = {
   it: {
-    altraLingua: "🇬🇧 English", caricamento: "Caricamento…", qrNonValido: "QR non valido: inquadra il codice sul tuo tavolo o chiedi al personale.",
+    caricamento: "Caricamento…", qrNonValido: "QR non valido: inquadra il codice sul tuo tavolo o chiedi al personale.",
     tavolo: "Tavolo", richiestaInviata: "⏳ Richiesta inviata: il personale sta arrivando a confermare il tuo ordine…", sezioni: "Sezioni",
     menu: "Menu", ilTuoOrdine: "Il tuo ordine", ordiniConto: "Ordini e conto", da: "da ", componiPiacere: "Componi a piacere: ",
     conAggiunte: "con aggiunte nel tuo ordine", allergeni: "Allergeni: ", nelTuoOrdine: "nel tuo ordine", componi: "Componi", togli: "Togli",
@@ -38,7 +50,7 @@ export const TESTI_TAVOLO = {
     stati: { da_confermare: "In attesa di conferma", confermato: "Inviato in cucina", in_preparazione: "In preparazione", pronto: "Pronto, sta arrivando", servito: "Servito", rifiutato: "Non accettato" } as Record<string, string>,
   },
   en: {
-    altraLingua: "🇮🇹 Italiano", caricamento: "Loading…", qrNonValido: "Invalid QR code: scan the code on your table or ask our staff.",
+    caricamento: "Loading…", qrNonValido: "Invalid QR code: scan the code on your table or ask our staff.",
     tavolo: "Table", richiestaInviata: "⏳ Request sent: our staff is coming to confirm your order…", sezioni: "Sections",
     menu: "Menu", ilTuoOrdine: "Your order", ordiniConto: "Orders and bill", da: "from ", componiPiacere: "Make your own: ",
     conAggiunte: "with extras in your order", allergeni: "Allergens: ", nelTuoOrdine: "in your order", componi: "Choose", togli: "Remove",
@@ -61,25 +73,53 @@ export const TESTI_TAVOLO = {
     scaduta: "Nobody has answered yet: please call our staff.", rifiutata: "Our staff did not accept the request",
     stati: { da_confermare: "Waiting for confirmation", confermato: "Sent to the kitchen", in_preparazione: "Being prepared", pronto: "Ready, on its way", servito: "Served", rifiutato: "Not accepted" } as Record<string, string>,
   },
+  es: {
+    caricamento: "Cargando…", qrNonValido: "QR no válido: escanea el código de tu mesa o pregunta a nuestro personal.",
+    tavolo: "Mesa", richiestaInviata: "⏳ Solicitud enviada: nuestro personal viene a confirmar tu pedido…", sezioni: "Secciones",
+    menu: "Menú", ilTuoOrdine: "Tu pedido", ordiniConto: "Pedidos y cuenta", da: "desde ", componiPiacere: "Elige a tu gusto: ",
+    conAggiunte: "con extras en tu pedido", allergeni: "Alérgenos: ", nelTuoOrdine: "en tu pedido", componi: "Elegir", togli: "Quitar",
+    aggiungi: "Añadir", aggiunte: "＋ Extras", aggiuntePer: "Extras para", esaurito: "Agotado", vuoto: "Todavía no has añadido nada.",
+    meno: "Menos", piu: "Más", notaRiga: "Nota (p. ej. sin cebolla)", notaPersonale: "Nota para el personal", facoltativa: "Opcional",
+    tuoNome: "Tu nombre", facoltativo: " (opcional)", chiCercare: "Así nuestro personal sabe a quién buscar",
+    infoNome: "El nombre solo sirve a nuestro personal para reconocerte y se borra cuando se cierra la mesa.",
+    codiceTavolo: "Código de la mesa (opcional)", quattroCifre: "4 cifras", haiCodice: "¿Ya tienes el código de la mesa? Introdúcelo",
+    invio: "Enviando…", inviaOrdine: "Enviar pedido", direttoCucina: "El pedido va directo a la cocina.",
+    spiegazione: "Nuestro personal recibe tu solicitud, abre la mesa y desde entonces los pedidos van directos a la cocina.",
+    ordiniInviati: "Pedidos enviados", codice: "Código de la mesa:", condividi: "compártelo con quien está contigo",
+    contoRichiesto: "🧾 Cuenta solicitada: nuestro personal está llegando.", notaConto: "Nota para la cuenta (p. ej. pago con tarjeta, cuentas separadas)",
+    chiediConto: "🧾 Pedir la cuenta", comprendeCoperto: "Incluye el cubierto:", attesaConferma: "Esperando la confirmación del personal…",
+    quiVedrai: "Aquí verás los pedidos cuando el personal los confirme.", nessunOrdine: "Todavía no se ha enviado ningún pedido desde esta mesa.",
+    motivo: "Motivo:", inviatoAlle: "Enviado a las", aggiuntoAlTuo: "añadido a tu pedido", vedi: "Ver tu pedido",
+    piatto: "plato", piatti: "platos", scriviNome: "Escribe tu nombre para pedir la apertura de la mesa", invioFallito: "No se ha podido enviar",
+    richiestaOk: "¡Solicitud enviada! Nuestro personal viene a confirmar tu pedido.", ordineOk: "¡Pedido enviado a la cocina! 🍽️",
+    richiestaFallita: "Solicitud fallida", contoOk: "Cuenta solicitada: nuestro personal está llegando. 🧾",
+    aperto: (c: string) => `¡Mesa abierta y pedido enviado a la cocina! Código de la mesa: ${c}. A partir de ahora los pedidos van directos a la cocina; compártelo con quien está contigo.`,
+    scaduta: "Nadie ha respondido todavía: llama a nuestro personal.", rifiutata: "Nuestro personal no ha aceptado la solicitud",
+    stati: { da_confermare: "Esperando confirmación", confermato: "Enviado a la cocina", in_preparazione: "En preparación", pronto: "Listo, está llegando", servito: "Servido", rifiutato: "No aceptado" } as Record<string, string>,
+  },
 } satisfies Record<Lingua, Record<string, unknown>>;
 
 const ETICHETTE_EN: Record<string, string> = {
   Vegetariano: "Vegetarian", Vegano: "Vegan", Piccante: "Spicy", "Senza glutine": "Gluten free", "Novità": "New", Consigliato: "Recommended", Surgelato: "Frozen",
 };
+const ETICHETTE: Record<Lingua, Record<string, string>> = {
+  it: {}, en: ETICHETTE_EN,
+  es: { Vegetariano: "Vegetariano", Vegano: "Vegano", Piccante: "Picante", "Senza glutine": "Sin gluten", "Novità": "Novedad", Consigliato: "Recomendado", Surgelato: "Congelado" },
+};
 
 /** Menu con i testi del locale nella lingua scelta: nomi, descrizioni, note dei vini, allergeni ed etichette (dove manca resta l'italiano). */
-export function menuInLingua<M extends { categorie: { nome: string; nome_en?: string; descrizione: string; descrizione_en?: string;
-  prodotti: { nome: string; nome_en?: string; descrizione: string; descrizione_en?: string; allergeni: string[]; etichette: string[];
-    vino?: { note: string; note_en?: string } | null }[] }[] }>(menu: M, l: Lingua): M {
-  if (l !== "en") return menu;
+export function menuInLingua<M extends { categorie: { nome: string; descrizione: string;
+  prodotti: { nome: string; descrizione: string; allergeni: string[]; etichette: string[];
+    vino?: { note: string } | null }[] }[] }>(menu: M, l: Lingua): M {
+  if (l === "it") return menu;
   return {
     ...menu,
     categorie: menu.categorie.map((c) => ({
-      ...c, nome: nomeIn(l, c), descrizione: descrizioneIn(l, c),
+      ...c, nome: tradotto(l, c, "nome"), descrizione: tradotto(l, c, "descrizione"),
       prodotti: c.prodotti.map((p) => ({
-        ...p, nome: nomeIn(l, p), descrizione: descrizioneIn(l, p), allergeni: allergeniIn(l, p.allergeni),
-        etichette: p.etichette.map((e) => ETICHETTE_EN[e] ?? e),
-        vino: p.vino ? { ...p.vino, note: p.vino.note_en || p.vino.note } : p.vino,
+        ...p, nome: tradotto(l, p, "nome"), descrizione: tradotto(l, p, "descrizione"), allergeni: allergeniIn(l, p.allergeni),
+        etichette: p.etichette.map((e) => ETICHETTE[l][e] ?? e),
+        vino: p.vino ? { ...p.vino, note: tradotto(l, p.vino, "note") } : p.vino,
       })),
     })),
   };
@@ -114,6 +154,20 @@ export const TESTI_MENU = {
     tocca: "Tap a highlighted region", vino: "wine", vini: "wines", regioniItalia: "Regions of Italy", fonteMappa: "Borders: ISTAT (CC BY 4.0)",
     tipi: { rosso: "Red", bianco: "White", rosato: "Rosé", bollicine: "Sparkling", dolce: "Dessert" } as Record<string, string>,
     corpi: { leggero: "Light", medio: "Balanced", strutturato: "Full-bodied" } as Record<string, string>,
+  },
+  es: {
+    trova: "🍷 Encuentra tu vino", viniPerRegione: "Vinos por región", mappa: "🗺️ Elige en el mapa", tutte: "Todas", altreZone: "Otras zonas",
+    categorie: "Categorías", vuoto: "El menú estará disponible en breve.", apriScheda: "abrir la ficha", esaurito: "Agotado", da: "desde ",
+    siAbbinaCon: "🍷 Marida con ", o: " o ", allergeni: "Alérgenos: ", infoAllergeni: "Para información sobre alérgenos, consulte a nuestro personal.",
+    chiudi: "Cerrar", torna: "← Volver a ", calice: "Copa ", bottiglia: " · Botella ", idealeCon: "Ideal con", sommelier: "Nuestro sumiller recomienda",
+    scegli: "elige ", a: " a ", finoA: "hasta ", incluso: "incluido", domanda: (n: number) => `Pregunta ${n} de 3`, qVino: "¿Qué vino prefieres?",
+    sorprendimi: "Sorpréndeme", qCorpo: "¿Cómo lo quieres?", leggero: "Ligero y fresco", equilibrato: "Equilibrado", strutturato: "Con cuerpo e intenso",
+    indifferente: "Me da igual", qCibo: "¿Qué vas a comer?", soloVino: "Solo vino", comePreferisci: ", como prefieras", siAbbinaA: "Marida con ", e: " y ",
+    nessuno: (tipo: string | null) => `${tipo ? `En este momento no tenemos un ${tipo.toLowerCase()} disponible en carta` : "Ningún vino disponible en carta"}: pregunta a nuestro personal, te aconsejará encantado.`,
+    ricomincia: "Empezar de nuevo", trovaTitolo: "Encuentra tu vino", mappaTitolo: "Elige la región en el mapa", scegliRegione: "Elige una región",
+    tocca: "Toca una región iluminada", vino: "vino", vini: "vinos", regioniItalia: "Regiones de Italia", fonteMappa: "Límites: ISTAT (CC BY 4.0)",
+    tipi: { rosso: "Tinto", bianco: "Blanco", rosato: "Rosado", bollicine: "Espumoso", dolce: "Dulce" } as Record<string, string>,
+    corpi: { leggero: "Ligero", medio: "Equilibrado", strutturato: "Con cuerpo" } as Record<string, string>,
   },
 } satisfies Record<Lingua, Record<string, unknown>>;
 export type TestiMenu = (typeof TESTI_MENU)["it"];

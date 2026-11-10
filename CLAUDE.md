@@ -93,15 +93,15 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   stampa.mjs         comande su stampanti ESC/POS di rete
   vitigni.mjs        base di conoscenza dei vitigni (ripiego se l'enciclopedia non risponde)
   descrizioni.mjs    descrizioni dei vini composte da dati verificati
-  traduttore.mjs     menu in inglese tradotto dall'IA locale (ogni minuto: nomi, descrizioni, note dei vini; ogni campo controllato da solo sui numeri; nomi dei vini invariati; a mano si completano solo i campi vuoti)
+  traduttore.mjs     menu in inglese e spagnolo tradotto dall'IA locale (ogni minuto: nomi, descrizioni, note dei vini; ogni campo controllato da solo sui numeri; nomi dei vini invariati; a mano si completano solo i campi vuoti)
   regioni.mjs        zona di produzione → regione italiana (copia in apps/web/src/lib/regioni.ts: tenerle allineate)
   mappa-italia.mjs   confini regioni ISTAT (CC BY 4.0) in SVG (copia in apps/web/src/lib/mappaItalia.ts)
   migra-immagini.mjs migrazione immagini base64 → Storage
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 36 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (369 test)
+supabase/migrations/ 37 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (374 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -140,6 +140,7 @@ deploy/pi/           installer per il server
 |`sconto\_massimo\_stampa`|tetto allo sconto per chi non ha `impostazioni` (`sconto\_max\_pct`); `servizio\_stampa` con permessi solo sulle colonne stampate|
 |`traduzione\_automatica`|`traduzione\_da` su categorie e prodotti: impronta dell'italiano tradotto, «manuale» se scritta a mano, «…:scartata» se il controllo dei numeri l'ha rifiutata|
 |`note\_vini\_inglese`|`note\_en` e `traduzione\_da` sulle schede dei vini, esposte da `menu\_pubblico`|
+|`menu\_spagnolo`|`nome\_es`, `descrizione\_es`, `note\_es` e `traduzione\_es\_da` (stato a parte) su categorie, prodotti e vini, esposti da `menu\_pubblico` (pagina `<slug>/es/`)|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -190,11 +191,11 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 369 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 374 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
-  **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 12 test.
+  **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 13 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
-jsdom solo come dipendenza di sviluppo). Atteso: 93 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
+jsdom solo come dipendenza di sviluppo). Atteso: 96 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
 (non avviano i servizi) e `fetch` simulato (`test/simula.mjs`): nessuna chiamata reale a Telegram, Supabase, Ollama, Cloudflare.
   * `bot.test.mjs`: regole, IA vincolata (numeri solo dal testo, enum), anteprima → conferma → /annulla, notifiche di sala.
   * `pubblicatore.test.mjs`: D1/KV, immagini versionate e pulizia, percorsi, escape dell'HTML.
@@ -210,9 +211,9 @@ jsdom solo come dipendenza di sviluppo). Atteso: 93 test superati. Usano `BOT\_T
 1. HTTPS: certificato Let's Encrypt ottenuto e rinnovo notturno attivo (10/11/2026); gateway riportato in HTTP perché la rete aziendale provvisoria blocca il nome (DNS rebinding). In loco: `https-installa.sh --dominio gestionale.enotechiasantalucia.it` (versione con riserva HTTP per IP) e prova da tablet. `https://<IP>` non funziona (Caddy nel container non vede l'IP): usare il nome.
 2. Ponte ordini `ordini.enotechiasantalucia.it` su Cloudflare (ordini dal telefono solo con HTTPS; nel frattempo solo comande dal tablet).
 3. QR stampabili con il nuovo dominio (non ancora stampato nulla).
-4. Verifiche sul posto: seguire `docs/collaudo.md` (scaletta completa, compresi stampa reale, accessi, menu in inglese).
+4. Verifiche sul posto: seguire `docs/collaudo.md` (scaletta completa, compresi stampa reale, accessi, menu in inglese e spagnolo).
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
-6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; testi in inglese anche nella composizione dei piatti (Componi) e nei nomi delle scelte.
+6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; testi tradotti anche nella composizione dei piatti (Componi) e nei nomi delle scelte; spagnolo scrivibile a mano nel Catalogo.
 8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.
 9. Sicurezza (analisi del 10/11/2026), ancora aperti: firma dell'immagine con cosign e verifica in `aggiorna.sh`; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito).
 

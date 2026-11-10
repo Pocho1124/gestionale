@@ -457,15 +457,23 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .voce-composizione { padding-left: 14px; }
 
 /* Vini per regione */
-.menu-filtro-regioni { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin: 12px 0 0; font-size: .8rem; }
-.menu-filtro-regioni span { width: 100%; text-align: center; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
 .menu-filtro-regioni button { border: 1px solid color-mix(in srgb, var(--m-primario) 55%, transparent); background: transparent; color: var(--m-testo);
   border-radius: 999px; padding: 5px 12px; font: 600 .8rem var(--m-font-testo); cursor: pointer; }
 .menu-filtro-regioni button.attiva { background: var(--m-primario); color: var(--m-sfondo); border-color: var(--m-primario); }
 .menu-regione-titolo { margin: 18px 0 2px; font: 600 .78rem var(--m-font-testo); letter-spacing: .2em; text-transform: uppercase; color: var(--m-primario); }
 
 /* Mappa delle regioni */
-.menu-filtro-regioni .apri-mappa { border-style: dashed; }
+/* Vini per regione in un riquadro, con «Scegli dalla mappa» in evidenza al centro */
+.menu-filtro-regioni { margin: 16px 0 0; padding: 16px 14px 14px; border-radius: 18px; text-align: center; font-size: .8rem;
+  background: color-mix(in srgb, var(--m-sfondo) 90%, transparent); border: 1px solid color-mix(in srgb, var(--m-primario) 30%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .2); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.menu-filtro-titolo { margin: 0 0 10px; font: 600 .78rem var(--m-font-testo); letter-spacing: .2em; text-transform: uppercase; color: var(--m-primario); }
+.menu-filtro-scelte { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--m-primario) 22%, transparent); }
+.menu .menu-filtro-regioni .apri-mappa { display: block; width: min(320px, 100%); margin: 0 auto; padding: 12px 18px; border: 0; border-radius: 14px;
+  background: var(--m-primario); color: var(--m-sfondo); font: 700 1rem var(--m-font-testo); letter-spacing: .03em;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--m-primario) 35%, transparent); }
+.menu-filtro-regioni .apri-mappa:hover, .menu-filtro-regioni .apri-mappa:focus-visible { filter: brightness(1.08); outline: 2px solid color-mix(in srgb, var(--m-primario) 60%, transparent); outline-offset: 3px; }
 .mappa-centro { place-items: center; }
 .menu-mappa { text-align: center; }
 .menu-mappa svg { width: 100%; height: auto; max-height: 64vh; display: block; margin: 6px auto; }
@@ -694,11 +702,10 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .input-inglese { max-width: 200px; font-size: .85rem; }
 .traduzione summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
 .traduzione { display: grid; gap: 8px; }
-.ordina-lingua { margin-top: 6px; border: 1px solid var(--m-primario); color: var(--m-primario); background: transparent; border-radius: 999px; padding: 3px 12px; font: 600 .85rem var(--m-font-testo); cursor: pointer; }
 .ordina-lingue { display: flex; justify-content: center; gap: 10px; margin: 24px 0 90px; }
 .ordina-lingue button { border: 1px solid var(--m-primario); color: var(--m-primario); background: transparent; border-radius: 999px; padding: 6px 14px; font: 700 .9rem var(--m-font-testo); cursor: pointer; }
 .ordina-lingue button.attiva { background: var(--m-primario); color: var(--m-sfondo); }
-.menu-lingue { display: flex; justify-content: center; gap: 10px; margin: 0 0 12px; }
+.menu-lingue { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 0 0 12px; }
 .menu-lingue button { border: 1px solid var(--m-primario); color: var(--m-primario); background: transparent; border-radius: 999px; padding: 6px 14px; font: 700 .9rem var(--m-font-testo); cursor: pointer; }
 .menu-lingue button.attiva { background: var(--m-primario); color: var(--m-sfondo); }
 
@@ -719,4 +726,3 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu .menu-regione-titolo::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--m-primario) 30%,transparent)}
 .menu.menu-griglia .menu-piatto{border:1px solid color-mix(in srgb,var(--m-testo) 15%,transparent);border-radius:12px;padding:10px}
 .menu.con-foto-pagina .menu-testata{text-shadow:0 1px 4px rgba(0,0,0,.55)}
-.menu.con-foto-pagina .menu-filtro-regioni button:not(.attiva){background:color-mix(in srgb,var(--m-sfondo) 78%,transparent)}

@@ -3,11 +3,11 @@ export type Ruolo = "owner" | "manager" | "caposala" | "cameriere" | "cucina";
 export interface Locale { id: string; nome: string; slug: string; organizzazione_id: string }
 
 export interface Categoria {
-  id: string; locale_id: string; nome: string; descrizione: string; posizione: number; visibile: boolean; nome_en?: string; descrizione_en?: string; traduzione_da?: string;
+  id: string; locale_id: string; nome: string; descrizione: string; posizione: number; visibile: boolean; nome_en?: string; descrizione_en?: string; traduzione_da?: string; nome_es?: string; descrizione_es?: string; traduzione_es_da?: string;
 }
 
 export interface Prodotto {
-  id: string; locale_id: string; categoria_id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string; traduzione_da?: string;
+  id: string; locale_id: string; categoria_id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string; traduzione_da?: string; nome_es?: string; descrizione_es?: string; traduzione_es_da?: string;
   prezzo_cent: number; aliquota_iva: number; disponibile: boolean; visibile: boolean;
   allergeni: string[]; etichette: string[]; immagine_url: string | null; posizione: number;
 }
@@ -25,11 +25,11 @@ export interface MenuPubblico {
   locale: { nome: string; indirizzo: string };
   aspetto: Aspetto | null;
   categorie: {
-    id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string;
+    id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string; nome_es?: string; descrizione_es?: string;
     /** Aggiunte disponibili per i piatti di questa categoria (es. «Mozzarella di bufala» + 2 €). */
     aggiunte?: Scelta[];
     prodotti: {
-      id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string; prezzo_cent: number; disponibile: boolean;
+      id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string; nome_es?: string; descrizione_es?: string; prezzo_cent: number; disponibile: boolean;
       allergeni: string[]; etichette: string[]; immagine_url: string | null; foto?: number | null;
       vino?: SchedaVino | null; abbinamenti?: { id: string; motivo: string }[]; foto_path?: string | null;
       opzioni: GruppoScelte[];
@@ -44,7 +44,7 @@ export interface Scelta { id: string; nome: string; sovrapprezzo_cent: number }
 export interface SchedaVino {
   tipo: "rosso" | "bianco" | "rosato" | "bollicine" | "dolce";
   corpo: "leggero" | "medio" | "strutturato";
-  regione: string; vitigno: string; cantina: string; annata: number | null; note: string; note_en?: string;
+  regione: string; vitigno: string; cantina: string; annata: number | null; note: string; note_en?: string; note_es?: string;
   prezzo_bottiglia_cent: number | null;
 }
 

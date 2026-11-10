@@ -9,7 +9,7 @@ import { MappaRegioni } from "./MappaRegioni";
 import { MAPPA_ITALIA } from "../lib/mappaItalia";
 import { TrovaVino } from "./TrovaVino";
 import type { PiattoMenu } from "../lib/tipi";
-import { TESTI_MENU, menuInLingua, type Lingua } from "../lib/traduzioni";
+import { LINGUE, TESTI_MENU, menuInLingua, type Lingua } from "../lib/traduzioni";
 
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 
@@ -79,11 +79,13 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
 
       {tutteLeRegioni.length >= 2 && (
         <div className="menu-filtro-regioni" role="group" aria-label={T.viniPerRegione}>
-          <span>{T.viniPerRegione}</span>
+          <p className="menu-filtro-titolo">{T.viniPerRegione}</p>
           {conMappa && <button type="button" className="apri-mappa" onClick={() => setMappa(true)}>{T.mappa}</button>}
-          {["", ...tutteLeRegioni].map((r) => (
-            <button key={r || "tutte"} type="button" className={regione === r ? "attiva" : ""} aria-pressed={regione === r} onClick={() => setRegione(r)}>{r || T.tutte}</button>
-          ))}
+          <div className="menu-filtro-scelte">
+            {["", ...tutteLeRegioni].map((r) => (
+              <button key={r || "tutte"} type="button" className={regione === r ? "attiva" : ""} aria-pressed={regione === r} onClick={() => setRegione(r)}>{r || T.tutte}</button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -152,8 +154,9 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
         {aspetto.testo_piede && <p>{aspetto.testo_piede}</p>}
         {onLingua && (
           <nav className="menu-lingue" aria-label="Lingua / Language">
-            <button lang="it" aria-pressed={lingua === "it"} className={lingua === "it" ? "attiva" : ""} onClick={() => onLingua("it")}>🇮🇹 Italiano</button>
-            <button lang="en" aria-pressed={lingua === "en"} className={lingua === "en" ? "attiva" : ""} onClick={() => onLingua("en")}>🇬🇧 English</button>
+            {LINGUE.map(([l, bandiera, nome]) => (
+              <button key={l} lang={l} aria-pressed={lingua === l} className={lingua === l ? "attiva" : ""} onClick={() => onLingua(l)}>{bandiera} {nome}</button>
+            ))}
           </nav>
         )}
         <p>{T.infoAllergeni}</p>

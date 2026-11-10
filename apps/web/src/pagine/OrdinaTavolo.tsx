@@ -7,7 +7,7 @@ import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
 import { euro } from "../lib/formato";
-import { TESTI_TAVOLO, allergeniIn, descrizioneIn, nomeIn, useLingua } from "../lib/lingua";
+import { LINGUE, TESTI_TAVOLO, allergeniIn, descrizioneIn, nomeIn, useLingua } from "../lib/lingua";
 
 interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean; chiedi_nome?: boolean; nome_obbligatorio?: boolean }
 interface RigaCarrello { chiave: string; piatto: PiattoMenu; quantita: number; nota: string; scelte: Scelta[]; prezzo: number }
@@ -164,7 +164,6 @@ export function OrdinaTavolo() {
         {sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url)
           ? <img className="menu-logo" src={sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url)!} alt={info.locale} /> : <h1>{info.locale}</h1>}
         <p className="ordina-tavolo">{T.tavolo} {info.tavolo}</p>
-        <button className="ordina-lingua" onClick={() => setLingua(lingua === "it" ? "en" : "it")} lang={lingua === "it" ? "en" : "it"}>{T.altraLingua}</button>
       </header>
       {richiesta && <p className="ordina-avviso" role="status">{T.richiestaInviata}</p>}
       {messaggio && <p className={`ordina-avviso${messaggio.errore ? " errore" : " ok"}`} role="status">{messaggio.testo}</p>}
@@ -300,8 +299,9 @@ export function OrdinaTavolo() {
       )}
 
       <nav className="ordina-lingue" aria-label="Lingua / Language">
-        <button lang="it" aria-pressed={lingua === "it"} className={lingua === "it" ? "attiva" : ""} onClick={() => setLingua("it")}>🇮🇹 Italiano</button>
-        <button lang="en" aria-pressed={lingua === "en"} className={lingua === "en" ? "attiva" : ""} onClick={() => setLingua("en")}>🇬🇧 English</button>
+        {LINGUE.map(([l, bandiera, nome]) => (
+          <button key={l} lang={l} aria-pressed={lingua === l} className={lingua === l ? "attiva" : ""} onClick={() => setLingua(l)}>{bandiera} {nome}</button>
+        ))}
       </nav>
 
       {vista === "menu" && pezzi > 0 && (
