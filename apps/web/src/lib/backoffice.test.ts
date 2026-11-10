@@ -3,7 +3,7 @@
 import { euro, euroTesto } from "./formato";
 import { LATI, dimensioni, sedie, stacco, stato, type Tavolo } from "./piantina";
 import { nomeFileXml, xmlFattura, type Fattura } from "./fatture";
-import { conAggiunte } from "../componenti/Componi";
+import { conAggiunte } from "./aggiunte";
 import { TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, menuInLingua, nomeIn } from "./traduzioni";
 
 const tavolo = (forma: Tavolo["forma"], posti: number): Tavolo =>
