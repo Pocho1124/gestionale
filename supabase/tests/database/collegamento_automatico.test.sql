@@ -40,9 +40,9 @@ select is((select jsonb_array_length(o -> 'scelte') from jsonb_array_elements(pu
 select is((select o -> 'scelte' from jsonb_array_elements(public.menu_pubblico('locale-tagliere') -> 'categorie' -> 0 -> 'prodotti' -> 0 -> 'opzioni') o
             where o ->> 'nome' = 'Pane') -> 0 ->> 'nome', 'Pane casereccio', 'Gruppo con voci scritte a mano: nessun collegamento automatico');
 select is(pg_temp.prezzo('["fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000001", "fd400000-0000-0000-0000-000000000002:fd500000-0000-0000-0000-000000000003"]') ->> 'prezzo_cent',
-          '1800', 'Salume e formaggio compresi dai gruppi collegati in automatico');
+          '2250', 'Salume e formaggio dai gruppi collegati in automatico, al loro prezzo (18 + 2 + 2,50)');
 select throws_ok($$ select pg_temp.prezzo('["fd400000-0000-0000-0000-000000000003:fd500000-0000-0000-0000-000000000004"]') $$, '22023', null,
-          'Nel gruppo con voci proprie un''aggiunta non entra come compresa');
+          'Nel gruppo con voci proprie un''aggiunta non entra');
 
 select * from finish();
 rollback;

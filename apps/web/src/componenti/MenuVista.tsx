@@ -10,6 +10,7 @@ import { MAPPA_ITALIA } from "../lib/mappaItalia";
 import { TrovaVino } from "./TrovaVino";
 import type { PiattoMenu } from "../lib/tipi";
 import { LINGUE, TESTI_MENU, menuInLingua, type Lingua } from "../lib/traduzioni";
+import { prezzoMinimo } from "../lib/aggiunte";
 
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 
@@ -132,7 +133,7 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
                   <h3>{p.nome}{p.foto ? <span className="menu-icona-foto" aria-hidden="true"> ◉</span> : null}</h3>
                   {!p.disponibile && <span className="menu-badge">{T.esaurito}</span>}
                   {aspetto.layout !== "elegante" && <span className="menu-puntini" aria-hidden="true" />}
-                  <span className="menu-prezzo">{p.opzioni?.length ? T.da : ""}{formatta(centesimi(p.prezzo_cent))}</span>
+                  <span className="menu-prezzo">{p.opzioni?.length ? T.da : ""}{formatta(centesimi(prezzoMinimo(p.prezzo_cent, p.opzioni)))}</span>
                 </div>
                 {p.vino && <p className="menu-vino-info">{[T.tipi[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · ")}</p>}
                 {aspetto.mostra_descrizioni && p.descrizione && <p className="menu-desc">{p.descrizione}</p>}

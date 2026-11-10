@@ -1,4 +1,4 @@
--- Test dei gruppi collegati alle aggiunte (tagliere: «Salumi» = aggiunte del gruppo «Salumi», comprese nel prezzo).
+-- Test dei gruppi collegati alle aggiunte (tagliere: «Salumi» = aggiunte del gruppo «Salumi», al prezzo dell'aggiunta).
 -- Prezzo e controlli da prezzo_riga(); voci esposte dal menu pubblico con id «gruppo:aggiunta». Dati sintetici.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -35,14 +35,14 @@ select is((select jsonb_agg(s -> 'id' order by s ->> 'nome')
              from jsonb_array_elements(public.menu_pubblico('locale-tagliere') -> 'categorie' -> 0 -> 'prodotti' -> 0 -> 'opzioni' -> 0 -> 'scelte') s),
           '["fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000002", "fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000001"]'::jsonb,
           'Il gruppo collegato mostra solo le aggiunte del suo gruppo (maiuscole indifferenti), con id gruppo:aggiunta');
-select is(public.menu_pubblico('locale-tagliere') -> 'categorie' -> 0 -> 'prodotti' -> 0 -> 'opzioni' -> 0 -> 'scelte' -> 0 ->> 'sovrapprezzo_cent', '0',
-          'Nel gruppo collegato le aggiunte sono comprese nel prezzo');
+select is(public.menu_pubblico('locale-tagliere') -> 'categorie' -> 0 -> 'prodotti' -> 0 -> 'opzioni' -> 0 -> 'scelte' -> 0 ->> 'sovrapprezzo_cent', '200',
+          'Nel gruppo collegato ogni aggiunta ha il suo prezzo');
 select is(pg_temp.prezzo('["fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000001", "fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000002"]') ->> 'prezzo_cent',
-          '1800', 'Due salumi compresi: prezzo del piatto');
+          '2300', 'Due salumi: prezzo del piatto più i due salumi (18 + 2 + 3)');
 select is((select count(*)::int from jsonb_array_elements(pg_temp.prezzo('["fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000001", "fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000002", "fd500000-0000-0000-0000-000000000001"]') -> 'opzioni') o
-            where o ->> 'nome' in ('Speck', '+ Speck')), 2, 'La stessa aggiunta compresa e in più: nella comanda «Speck» e «+ Speck»');
+            where o ->> 'nome' in ('Speck', '+ Speck')), 2, 'La stessa aggiunta nel gruppo e in più: nella comanda «Speck» e «+ Speck»');
 select is(pg_temp.prezzo('["fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000001", "fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000002", "fd500000-0000-0000-0000-000000000003"]') ->> 'prezzo_cent',
-          '2050', 'Aggiunta a pagamento in più: prezzo del piatto + aggiunta');
+          '2550', 'Aggiunta a pagamento in più: piatto + salumi + aggiunta');
 select throws_ok($$ select pg_temp.prezzo('["fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000001"]') $$, '22023', null,
           'Un solo salume su due: rifiutato');
 select throws_ok($$ select pg_temp.prezzo('["fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000001", "fd400000-0000-0000-0000-000000000001:fd500000-0000-0000-0000-000000000003"]') $$, '22023', null,

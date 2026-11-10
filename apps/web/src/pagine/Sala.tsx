@@ -20,11 +20,11 @@ const daGrezzo = (aggiunte: GrezzaAggiunta[]) => ({ gruppi_opzioni, ...p }: Grez
   const valide = aggiunte.filter((a) => a.disponibile && (!a.aggiunte_categorie.length || a.aggiunte_categorie.some((c) => c.categoria_id === p.categoria_id)))
     .sort((a, b) => a.posizione - b.posizione || a.nome.localeCompare(b.nome));
   // Gruppo collegato alle aggiunte (es. tagliere «Salumi»), anche in automatico se non ha voci proprie e si chiama come un gruppo
-  // di aggiunte: le aggiunte del gruppo, comprese, con id «gruppo:aggiunta». Stessa regola di gruppo_aggiunte_collegato() nel database
+  // di aggiunte: le aggiunte del gruppo al loro prezzo, con id «gruppo:aggiunta». Stessa regola di gruppo_aggiunte_collegato() nel database
   const collegate = (g: { id: string; nome: string; da_aggiunte?: string | null; opzioni: unknown[] }) => {
     const nome = (g.da_aggiunte ?? (g.opzioni.length === 0 ? g.nome : "")).trim().toLowerCase();
     return !nome ? [] : valide.filter((a) => (a.gruppo ?? "").trim().toLowerCase() === nome)
-      .map((a) => ({ id: `${g.id}:${a.id}`, nome: a.nome, sovrapprezzo_cent: 0 }));
+      .map((a) => ({ id: `${g.id}:${a.id}`, nome: a.nome, sovrapprezzo_cent: a.prezzo_cent }));
   };
   return {
   ...p,

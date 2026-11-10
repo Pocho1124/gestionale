@@ -3,7 +3,7 @@
 import { euro, euroTesto } from "./formato";
 import { LATI, dimensioni, sedie, stacco, stato, type Tavolo } from "./piantina";
 import { nomeFileXml, xmlFattura, type Fattura } from "./fatture";
-import { conAggiunte } from "./aggiunte";
+import { conAggiunte, prezzoMinimo } from "./aggiunte";
 import { TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, menuInLingua, nomeIn } from "./traduzioni";
 
 const tavolo = (forma: Tavolo["forma"], posti: number): Tavolo =>
@@ -118,5 +118,13 @@ describe("aggiunte divise per gruppo", () => {
     expect(g.map((x) => [x.nome, x.min, x.max, x.scelte.length])).toEqual([
       ["Salumi", 3, 3, 0], ["Aggiunte · Formaggi", 0, 1, 1], ["Aggiunte · Salumi", 0, 2, 2], ["Altre aggiunte", 0, 1, 1]]);
     expect(conAggiunte([], [a("Miele")]).map((x) => x.nome)).toEqual(["Aggiunte"]);
+    // Tagliere: i salumi del gruppo collegato non si ripetono tra le aggiunte
+    const tagliere = conAggiunte([{ id: "g", nome: "Salumi", min: 1, max: 6, scelte: [{ id: "g:Speck", nome: "Speck", sovrapprezzo_cent: 400 }] }], [a("Speck", "Salumi"), a("Miele")]);
+    expect(tagliere.map((x) => x.nome)).toEqual(["Salumi", "Aggiunte"]);
+  });
+  it("prezzo «da» di un tagliere da comporre: le voci obbligatorie più economiche", () => {
+    const voci = (...p: number[]) => p.map((c) => ({ sovrapprezzo_cent: c }));
+    expect(prezzoMinimo(0, [{ min: 1, scelte: voci(600, 400, 500) }, { min: 0, scelte: voci(300) }])).toBe(400);
+    expect(prezzoMinimo(1000, [{ min: 2, scelte: voci(0, 0, 0) }])).toBe(1000);
   });
 });

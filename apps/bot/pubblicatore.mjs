@@ -125,6 +125,10 @@ const TESTI = {
   },
 };
 
+/** Prezzo «da» di un piatto componibile: prezzo del piatto più le voci obbligatorie più economiche (copia in apps/web/src/lib/aggiunte.ts). */
+export const prezzoMinimo = (p) => p.prezzo_cent + (p.opzioni || []).reduce((tot, g) =>
+  tot + (g.scelte || []).map((s) => s.sovrapprezzo_cent).sort((a, b) => a - b).slice(0, g.min).reduce((n, c) => n + c, 0), 0);
+
 /** Lingue del menu: codice, bandierina e nome nella propria lingua (in fondo alla pagina). */
 export const LINGUE = [["it", "🇮🇹", "Italiano"], ["en", "🇬🇧", "English"], ["es", "🇪🇸", "Español"]];
 
@@ -186,7 +190,7 @@ export function pagina(menuOriginale, aggiornato, logoFileIt = null, sfondoFileI
   const prodotto = (p) => `
         <article class="piatto${p.disponibile ? "" : " esaurito"}${apribile(p) ? " apribile" : ""}"${apribile(p) ? ` tabindex="0" role="button" data-id="${esc(p.id)}"` : ""}${p.vino ? ` data-regione="${esc(regioneVino(p))}"` : ""}>
           ${layout === "griglia" && /^https:\/\//.test(p.immagine_url ?? "") ? `<img class="foto" src="${esc(p.immagine_url)}" alt="" loading="lazy">` : ""}
-          <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : `<span class="badge">${esc(L.esaurito)}</span>`}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${p.opzioni?.length ? esc(L.da) : ""}${esc(euro(p.prezzo_cent))}</span></div>
+          <div class="riga"><h3>${esc(p.nome)}${fotoPiatti[p.id] ? '<span class="icona-foto" aria-hidden="true"> ◉</span>' : ""}</h3>${p.disponibile ? "" : `<span class="badge">${esc(L.esaurito)}</span>`}${layout === "elegante" ? "" : '<span class="punti" aria-hidden="true"></span>'}<span class="prezzo">${p.opzioni?.length ? esc(L.da) : ""}${esc(euro(prezzoMinimo(p)))}</span></div>
           ${p.vino ? `<p class="vino-info">${esc([TIPI[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · "))}</p>` : ""}
           ${a.mostra_descrizioni && p.descrizione ? `<p class="desc">${esc(p.descrizione)}</p>` : ""}
           ${!p.vino && p.abbinamenti?.length ? `<p class="abbinamento">${esc(L.siAbbinaCon)}${esc(p.abbinamenti.slice(0, 2).map((x) => perId.get(x.id)?.nome).filter(Boolean).join(L.o))}</p>` : ""}

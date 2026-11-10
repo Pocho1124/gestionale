@@ -4,6 +4,7 @@ import { sb } from "../lib/supabase";
 import { caricaFont, pilaFont } from "../lib/font";
 import type { GruppoScelte, MenuPubblico, PiattoMenu, Scelta } from "../lib/tipi";
 import { Componi, chiaveRiga, conAggiunte, descriviScelte, prezzoComposto } from "../componenti/Componi";
+import { prezzoMinimo } from "../lib/aggiunte";
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
 import { euro } from "../lib/formato";
@@ -186,7 +187,7 @@ export function OrdinaTavolo() {
             <article key={p.id} className={`menu-piatto ordina-piatto${p.disponibile ? "" : " esaurito"}`}>
               <div className="menu-riga">
                 <h3>{nomeIn(lingua, p)}</h3>
-                <span className="menu-prezzo">{componibile(p) ? T.da : ""}{euro(p.prezzo_cent)}</span>
+                <span className="menu-prezzo">{componibile(p) ? T.da : ""}{euro(componibile(p) ? prezzoMinimo(p.prezzo_cent, p.opzioni) : p.prezzo_cent)}</span>
               </div>
               {descrizioneIn(lingua, p) && <p className="menu-desc">{descrizioneIn(lingua, p)}</p>}
               {componibile(p) && <p className="menu-allergeni">{T.componiPiacere}{p.opzioni.map((g) => g.nome).join(", ")}</p>}

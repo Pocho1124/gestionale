@@ -51,14 +51,14 @@ export function EditorComposizione({ prodotto }: { prodotto: { id: string; local
       <legend>Componibile (es. tagliere personalizzato)</legend>
       <p className="muto piccolo">Il cliente sceglie le voci di ogni gruppo. Prezzo fisso: quello del piatto ({formatta(centesimi(prodotto.prezzo_cent))});
         cambia solo con le aggiunte del locale o con un supplemento messo su una voce (es. tartufo +3 €). Le voci di un gruppo si
-        possono <strong>collegare a un gruppo di aggiunte</strong> (es. «Salumi»): compaiono sempre tutte quelle disponibili, comprese nel
-        prezzo, e restano ordinabili anche a pagamento. Oppure si scrivono qui, anche tutte insieme separate da virgola.</p>
+        possono <strong>collegare a un gruppo di aggiunte</strong> (es. «Salumi»): compaiono sempre tutte quelle disponibili, ognuna al suo
+        prezzo, e il totale è il prezzo del piatto (anche 0) più le voci scelte. Oppure si scrivono qui, anche tutte insieme separate da virgola.</p>
       {gruppi.length === 0 && (
         <button type="button" className="btn btn-piccolo" onClick={() => void esito(sb().from("gruppi_opzioni").insert([
-          // Gruppi «Salumi» e «Formaggi» (3 scelte ciascuno), collegati alle aggiunte con lo stesso gruppo
-          { locale_id: prodotto.locale_id, prodotto_id: prodotto.id, nome: "Salumi", min_scelte: 3, max_scelte: 3, posizione: 0, da_aggiunte: "Salumi" },
-          { locale_id: prodotto.locale_id, prodotto_id: prodotto.id, nome: "Formaggi", min_scelte: 3, max_scelte: 3, posizione: 1, da_aggiunte: "Formaggi" },
-        ]), "Tagliere pronto: salumi e formaggi presi dalle aggiunte")}>🧀 Tagliere: scegli 3 salumi e 3 formaggi</button>
+          // «Componi il tuo tagliere»: almeno un salume, formaggi facoltativi, ognuno al prezzo della sua aggiunta
+          { locale_id: prodotto.locale_id, prodotto_id: prodotto.id, nome: "Salumi", min_scelte: 1, max_scelte: 6, posizione: 0, da_aggiunte: "Salumi" },
+          { locale_id: prodotto.locale_id, prodotto_id: prodotto.id, nome: "Formaggi", min_scelte: 0, max_scelte: 6, posizione: 1, da_aggiunte: "Formaggi" },
+        ]), "Tagliere pronto: salumi e formaggi dalle aggiunte, ognuno al suo prezzo")}>🧀 Componi il tuo tagliere (salumi e formaggi a prezzo)</button>
       )}
       {gruppi.map((g) => (
         <div key={g.id} className="gruppo-composizione">
@@ -94,7 +94,7 @@ export function EditorComposizione({ prodotto }: { prodotto: { id: string; local
             const fonte = g.da_aggiunte ?? (g.opzioni.length === 0 ? g.nome : null);
             if (!fonte) return null;
             const nomi = collegate(fonte);
-            if (nomi.length) return <p className="muto piccolo">{g.da_aggiunte ? "Dalle" : "In automatico dalle"} aggiunte «{fonte.trim()}» (comprese nel prezzo): {nomi.join(", ")}</p>;
+            if (nomi.length) return <p className="muto piccolo">{g.da_aggiunte ? "Dalle" : "In automatico dalle"} aggiunte «{fonte.trim()}», ognuna al suo prezzo: {nomi.join(", ")}</p>;
             return g.min_scelte > 0 ? <p className="muto piccolo">⚠️ Nessuna voce: scrivile qui sotto oppure assegna il gruppo «{fonte.trim()}» alle aggiunte in «＋ Aggiunte» (attive su questa categoria).</p> : null;
           })()}
           <NuovaVoce onAggiungi={(nomi, cent) => esito(sb().from("opzioni").insert(nomi.map((nome, i) =>
