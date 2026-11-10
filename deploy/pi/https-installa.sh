@@ -59,12 +59,15 @@ if [ -n "$DOMINIO" ]; then
   else ESITO=$(cf -X POST "$API/zones/$ZID/dns_records" -H "Content-Type: application/json" --data "$CORPO"); fi
   echo "$ESITO" | grep -q '"success":true' || { echo "Record DNS non salvato: controlla i permessi del token (DNS → Modifica)"; exit 1; }
 
-  echo "== Certificato Let's Encrypt (verifica DNS, può richiedere un paio di minuti)"
+  # Niente controllo della propagazione interrogando direttamente i nameserver: molte reti (router, operatore) bloccano
+  # o intercettano le richieste DNS in uscita e rispondono REFUSED. Si attendono 90 secondi: Cloudflare pubblica il
+  # record in pochi secondi e la verifica vera la fa Let's Encrypt dai suoi server.
+  echo "== Certificato Let's Encrypt (verifica DNS, circa due minuti)"
   mkdir -p "$CERT"
   if [ -s "$CERT/certificates/$DOMINIO.crt" ]; then AZIONE="renew --days 30"; else AZIONE="run"; fi
   # shellcheck disable=SC2086
   docker run --rm --env-file "$ENVH" -v "$CERT:/.lego" "$LEGO_IMMAGINE" --accept-tos --email "$LEGO_EMAIL" --dns cloudflare \
-    --dns.resolvers 1.1.1.1:53 --domains "$DOMINIO" --path /.lego $AZIONE \
+    --dns.resolvers 1.1.1.1:53 --dns.propagation-wait 90s --domains "$DOMINIO" --path /.lego $AZIONE \
     || { echo "Certificato non ottenuto: controlla token e dominio, poi rilancia"; exit 1; }
   [ -s "$CERT/certificates/$DOMINIO.crt" ] || { echo "Certificato non trovato dopo la richiesta"; exit 1; }
 
@@ -76,7 +79,7 @@ set -eu
 . $ENVH
 PRIMA=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
 docker run --rm --env-file $ENVH -v "$CERT:/.lego" $LEGO_IMMAGINE --accept-tos --email "\$LEGO_EMAIL" --dns cloudflare \\
-  --dns.resolvers 1.1.1.1:53 --domains "\$DOMINIO" --path /.lego renew --days 30
+  --dns.resolvers 1.1.1.1:53 --dns.propagation-wait 90s --domains "\$DOMINIO" --path /.lego renew --days 30
 DOPO=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
 if [ "\$PRIMA" != "\$DOPO" ]; then (cd /opt/supabase && docker compose restart gateway >/dev/null); echo "Certificato rinnovato"; fi
 RINNOVO
