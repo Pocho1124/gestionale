@@ -182,9 +182,10 @@ Vini (enciclopedia), Magazzino, Cassa e Fatture (solo titolare), Impostazioni (p
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
 (su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 321 test superati.
-* **Backoffice**: `pnpm --filter web build` (TypeScript + Vite). **Core**: `vitest` in `packages/core`.
+* **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
+  **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 11 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
-jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
+jsdom solo come dipendenza di sviluppo). Atteso: 79 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
 (non avviano i servizi) e `fetch` simulato (`test/simula.mjs`): nessuna chiamata reale a Telegram, Supabase, Ollama, Cloudflare.
   * `bot.test.mjs`: regole, IA vincolata (numeri solo dal testo, enum), anteprima → conferma → /annulla, notifiche di sala.
   * `pubblicatore.test.mjs`: D1/KV, immagini versionate e pulizia, percorsi, escape dell'HTML.
@@ -192,7 +193,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_T
   * `worker.test.mjs`: Worker con D1/KV simulati.
   * **Visibilità**: jsdom ignora specificità e `!important` in `getComputedStyle`; usare sempre `visibile()` di
   `test/visibilita.mjs`, che risolve la cascata di `display` come un browser.
-* **Stampa**: `STAMPA\_TEST=1` espone `codifica`, `biglietto`, `IP`, `porta` (test non ancora scritti).
+  * `stampa.test.mjs`: indirizzi e porte ammessi, code page 858, contenuto del biglietto, comandi ESC/POS nei testi neutralizzati (`STAMPA\_TEST=1`).
 
 ## Da fare
 
@@ -202,7 +203,6 @@ jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_T
 4. Verifiche sul posto: accesso di un utente creato dal pannello, stampa di prova su stampante reale.
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
 6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; report incassi avanzati; menu multilingua.
-7. Test automatici del servizio di stampa (`stampa.mjs`).
 8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.
 9. Sicurezza (analisi del 10/11/2026), ancora aperti: firma dell'immagine con cosign e verifica in `aggiorna.sh`; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito); tetto agli sconti per ruolo; ruolo `servizio\_stampa` senza accesso a `qr\_token`.
 

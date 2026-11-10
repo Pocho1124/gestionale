@@ -24,6 +24,8 @@ jobs:
           npm ci --no-audit --no-fund
           npx tsc --noEmit
           npx vitest run
+          # Logica del backoffice senza React (formati, piantina, fatture, traduzioni)
+          npx vitest run --config vitest.backoffice.config.mjs
 
   web:
     runs-on: ubuntu-latest

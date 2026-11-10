@@ -28,13 +28,13 @@ const seC = (nome: string, valore: string) => (valore ? tag(nome, valore) : "");
 
 /** Progressivo di invio (5 caratteri): ultime due cifre dell'anno + numero in base 36. */
 const progressivo = (f: Fattura) => `${String(f.anno).slice(-2)}${f.numero.toString(36).toUpperCase().padStart(3, "0")}`;
-const nomeFileXml = (f: Fattura) => `IT${f.cedente.partita_iva}_${progressivo(f)}.xml`;
+export const nomeFileXml = (f: Fattura) => `IT${f.cedente.partita_iva}_${progressivo(f)}.xml`;
 
 const sede = (s: { indirizzo: string; cap: string; comune: string; provincia: string }, nazione = "IT") =>
   `<Sede>${tag("Indirizzo", s.indirizzo)}${tag("CAP", s.cap)}${tag("Comune", s.comune)}${seC("Provincia", s.provincia)}${tag("Nazione", nazione)}</Sede>`;
 
 /** XML FatturaPA 1.2 (FPR12, fattura TD01) da caricare sul portale «Fatture e Corrispettivi» o da dare all'intermediario. */
-function xmlFattura(f: Fattura): string {
+export function xmlFattura(f: Fattura): string {
   const c = f.cliente, e = f.cedente;
   const destinatario = c.codice_destinatario || "0000000";
   return `<?xml version="1.0" encoding="UTF-8"?>

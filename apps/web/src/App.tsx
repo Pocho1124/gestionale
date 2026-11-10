@@ -1,20 +1,24 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ProviderSessione, useSessione } from "./lib/sessione";
 import { ProviderAvvisi } from "./componenti/Avviso";
 import { Guscio } from "./componenti/Guscio";
 import { Accesso } from "./pagine/Accesso";
 import { PrimoLocale } from "./pagine/PrimoLocale";
-import { Catalogo } from "./pagine/Catalogo";
-import { Aspetto } from "./pagine/Aspetto";
-import { MenuPubblico } from "./pagine/MenuPubblico";
-import { Sala } from "./pagine/Sala";
-import { OrdinaTavolo } from "./pagine/OrdinaTavolo";
-import { Impostazioni } from "./pagine/Impostazioni";
-import { Magazzino } from "./pagine/Magazzino";
-import { Cassa } from "./pagine/Cassa";
-import { Enciclopedia } from "./pagine/Enciclopedia";
-import { Fatture } from "./pagine/Fatture";
-import { Cucina } from "./pagine/Cucina";
+
+// Ogni pagina si scarica quando serve: il tablet apre prima e il cliente al tavolo scarica solo la sua pagina
+const Catalogo = lazy(() => import("./pagine/Catalogo").then((m) => ({ default: m.Catalogo })));
+const Aspetto = lazy(() => import("./pagine/Aspetto").then((m) => ({ default: m.Aspetto })));
+const MenuPubblico = lazy(() => import("./pagine/MenuPubblico").then((m) => ({ default: m.MenuPubblico })));
+const Sala = lazy(() => import("./pagine/Sala").then((m) => ({ default: m.Sala })));
+const OrdinaTavolo = lazy(() => import("./pagine/OrdinaTavolo").then((m) => ({ default: m.OrdinaTavolo })));
+const Impostazioni = lazy(() => import("./pagine/Impostazioni").then((m) => ({ default: m.Impostazioni })));
+const Magazzino = lazy(() => import("./pagine/Magazzino").then((m) => ({ default: m.Magazzino })));
+const Cassa = lazy(() => import("./pagine/Cassa").then((m) => ({ default: m.Cassa })));
+const Enciclopedia = lazy(() => import("./pagine/Enciclopedia").then((m) => ({ default: m.Enciclopedia })));
+const Fatture = lazy(() => import("./pagine/Fatture").then((m) => ({ default: m.Fatture })));
+const Cucina = lazy(() => import("./pagine/Cucina").then((m) => ({ default: m.Cucina })));
+const attesa = <p className="centrato muto">Caricamento…</p>;
 
 function AreaRiservata() {
   const { pronta, sessione, locale, puoModificare } = useSessione();
@@ -22,6 +26,7 @@ function AreaRiservata() {
   if (!sessione) return <Accesso />;
   if (!locale) return <PrimoLocale />;
   return (
+    <Suspense fallback={attesa}>
     <Routes>
       <Route element={<Guscio />}>
         <Route path="/catalogo" element={<Catalogo />} />
@@ -37,6 +42,7 @@ function AreaRiservata() {
         <Route path="*" element={<Navigate to="/catalogo" replace />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }
 
@@ -44,6 +50,7 @@ export function App() {
   return (
     <BrowserRouter>
       <ProviderAvvisi>
+        <Suspense fallback={attesa}>
         <Routes>
           {/* Menu clienti: pubblico, senza login */}
           <Route path="/m/:slug" element={<MenuPubblico />} />
@@ -51,6 +58,7 @@ export function App() {
           <Route path="/t/:token" element={<OrdinaTavolo />} />
           <Route path="*" element={<ProviderSessione><AreaRiservata /></ProviderSessione>} />
         </Routes>
+        </Suspense>
       </ProviderAvvisi>
     </BrowserRouter>
   );

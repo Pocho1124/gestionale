@@ -14,5 +14,5 @@
     "paths": { "@gest/core": ["../../packages/core/src/index.ts"] }
   },
   "include": ["src", "../../packages/core/src"],
-  "exclude": ["../../packages/core/src/**/*.test.ts"]
+  "exclude": ["../../packages/core/src/**/*.test.ts", "src/**/*.test.ts"]
 }
