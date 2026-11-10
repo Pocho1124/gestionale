@@ -63,8 +63,8 @@ if [ -n "$DOMINIO" ]; then
   mkdir -p "$CERT"
   if [ -s "$CERT/certificates/$DOMINIO.crt" ]; then AZIONE="renew --days 30"; else AZIONE="run"; fi
   # shellcheck disable=SC2086
-  docker run --rm --env-file "$ENVH" -v "$CERT:/lego" "$LEGO_IMMAGINE" --accept-tos --email "$LEGO_EMAIL" --dns cloudflare \
-    --dns.resolvers 1.1.1.1:53 --domains "$DOMINIO" --path /lego $AZIONE \
+  docker run --rm --env-file "$ENVH" -v "$CERT:/.lego" "$LEGO_IMMAGINE" --accept-tos --email "$LEGO_EMAIL" --dns cloudflare \
+    --dns.resolvers 1.1.1.1:53 --domains "$DOMINIO" --path /.lego $AZIONE \
     || { echo "Certificato non ottenuto: controlla token e dominio, poi rilancia"; exit 1; }
   [ -s "$CERT/certificates/$DOMINIO.crt" ] || { echo "Certificato non trovato dopo la richiesta"; exit 1; }
 
@@ -75,8 +75,8 @@ if [ -n "$DOMINIO" ]; then
 set -eu
 . $ENVH
 PRIMA=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
-docker run --rm --env-file $ENVH -v "$CERT:/lego" $LEGO_IMMAGINE --accept-tos --email "\$LEGO_EMAIL" --dns cloudflare \\
-  --dns.resolvers 1.1.1.1:53 --domains "\$DOMINIO" --path /lego renew --days 30
+docker run --rm --env-file $ENVH -v "$CERT:/.lego" $LEGO_IMMAGINE --accept-tos --email "\$LEGO_EMAIL" --dns cloudflare \\
+  --dns.resolvers 1.1.1.1:53 --domains "\$DOMINIO" --path /.lego renew --days 30
 DOPO=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
 if [ "\$PRIMA" != "\$DOPO" ]; then (cd /opt/supabase && docker compose restart gateway >/dev/null); echo "Certificato rinnovato"; fi
 RINNOVO
