@@ -32,7 +32,7 @@ Indicare sempre file per file, cartella per cartella, cosa sostituire.
 |-|-|
 |Server|Lenovo i7, 16 GB RAM, Ubuntu Server 24.04, IP fisso `192.168.111.183`, utente SSH `gestionale`|
 |Database|Supabase self-hosted (PostgreSQL 17) in Docker, `/opt/supabase` (gateway Kong porta 8000)|
-|Gateway web|Caddy: backoffice su `https://gestionale.enotechiasantalucia.it` (Let's Encrypt via DNS Cloudflare, attivo dal 10/11/2026; record A verso l'IP locale); porta 80 solo per le pagine dei clienti, il resto rimanda al dominio|
+|Gateway web|Caddy porta 80 (backoffice in HTTP, provvisorio); HTTPS pronto su `https://gestionale.enotechiasantalucia.it` (certificato Let's Encrypt via DNS Cloudflare, record A verso l'IP locale) da attivare in loco con `https-installa.sh --dominio`|
 |Pannello|Cockpit `https://192.168.111.183:9090`|
 |IA locale|Ollama `qwen2.5:3b` (container `ollama`, `http://ollama:11434`); llama.cpp pronto ma in standby|
 |Trascrizione vocali|Whisper `small` (servizio `apps/bot/trascrizione`, porta 9000)|
@@ -175,7 +175,7 @@ strutturato, Campania, vitigno …», «descrivi / riscrivi le descrizioni dei v
 
 ### Backoffice
 
-`https://gestionale.enotechiasantalucia.it` – Sala (servizio con cruscotto e modalità monitor, piantina, cartoncini QR), Catalogo (anche componibili e aggiunte), Aspetto,
+`http://192.168.111.183` (in loco `https://gestionale.enotechiasantalucia.it`) – Sala (servizio con cruscotto e modalità monitor, piantina, cartoncini QR), Catalogo (anche componibili e aggiunte), Aspetto,
 Vini (enciclopedia), Magazzino, Cassa e Fatture (solo titolare), Impostazioni (personale, reparti/stampanti, bot).
 
 ## Test
@@ -196,7 +196,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_T
 
 ## Da fare
 
-1. HTTPS: attivo su `https://gestionale.enotechiasantalucia.it` (10/11/2026). `https://<IP>` non funziona (senza nome, Caddy nel container non trova il certificato): usare sempre il dominio.
+1. HTTPS: certificato Let's Encrypt ottenuto e rinnovo notturno attivo (10/11/2026); gateway riportato in HTTP perché la rete aziendale provvisoria blocca il nome (DNS rebinding). In loco: `https-installa.sh --dominio gestionale.enotechiasantalucia.it` (versione con riserva HTTP per IP) e prova da tablet. `https://<IP>` non funziona (Caddy nel container non vede l'IP): usare il nome.
 2. Ponte ordini `ordini.enotechiasantalucia.it` su Cloudflare (ordini dal telefono solo con HTTPS; nel frattempo solo comande dal tablet).
 3. QR stampabili con il nuovo dominio (non ancora stampato nulla).
 4. Verifiche sul posto: accesso di un utente creato dal pannello, stampa di prova su stampante reale.
