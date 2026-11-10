@@ -59,7 +59,9 @@ const ARREDI: Record<TipoElemento, { nome: string; w: number; h: number; etichet
 const SOTTILI = new Set<TipoElemento>(["muro", "porta", "finestra"]);
 /** Elementi a terra, disegnati sotto tutto il resto. */
 const A_TERRA = new Set<TipoElemento>(["zona", "tappeto"]);
-const lati = (tipo: TipoElemento): Lato[] => (SOTTILI.has(tipo) ? ["sinistra", "destra"] : ["sinistra", "destra", "sopra", "sotto"]);
+const LATI: Lato[] = ["sinistra", "destra", "sopra", "sotto"];
+/** Distanza in più delle maniglie dal bordo quando l'elemento è sottile: così le due maniglie opposte non si sovrappongono. */
+const stacco = (meta: number) => Math.max(0, 18 - meta);
 const dimensioni = (t: Tavolo) => {
   const base = 34 + Math.min(t.posti, 12) * 3;
   return t.forma === "rettangolo" ? { w: base * 1.8, h: base } : { w: base, h: base };
@@ -315,7 +317,10 @@ export function Piantina(props: {
     const el = props.elementi.find((z) => z.id === azione.id); if (!el) return;
     // Ridimensiona nel sistema dell'elemento (tiene conto della rotazione): si sposta solo il lato trascinato
     const a = (el.rotazione * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a), dx = p.x - el.x, dy = p.y - el.y;
-    const lx = dx * cos + dy * sin, ly = -dx * sin + dy * cos;
+    // La maniglia di un lato sottile è staccata dal bordo: si toglie lo stacco, così l'elemento non salta alla presa
+    const ox = stacco(el.w / 2), oy = stacco(el.h / 2);
+    const lx0 = dx * cos + dy * sin, ly0 = -dx * sin + dy * cos;
+    const lx = lx0 > 0 ? lx0 - ox : lx0 + ox, ly = ly0 > 0 ? ly0 - oy : ly0 + oy;
     let w = el.w, h = el.h, sx = 0, sy = 0;   // nuove misure e spostamento del centro (coordinate dell'elemento)
     if (azione.lato === "destra") { w = Math.min(1000, Math.max(10, scatto(lx + el.w / 2))); sx = (w - el.w) / 2; }
     if (azione.lato === "sinistra") { w = Math.min(1000, Math.max(10, scatto(el.w / 2 - lx))); sx = -(w - el.w) / 2; }
@@ -417,12 +422,13 @@ export function Piantina(props: {
             onPointerDown={(e) => inizia(e, "sposta", "elemento", el)}>
             <Arredo tipo={el.tipo} w={pos.w} h={pos.h} etichetta={el.etichetta} />
             {/* Una maniglia per lato: trascinandola si allunga solo da quella parte */}
-            {props.modificabile && selez("elemento", el.id) && lati(el.tipo).map((l) => {
-              const cx = l === "sinistra" ? -pos.w / 2 : l === "destra" ? pos.w / 2 : 0, cy = l === "sopra" ? -pos.h / 2 : l === "sotto" ? pos.h / 2 : 0;
+            {props.modificabile && selez("elemento", el.id) && LATI.map((l) => {
+              const mx = pos.w / 2 + stacco(pos.w / 2), my = pos.h / 2 + stacco(pos.h / 2);
+              const cx = l === "sinistra" ? -mx : l === "destra" ? mx : 0, cy = l === "sopra" ? -my : l === "sotto" ? my : 0;
               return (
                 <g key={l} className={`maniglia maniglia-${l === "sinistra" || l === "destra" ? "orizzontale" : "verticale"}`}
                   onPointerDown={(e) => inizia(e, "ridimensiona", "elemento", el, l)}>
-                  <circle cx={cx} cy={cy} r={18} className="maniglia-presa" />
+                  <circle cx={cx} cy={cy} r={14} className="maniglia-presa" />
                   <circle cx={cx} cy={cy} r={8} className="maniglia-punto" />
                 </g>
               );
@@ -603,14 +609,18 @@ function MisureElemento({ elemento, metri, onCambia }: { elemento: Elemento; met
   const inMetri = (v: number) => (v * metri).toFixed(2);
   const daMetri = (t: string, max: number) => { const v = Number(t.replace(",", ".")); return v > 0 ? Math.min(max, Math.max(4, Math.round(v / metri))) : null; };
   const sottile = SOTTILI.has(elemento.tipo);
+  // Muro verticale (più alto che largo): la lunghezza è l'altezza
+  const [lungo, corto] = (sottile && elemento.h > elemento.w ? ["h", "w"] : ["w", "h"]) as ["w" | "h", "w" | "h"];
+  const campo = (k: "w" | "h", etichetta: string) => (
+    <label className="campo" style={{ flex: 1 }}>{etichetta}
+      <input inputMode="decimal" defaultValue={inMetri(elemento[k])}
+        onBlur={(e) => { const v = daMetri(e.target.value, k === "w" ? 1000 : 2000); if (v && v !== elemento[k]) onCambia({ [k]: v }); }} />
+    </label>
+  );
   return (
     <div className="riga-form" key={`${elemento.id}-${elemento.w}-${elemento.h}`}>
-      <label className="campo" style={{ flex: 1 }}>{sottile ? "Lunghezza (m)" : "Larghezza (m)"}
-        <input inputMode="decimal" defaultValue={inMetri(elemento.w)} onBlur={(e) => { const v = daMetri(e.target.value, 1000); if (v && v !== elemento.w) onCambia({ w: v }); }} />
-      </label>
-      <label className="campo" style={{ flex: 1 }}>{sottile ? "Spessore (m)" : "Profondità (m)"}
-        <input inputMode="decimal" defaultValue={inMetri(elemento.h)} onBlur={(e) => { const v = daMetri(e.target.value, 2000); if (v && v !== elemento.h) onCambia({ h: v }); }} />
-      </label>
+      {campo(lungo, sottile ? "Lunghezza (m)" : "Larghezza (m)")}
+      {campo(corto, sottile ? "Spessore (m)" : "Profondità (m)")}
     </div>
   );
 }
@@ -736,7 +746,7 @@ function PannelloPiantina(props: {
             <button className="btn btn-icona" onClick={() => aggiornaElemento({ rotazione: ruota(elemento.rotazione, 90) })}>90°</button>
           </div>
           <MisureElemento elemento={elemento} metri={Number(sala.larghezza_m) / W} onCambia={aggiornaElemento} />
-          <p className="muto piccolo">Trascina per spostare. Tira i pallini sui lati per allungare o allargare solo da quella parte.</p>
+          <p className="muto piccolo">Trascina per spostare. Tira i pallini sui quattro lati per allungare, accorciare o ispessire solo da quella parte.</p>
           <div className="riga-form">
             <button className="btn btn-piccolo" onClick={() => void aggiungiElemento(elemento.tipo, elemento)}>Duplica</button>
             <button className="btn btn-pericolo" onClick={async () => {
