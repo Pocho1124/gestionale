@@ -363,6 +363,10 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .menu .regione-titolo::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--p) 30%,transparent)}
 .menu.griglia .piatto{border:1px solid color-mix(in srgb,var(--t) 15%,transparent);border-radius:12px;padding:10px}
 .con-sfondo header{text-shadow:0 1px 4px rgba(0,0,0,.55)}
+/* Barra delle categorie nello stesso stile dei riquadri: arrotondata, velata, fissa in alto staccata dal bordo */
+html{scroll-padding-top:76px}
+.menu > nav:not(.lingue){top:8px;margin:16px 0 0;padding:10px 16px;border-radius:14px;background:color-mix(in srgb,var(--s) 92%,transparent);border:1px solid color-mix(in srgb,var(--p) 30%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.menu > nav:not(.lingue) a:hover,.menu > nav:not(.lingue) a:focus-visible{color:var(--p);opacity:1}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
 </head>

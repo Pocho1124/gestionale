@@ -14,8 +14,10 @@ const SCARTATA = ":scartata";
 const tentati = new Set();
 export const dimenticaTentativi = () => tentati.clear();
 
+/** Versione delle regole di traduzione: se cambia, le traduzioni automatiche si rifanno (quelle a mano restano). */
+const VERSIONE = "2";
 /** Impronta dei testi italiani da cui nasce la traduzione: cambia se cambia uno qualsiasi dei testi. */
-export const impronta = (...testi) => createHash("sha256").update(testi.map((t) => t ?? "").join("\u0000")).digest("hex").slice(0, 16);
+export const impronta = (...testi) => createHash("sha256").update([VERSIONE, ...testi.map((t) => t ?? "")].join("\u0000")).digest("hex").slice(0, 16);
 
 const numeri = (t) => (String(t ?? "").match(/\d+(?:[.,]\d+)?/g) ?? []).map((n) => n.replace(",", ".")).sort();
 
@@ -48,14 +50,22 @@ export const LINGUE = {
   es: { suffisso: "_es", stato: "traduzione_es_da", nome: "spagnolo", NOME: "SPAGNOLO" },
 };
 
-const sistema = (L) => [
-  `Traduci in ${L.nome}, per il menu di un'enoteca italiana, ogni campo che ricevi e restituisci gli stessi campi tradotti.`,
+/** Nomi ricorrenti delle categorie: esempi per il modello piccolo, che altrimenti li traduce alla lettera. */
+const ESEMPI = {
+  inglese: "Carta dei vini = Wine list; Vini al calice = Wines by the glass; Taglieri = Platters; Birre = Beers; Bollicine = Sparkling wines",
+  spagnolo: "Carta dei vini = Carta de vinos; Vini al calice = Vinos por copas; Taglieri = Tablas; Birre = Cervezas; Bollicine = Espumosos",
+};
+
+const sistema = (L, fonte = "italiano") => [
+  `Traduci dall'${fonte} in ${L.nome}, per il menu di un'enoteca italiana, ogni campo che ricevi e restituisci gli stessi campi tradotti.`,
+  `Esempi di categorie: ${ESEMPI[L.nome]}.`,
   "Regole:",
   "- lascia invariati i nomi propri: vini, denominazioni (DOC, DOCG, IGT), vitigni, cantine, località;",
   "- lascia in italiano i prodotti tipici che non hanno traduzione (es. pinsa, burrata, 'nduja, speck, bruschetta);",
   "- non aggiungere e non togliere informazioni, ingredienti o numeri; nessun prezzo;",
   "- testo naturale, iniziale maiuscola; traduci tutto il testo, anche le descrizioni lunghe;",
-  `- ogni campo della risposta (es. descrizione_${L.nome}) deve essere in ${L.NOME}: mai ricopiare il testo italiano.`,
+  `- ogni campo della risposta (es. descrizione_${L.nome}) deve essere in ${L.NOME}: mai ricopiare il testo ricevuto;`,
+  `- traduci anche tipo e colore dei vini (rosso, bianco, rosato) e le parole comuni: in ${L.nome} non resta nessuna parola italiana comune.`,
 ].join("\n");
 
 /** Tabelle e campi da tradurre: campo italiano e lunghezza massima (la colonna tradotta è campo + suffisso della lingua). */
@@ -83,6 +93,17 @@ export async function traduciMenu({ db, chiediModello, locale, log = () => {}, l
   return salvate;
 }
 
+/**
+ * Lo spagnolo si traduce dall'inglese già controllato quando c'è (il modello piccolo traduce molto meglio dall'inglese);
+ * numeri e italiano rimasto si controllano sempre sul testo italiano.
+ */
+const ponte = (lingua, t, x, it, im) => {
+  if (lingua === "en") return "";
+  const en = String(x[`${it}_en`] ?? "").trim();
+  const attuale = x.traduzione_da === im || x.traduzione_da === "manuale";
+  return en && attuale && traduzioneValida(x[it], en, 10_000) && !(descrittivo(t.tabella, it) && sembraItaliano(x[it], en)) ? en : "";
+};
+
 async function traduciLingua({ L, lingua, righe, db, chiediModello, log, limite }) {
   const voci = [];
   TABELLE.forEach((t0, i) => {
@@ -107,12 +128,14 @@ async function traduciLingua({ L, lingua, righe, db, chiediModello, log, limite 
   for (const v of voci.slice(0, limite)) {
     const { t, x, campi, im, manuale } = v;
     const daTradurre = campi.filter(([it]) => String(x[it] ?? "").trim());
+    const fonti = Object.fromEntries(daTradurre.map(([it]) => [it, ponte(lingua, t, x, it, im)]));
+    const dallInglese = daTradurre.length > 0 && daTradurre.every(([it]) => fonti[it]);
     let risposta = {};
     if (daTradurre.length) {
       try {
         risposta = await chiediModello({
-          sistema: sistema(L),
-          utente: JSON.stringify({ tipo: t.tipo, ...Object.fromEntries(daTradurre.map(([it]) => [it, x[it]])) }),
+          sistema: sistema(L, dallInglese ? "inglese" : "italiano"),
+          utente: JSON.stringify({ tipo: t.tipo, ...Object.fromEntries(daTradurre.map(([it]) => [it, dallInglese ? fonti[it] : x[it]])) }),
           // Campi della risposta con il nome della lingua («descrizione_inglese»): il modello piccolo tende meno a ricopiare l'italiano
           schema: { type: "object", properties: Object.fromEntries(daTradurre.map(([it]) => [`${it}_${L.nome}`, { type: "string" }])),
             required: daTradurre.map(([it]) => `${it}_${L.nome}`) },
@@ -129,12 +152,14 @@ async function traduciLingua({ L, lingua, righe, db, chiediModello, log, limite 
       const originale = String(x[it] ?? "").trim();
       if (!originale) { if (!manuale) corpo[en] = ""; continue; }
       const tradotto = String(risposta[`${it}_${L.nome}`] ?? "").trim();
-      if (traduzioneValida(originale, tradotto, massimo) && !(descrittivo(t.tabella, it) && sembraItaliano(originale, tradotto))) { corpo[en] = tradotto; buoni++; }
+      const copiaInglese = dallInglese && descrittivo(t.tabella, it) && tradotto.toLowerCase() === fonti[it].toLowerCase();
+      if (traduzioneValida(originale, tradotto, massimo) && !copiaInglese && !(descrittivo(t.tabella, it) && sembraItaliano(originale, tradotto))) { corpo[en] = tradotto; buoni++; }
       else { scartati++; if (!manuale) corpo[en] = ""; log(`Traduzione ${L.nome} scartata (${t.tabella}.${it} «${originale.slice(0, 40)}»): rimasta in italiano, numeri o lunghezza non corrispondono`); }
     }
     if (!manuale) corpo[L.stato] = buoni || !scartati ? im : im + SCARTATA;
     if (!Object.keys(corpo).length) continue;
     await db(`${t.tabella}?${t.chiave}=eq.${x[t.chiave]}${manuale ? "" : `&${L.stato}=neq.manuale`}`, { metodo: "PATCH", corpo });
+    Object.assign(x, corpo);   // la lingua successiva vede la traduzione appena salvata
     if (buoni) salvate++;
   }
   return { salvate };

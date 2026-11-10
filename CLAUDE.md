@@ -195,7 +195,7 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
   **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 13 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
-jsdom solo come dipendenza di sviluppo). Atteso: 96 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
+jsdom solo come dipendenza di sviluppo). Atteso: 97 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
 (non avviano i servizi) e `fetch` simulato (`test/simula.mjs`): nessuna chiamata reale a Telegram, Supabase, Ollama, Cloudflare.
   * `bot.test.mjs`: regole, IA vincolata (numeri solo dal testo, enum), anteprima → conferma → /annulla, notifiche di sala.
   * `pubblicatore.test.mjs`: D1/KV, immagini versionate e pulizia, percorsi, escape dell'HTML.

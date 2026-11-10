@@ -158,6 +158,23 @@ describe("traduzione del menu", () => {
     assert.ok(!sembraItaliano("Pasta con salsa del giorno", "Pasta con la salsa del día y queso"));
   });
 
+  test("spagnolo tradotto dall'inglese appena controllato; copia dell'inglese scartata", async () => {
+    const { db, modifiche } = dbFinto({ prodotti: [riga(15, "Tagliere misto", "Salumi e formaggi per 2"), riga(16, "Calice", "Rosso strutturato")] });
+    const chieste = [];
+    const tr = { "Mixed board": "Tabla mixta", "Cured meats and cheeses for 2": "Embutidos y quesos para 2" };
+    await traduciMenu({ db, locale: LOCALE, chiediModello: async (r) => {
+      chieste.push(r); const x = JSON.parse(r.utente); delete x.tipo;
+      if (/in inglese/.test(r.sistema)) return modello(r);
+      return Object.fromEntries(Object.entries(x).map(([k, v]) => [`${k}_spagnolo`, tr[v] ?? v]));   // senza traduzione ricopia
+    } });
+    const es = chieste.filter((r) => /in spagnolo/.test(r.sistema));
+    assert.match(es[0].sistema, /dall'inglese in spagnolo/);
+    assert.deepEqual(JSON.parse(es[0].utente), { tipo: "piatto", nome: "Mixed board", descrizione: "Cured meats and cheeses for 2" });
+    assert.deepEqual(modifiche.find((m) => m.corpo.nome_es)?.corpo.descrizione_es, "Embutidos y quesos para 2");
+    const calice = modifiche.filter((m) => m.percorso.includes(id(16)) && "descrizione_es" in m.corpo)[0];
+    assert.equal(calice.corpo.descrizione_es, "", "«Full-bodied red» ricopiato in spagnolo: scartato");
+  });
+
   test("al massimo «limite» voci per giro", async () => {
     const { db, modifiche } = dbFinto({ prodotti: Array.from({ length: 30 }, (_, i) => riga(100 + i, `Piatto ${i}`, "")) });
     await traduciMenu({ lingue: ["en"], db, chiediModello: async ({ utente }) => ({ nome_inglese: `Dish ${JSON.parse(utente).nome.split(" ")[1]}` }), locale: LOCALE, limite: 15 });

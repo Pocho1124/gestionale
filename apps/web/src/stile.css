@@ -726,3 +726,7 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu .menu-regione-titolo::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--m-primario) 30%,transparent)}
 .menu.menu-griglia .menu-piatto{border:1px solid color-mix(in srgb,var(--m-testo) 15%,transparent);border-radius:12px;padding:10px}
 .menu.con-foto-pagina .menu-testata{text-shadow:0 1px 4px rgba(0,0,0,.55)}
+/* Barra delle categorie nello stesso stile dei riquadri: arrotondata, velata, fissa in alto staccata dal bordo */
+.menu .menu-nav{top:8px;margin:16px 0 0;padding:10px 16px;border-radius:14px;background:color-mix(in srgb,var(--m-sfondo) 92%,transparent);border:1px solid color-mix(in srgb,var(--m-primario) 30%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.menu .menu-nav a:hover,.menu .menu-nav a:focus-visible{color:var(--m-primario);opacity:1}
+.menu .menu-categoria{scroll-margin-top:76px}
