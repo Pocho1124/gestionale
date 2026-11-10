@@ -44,7 +44,7 @@ export interface Scelta { id: string; nome: string; sovrapprezzo_cent: number }
 export interface SchedaVino {
   tipo: "rosso" | "bianco" | "rosato" | "bollicine" | "dolce";
   corpo: "leggero" | "medio" | "strutturato";
-  regione: string; vitigno: string; cantina: string; annata: number | null; note: string;
+  regione: string; vitigno: string; cantina: string; annata: number | null; note: string; note_en?: string;
   prezzo_bottiglia_cent: number | null;
 }
 

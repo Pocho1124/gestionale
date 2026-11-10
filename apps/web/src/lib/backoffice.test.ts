@@ -3,7 +3,7 @@
 import { euro, euroTesto } from "./formato";
 import { LATI, dimensioni, sedie, stacco, stato, type Tavolo } from "./piantina";
 import { nomeFileXml, xmlFattura, type Fattura } from "./fatture";
-import { TESTI_TAVOLO, allergeniIn, descrizioneIn, nomeIn } from "./traduzioni";
+import { TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, menuInLingua, nomeIn } from "./traduzioni";
 
 const tavolo = (forma: Tavolo["forma"], posti: number): Tavolo =>
   ({ id: "t", locale_id: "l", sala_id: "s", nome: "1", posti, forma, x: 0, y: 0, rotazione: 0, qr_token: "q", attivo: true });
@@ -81,6 +81,16 @@ describe("traduzioni della pagina del tavolo", () => {
   it("allergeni tradotti", () => {
     expect(allergeniIn("en", ["Glutine", "Latte"])).toEqual(["Gluten", "Milk"]);
     expect(allergeniIn("it", ["Glutine"])).toEqual(["Glutine"]);
+  });
+  it("menu interno in inglese: nomi, descrizioni, note dei vini, allergeni ed etichette", () => {
+    const menu = { categorie: [{ nome: "Rossi", nome_en: "Red wines", descrizione: "", prodotti: [
+      { nome: "Taurasi", nome_en: "", descrizione: "Rosso strutturato", descrizione_en: "Full-bodied red", allergeni: ["Solfiti"], etichette: ["Consigliato"],
+        vino: { note: "Affinato in botte", note_en: "Aged in barrel" } }] }] };
+    const en = menuInLingua(menu, "en");
+    expect(en.categorie[0]!.nome).toBe("Red wines");
+    expect(en.categorie[0]!.prodotti[0]).toMatchObject({ nome: "Taurasi", descrizione: "Full-bodied red", allergeni: ["Sulphites"], etichette: ["Recommended"], vino: { note: "Aged in barrel" } });
+    expect(menuInLingua(menu, "it")).toBe(menu);
+    expect(Object.keys(TESTI_MENU.en).sort()).toEqual(Object.keys(TESTI_MENU.it).sort());
   });
   it("stessi testi in tutte e due le lingue", () => {
     expect(Object.keys(TESTI_TAVOLO.en).sort()).toEqual(Object.keys(TESTI_TAVOLO.it).sort());

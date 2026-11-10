@@ -8,12 +8,19 @@ import { regioneDi } from "../lib/regioni";
 import { MappaRegioni } from "./MappaRegioni";
 import { MAPPA_ITALIA } from "../lib/mappaItalia";
 import { TrovaVino } from "./TrovaVino";
-import { TIPI_VINO, type PiattoMenu } from "../lib/tipi";
+import type { PiattoMenu } from "../lib/tipi";
+import { TESTI_MENU, menuInLingua, type Lingua } from "../lib/traduzioni";
 
 const SERIF = new Set(["Young Serif", "Playfair Display", "Cormorant Garamond", "Lora", "Merriweather"]);
 
 /** Il menu come lo vedono i clienti: usato sia dalla pagina pubblica sia dall'anteprima di Aspetto. */
-export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspetto }) {
+export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingua }: {
+  menu: MenuPubblico; aspetto: Aspetto;
+  /** Lingua dei testi; con onLingua in fondo compaiono le bandierine per cambiarla (non nell'anteprima di Aspetto). */
+  lingua?: Lingua; onLingua?: (l: Lingua) => void;
+}) {
+  const menu = menuInLingua(menuOriginale, lingua);
+  const T = TESTI_MENU[lingua];
   type Piatto = MenuPubblico["categorie"][number]["prodotti"][number];
   const [aperto, setAperto] = useState<Piatto | null>(null);
   const [storia, setStoria] = useState<PiattoMenu[]>([]);
@@ -21,8 +28,8 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
   const [quiz, setQuiz] = useState(false);
   const perId = new Map(menu.categorie.flatMap((c) => c.prodotti.map((p) => [p.id, p] as const)));
   const [regione, setRegione] = useState("");
-  const regioneVino = (p: PiattoMenu) => (p.vino ? regioneDi(p.vino.regione) || "Altre zone" : "");
-  const ordina = (x: string, y: string) => Number(x === "Altre zone") - Number(y === "Altre zone") || x.localeCompare(y, "it");
+  const regioneVino = (p: PiattoMenu) => (p.vino ? regioneDi(p.vino.regione) || T.altreZone : "");
+  const ordina = (x: string, y: string) => Number(x === T.altreZone) - Number(y === T.altreZone) || x.localeCompare(y, "it");
   const [mappa, setMappa] = useState(false);
   const viniPerRegione = new Map<string, number>();
   for (const c of menu.categorie) for (const p of c.prodotti) if (p.vino) viniPerRegione.set(regioneVino(p), (viniPerRegione.get(regioneVino(p)) ?? 0) + 1);
@@ -67,26 +74,26 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
       </header>
 
       {numeroVini >= 2 && (
-        <button className="menu-trova-vino" onClick={() => setQuiz(true)}>🍷 Trova il tuo vino</button>
+        <button className="menu-trova-vino" onClick={() => setQuiz(true)}>{T.trova}</button>
       )}
 
       {tutteLeRegioni.length >= 2 && (
-        <div className="menu-filtro-regioni" role="group" aria-label="Vini per regione">
-          <span>Vini per regione</span>
-          {conMappa && <button type="button" className="apri-mappa" onClick={() => setMappa(true)}>🗺️ Scegli dalla mappa</button>}
+        <div className="menu-filtro-regioni" role="group" aria-label={T.viniPerRegione}>
+          <span>{T.viniPerRegione}</span>
+          {conMappa && <button type="button" className="apri-mappa" onClick={() => setMappa(true)}>{T.mappa}</button>}
           {["", ...tutteLeRegioni].map((r) => (
-            <button key={r || "tutte"} type="button" className={regione === r ? "attiva" : ""} aria-pressed={regione === r} onClick={() => setRegione(r)}>{r || "Tutte"}</button>
+            <button key={r || "tutte"} type="button" className={regione === r ? "attiva" : ""} aria-pressed={regione === r} onClick={() => setRegione(r)}>{r || T.tutte}</button>
           ))}
         </div>
       )}
 
       {menu.categorie.length > 0 && (
-        <nav className="menu-nav" aria-label="Categorie">
+        <nav className="menu-nav" aria-label={T.categorie}>
           {menu.categorie.map((c) => <a key={c.id} href={`#cat-${c.id}`}>{c.nome}</a>)}
         </nav>
       )}
 
-      {menu.categorie.length === 0 && <p className="menu-vuoto">Il menu sarà disponibile a breve.</p>}
+      {menu.categorie.length === 0 && <p className="menu-vuoto">{T.vuoto}</p>}
 
       {menu.categorie.map((c) => {
         // Vini della regione scelta (gli altri piatti restano); categorie di soli vini raggruppate per regione
@@ -105,27 +112,27 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
             {lista.map((p) => (
               <article key={p.id} className={`menu-piatto${p.disponibile ? "" : " esaurito"}${p.foto || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length ? " apribile" : ""}`}
                 {...(p.foto || p.descrizione || p.vino || p.abbinamenti?.length || p.opzioni?.length ? {
-                  role: "button", tabIndex: 0, "aria-label": `${p.nome}: apri la scheda`,
+                  role: "button", tabIndex: 0, "aria-label": `${p.nome}: ${T.apriScheda}`,
                   onClick: () => setAperto(p),
                   onKeyDown: (e: { key: string; preventDefault: () => void }) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAperto(p); } },
                 } : {})}>
                 {p.immagine_url && aspetto.layout === "griglia" && <img src={p.immagine_url} alt="" className="menu-foto" />}
                 <div className="menu-riga">
                   <h3>{p.nome}{p.foto ? <span className="menu-icona-foto" aria-hidden="true"> ◉</span> : null}</h3>
-                  {!p.disponibile && <span className="menu-badge">Esaurito</span>}
+                  {!p.disponibile && <span className="menu-badge">{T.esaurito}</span>}
                   {aspetto.layout !== "elegante" && <span className="menu-puntini" aria-hidden="true" />}
-                  <span className="menu-prezzo">{p.opzioni?.length ? "da " : ""}{formatta(centesimi(p.prezzo_cent))}</span>
+                  <span className="menu-prezzo">{p.opzioni?.length ? T.da : ""}{formatta(centesimi(p.prezzo_cent))}</span>
                 </div>
-                {p.vino && <p className="menu-vino-info">{[TIPI_VINO[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · ")}</p>}
+                {p.vino && <p className="menu-vino-info">{[T.tipi[p.vino.tipo], p.vino.regione, p.vino.vitigno].filter(Boolean).join(" · ")}</p>}
                 {aspetto.mostra_descrizioni && p.descrizione && <p className="menu-desc">{p.descrizione}</p>}
                 {!p.vino && (p.abbinamenti?.length ?? 0) > 0 && (
-                  <p className="menu-abbinamento">🍷 Si abbina con {p.abbinamenti!.slice(0, 2).map((a) => perId.get(a.id)?.nome).filter(Boolean).join(" o ")}</p>
+                  <p className="menu-abbinamento">{T.siAbbinaCon}{p.abbinamenti!.slice(0, 2).map((a) => perId.get(a.id)?.nome).filter(Boolean).join(T.o)}</p>
                 )}
                 {p.etichette.length > 0 && (
                   <ul className="menu-etichette">{p.etichette.map((e) => <li key={e}>{e}</li>)}</ul>
                 )}
                 {aspetto.mostra_allergeni && p.allergeni.length > 0 && (
-                  <p className="menu-allergeni">Allergeni: {p.allergeni.join(", ")}</p>
+                  <p className="menu-allergeni">{T.allergeni}{p.allergeni.join(", ")}</p>
                 )}
               </article>
             ))}
@@ -135,15 +142,21 @@ export function MenuVista({ menu, aspetto }: { menu: MenuPubblico; aspetto: Aspe
         );
       })}
 
-      {aperto && <SchedaPiatto key={aperto.id} piatto={aperto} onChiudi={chiudi} perId={perId} storia={storia}
+      {aperto && <SchedaPiatto key={aperto.id} testi={T} piatto={perId.get(aperto.id) ?? aperto} onChiudi={chiudi} perId={perId} storia={storia}
         onApri={(p) => { setQuiz(false); setStoria((s) => [...s, aperto]); setAperto(p); }}
         onIndietro={() => { setAperto(storia[storia.length - 1] ?? null); setStoria((s) => s.slice(0, -1)); }} />}
-      {mappa && <MappaRegioni viniPerRegione={viniPerRegione} onChiudi={() => setMappa(false)} onScegli={(r) => { setRegione(r); setMappa(false); }} />}
-      {quiz && !aperto && <TrovaVino menu={menu} onApri={(p) => setAperto(p)} onChiudi={() => setQuiz(false)} />}
+      {mappa && <MappaRegioni testi={T} viniPerRegione={viniPerRegione} onChiudi={() => setMappa(false)} onScegli={(r) => { setRegione(r); setMappa(false); }} />}
+      {quiz && !aperto && <TrovaVino testi={T} menu={menu} onApri={(p) => setAperto(p)} onChiudi={() => setQuiz(false)} />}
 
       <footer className="menu-piede">
         {aspetto.testo_piede && <p>{aspetto.testo_piede}</p>}
-        <p>Per informazioni sugli allergeni rivolgersi al personale.</p>
+        {onLingua && (
+          <nav className="menu-lingue" aria-label="Lingua / Language">
+            <button lang="it" aria-pressed={lingua === "it"} className={lingua === "it" ? "attiva" : ""} onClick={() => onLingua("it")}>🇮🇹 Italiano</button>
+            <button lang="en" aria-pressed={lingua === "en"} className={lingua === "en" ? "attiva" : ""} onClick={() => onLingua("en")}>🇬🇧 English</button>
+          </nav>
+        )}
+        <p>{T.infoAllergeni}</p>
       </footer>
     </div>
   );

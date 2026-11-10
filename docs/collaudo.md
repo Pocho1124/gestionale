@@ -24,6 +24,8 @@ Prima di iniziare: `git push`, pipeline verde, poi sul server `sudo /opt/gestion
   - [ ] in fondo **🇮🇹 Italiano / 🇬🇧 English**; con English: nomi tradotti, gli altri in italiano, allergeni in inglese;
   - [ ] quiz «Find your wine», scheda di un piatto, mappa delle regioni in inglese;
   - [ ] foto e logo visibili anche nella pagina inglese.
+  - [ ] descrizioni dei piatti e note dei vini (scheda) in inglese, non solo i nomi.
+- [ ] Menu interno `http://192.168.111.183/m/enotechia-santalucia`: bandierine in fondo, stesse traduzioni.
 
 ## 3. Cliente al tavolo (telefono)
 

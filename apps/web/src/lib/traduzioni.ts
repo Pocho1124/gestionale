@@ -62,3 +62,58 @@ export const TESTI_TAVOLO = {
     stati: { da_confermare: "Waiting for confirmation", confermato: "Sent to the kitchen", in_preparazione: "Being prepared", pronto: "Ready, on its way", servito: "Served", rifiutato: "Not accepted" } as Record<string, string>,
   },
 } satisfies Record<Lingua, Record<string, unknown>>;
+
+const ETICHETTE_EN: Record<string, string> = {
+  Vegetariano: "Vegetarian", Vegano: "Vegan", Piccante: "Spicy", "Senza glutine": "Gluten free", "Novità": "New", Consigliato: "Recommended", Surgelato: "Frozen",
+};
+
+/** Menu con i testi del locale nella lingua scelta: nomi, descrizioni, note dei vini, allergeni ed etichette (dove manca resta l'italiano). */
+export function menuInLingua<M extends { categorie: { nome: string; nome_en?: string; descrizione: string; descrizione_en?: string;
+  prodotti: { nome: string; nome_en?: string; descrizione: string; descrizione_en?: string; allergeni: string[]; etichette: string[];
+    vino?: { note: string; note_en?: string } | null }[] }[] }>(menu: M, l: Lingua): M {
+  if (l !== "en") return menu;
+  return {
+    ...menu,
+    categorie: menu.categorie.map((c) => ({
+      ...c, nome: nomeIn(l, c), descrizione: descrizioneIn(l, c),
+      prodotti: c.prodotti.map((p) => ({
+        ...p, nome: nomeIn(l, p), descrizione: descrizioneIn(l, p), allergeni: allergeniIn(l, p.allergeni),
+        etichette: p.etichette.map((e) => ETICHETTE_EN[e] ?? e),
+        vino: p.vino ? { ...p.vino, note: p.vino.note_en || p.vino.note } : p.vino,
+      })),
+    })),
+  };
+}
+
+/** Testi fissi del menu (pagina, scheda del piatto, quiz «Trova il tuo vino», mappa). */
+export const TESTI_MENU = {
+  it: {
+    trova: "🍷 Trova il tuo vino", viniPerRegione: "Vini per regione", mappa: "🗺️ Scegli dalla mappa", tutte: "Tutte", altreZone: "Altre zone",
+    categorie: "Categorie", vuoto: "Il menu sarà disponibile a breve.", apriScheda: "apri la scheda", esaurito: "Esaurito", da: "da ",
+    siAbbinaCon: "🍷 Si abbina con ", o: " o ", allergeni: "Allergeni: ", infoAllergeni: "Per informazioni sugli allergeni rivolgersi al personale.",
+    chiudi: "Chiudi", torna: "← Torna a ", calice: "Calice ", bottiglia: " · Bottiglia ", idealeCon: "Ideale con", sommelier: "Il sommelier consiglia",
+    scegli: "scegli ", a: " a ", finoA: "fino a ", incluso: "incluso", domanda: (n: number) => `Domanda ${n} di 3`, qVino: "Che vino preferisci?",
+    sorprendimi: "Sorprendimi", qCorpo: "Come lo vorresti?", leggero: "Leggero e fresco", equilibrato: "Equilibrato", strutturato: "Strutturato e intenso",
+    indifferente: "Indifferente", qCibo: "Cosa mangerai?", soloVino: "Solo vino", comePreferisci: ", come preferisci", siAbbinaA: "Si abbina a ", e: " e ",
+    nessuno: (tipo: string | null) => `${tipo ? `In questo momento non abbiamo un ${tipo.toLowerCase()} disponibile in carta` : "Nessun vino disponibile in carta"}: chiedi al personale, saprà consigliarti.`,
+    ricomincia: "Ricomincia", trovaTitolo: "Trova il tuo vino", mappaTitolo: "Scegli la regione dalla mappa", scegliRegione: "Scegli una regione",
+    tocca: "Tocca una regione illuminata", vino: "vino", vini: "vini", regioniItalia: "Regioni d'Italia", fonteMappa: "Confini: ISTAT (CC BY 4.0)",
+    tipi: { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" } as Record<string, string>,
+    corpi: { leggero: "Leggero", medio: "Equilibrato", strutturato: "Strutturato" } as Record<string, string>,
+  },
+  en: {
+    trova: "🍷 Find your wine", viniPerRegione: "Wines by region", mappa: "🗺️ Choose on the map", tutte: "All", altreZone: "Other areas",
+    categorie: "Categories", vuoto: "The menu will be available soon.", apriScheda: "open details", esaurito: "Sold out", da: "from ",
+    siAbbinaCon: "🍷 Pairs with ", o: " or ", allergeni: "Allergens: ", infoAllergeni: "For allergen information, please ask our staff.",
+    chiudi: "Close", torna: "← Back to ", calice: "Glass ", bottiglia: " · Bottle ", idealeCon: "Ideal with", sommelier: "Our sommelier suggests",
+    scegli: "choose ", a: " to ", finoA: "up to ", incluso: "included", domanda: (n: number) => `Question ${n} of 3`, qVino: "Which wine do you prefer?",
+    sorprendimi: "Surprise me", qCorpo: "How would you like it?", leggero: "Light and fresh", equilibrato: "Balanced", strutturato: "Full-bodied and intense",
+    indifferente: "No preference", qCibo: "What will you eat?", soloVino: "Just wine", comePreferisci: ", as you like", siAbbinaA: "Pairs with ", e: " and ",
+    nessuno: (tipo: string | null) => `${tipo ? `Right now we have no ${tipo.toLowerCase()} wine available` : "No wine available right now"}: please ask our staff, they will be happy to help.`,
+    ricomincia: "Start again", trovaTitolo: "Find your wine", mappaTitolo: "Choose the region on the map", scegliRegione: "Choose a region",
+    tocca: "Tap a highlighted region", vino: "wine", vini: "wines", regioniItalia: "Regions of Italy", fonteMappa: "Borders: ISTAT (CC BY 4.0)",
+    tipi: { rosso: "Red", bianco: "White", rosato: "Rosé", bollicine: "Sparkling", dolce: "Dessert" } as Record<string, string>,
+    corpi: { leggero: "Light", medio: "Balanced", strutturato: "Full-bodied" } as Record<string, string>,
+  },
+} satisfies Record<Lingua, Record<string, unknown>>;
+export type TestiMenu = (typeof TESTI_MENU)["it"];

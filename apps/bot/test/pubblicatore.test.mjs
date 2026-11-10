@@ -155,11 +155,18 @@ describe("pagina statica", () => {
     m.categorie[0].nome_en = "Pinsas";
     m.categorie[0].prodotti[0].nome_en = "Genoese pinsa";
     m.categorie[0].prodotti[0].allergeni = ["Glutine", "Latte"];
+    m.categorie[0].prodotti[0].descrizione = "Basilico e pinoli";
+    m.categorie[0].prodotti[0].descrizione_en = "Basil and pine nuts";
+    const vino = m.categorie.flatMap((c) => c.prodotti).find((p) => p.vino);
+    vino.vino.note = "Affinato in botte"; vino.vino.note_en = "Aged in barrel";
     const html = pub.pagina(m, "ora", "logo.abc.webp", null, { [m.categorie[0].prodotti[0].id]: "foto/x.jpg" }, "v1", "en");
     assert.match(html, /<html lang="en">/);
     assert.match(html, /<h2>Pinsas<\/h2>/);
     assert.match(html, /Genoese pinsa/);
     assert.match(html, /Allergens: Gluten, Milk/);
+    assert.match(html, /<p class="desc">Basil and pine nuts<\/p>/);   // descrizione tradotta nella pagina
+    assert.match(html, /"note":"Aged in barrel"/);                       // note del vino tradotte nella scheda
+    assert.doesNotMatch(html, /Basilico e pinoli|Affinato in botte/);
     assert.match(html, new RegExp(m.categorie[0].prodotti[1].nome));   // senza traduzione resta il nome italiano
     assert.match(html, /src="\.\.\/logo\.abc\.webp"/);
     assert.match(html, /\.\.\/foto\/x\.jpg/);   // foto del piatto nella cartella superiore

@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { sb } from "../lib/supabase";
 import type { Aspetto, MenuPubblico as Menu } from "../lib/tipi";
 import { MenuVista } from "../componenti/MenuVista";
+import { useLingua } from "../lib/lingua";
 
 export const ASPETTO_PREDEFINITO: Aspetto = {
   colore_primario: "#1F4FA8", colore_accento: "#F2C230", colore_sfondo: "#F2F5F8", colore_testo: "#13233A",
@@ -16,6 +17,7 @@ export function MenuPubblico() {
   const { slug = "" } = useParams();
   const [menu, setMenu] = useState<Menu | null>(null);
   const [stato, setStato] = useState<"carico" | "ok" | "assente" | "errore">("carico");
+  const [lingua, setLingua] = useLingua();
 
   useEffect(() => {
     let attivo = true;
@@ -37,5 +39,5 @@ export function MenuPubblico() {
   if (stato === "carico") return <p className="centrato muto">Caricamento del menu…</p>;
   if (stato === "assente") return <p className="centrato muto">Questo menu non esiste o non è più pubblicato.</p>;
   if (stato === "errore" || !menu) return <p className="centrato muto">Menu momentaneamente non raggiungibile. Riprova tra poco.</p>;
-  return <MenuVista menu={menu} aspetto={menu.aspetto ?? ASPETTO_PREDEFINITO} />;
+  return <MenuVista menu={menu} aspetto={menu.aspetto ?? ASPETTO_PREDEFINITO} lingua={lingua} onLingua={setLingua} />;
 }

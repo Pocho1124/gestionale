@@ -109,6 +109,7 @@ export function menuInLingua(menu, lingua) {
       ...c, nome: c.nome_en || c.nome, descrizione: c.descrizione_en || c.descrizione,
       prodotti: c.prodotti.map((p) => ({
         ...p, nome: p.nome_en || p.nome, descrizione: p.descrizione_en || p.descrizione,
+        vino: p.vino ? { ...p.vino, note: p.vino.note_en || p.vino.note } : p.vino,
         allergeni: (p.allergeni || []).map((x) => t.allergeniNomi[x] ?? x),
         etichette: (p.etichette || []).map((x) => t.etichetteNomi[x] ?? x),
       })),

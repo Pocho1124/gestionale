@@ -1,13 +1,20 @@
 // Traduzione automatica del menu in inglese con l'IA locale del server (nessun servizio esterno).
-// Traduce nome e descrizione di categorie e piatti quando il testo italiano cambia; le traduzioni scritte a mano
-// («manuale») non si toccano. I nomi dei vini restano quelli originali (sono nomi propri): si traduce la descrizione.
-// Regole del progetto: il modello non inventa dati. Una traduzione che cambia i numeri del testo, aggiunge HTML
-// o è troppo lunga si scarta; prezzi e schede dei vini non passano mai dal modello.
+// Traduce nome e descrizione di categorie e piatti e le note delle schede dei vini quando il testo italiano cambia.
+// Ogni campo vale da solo: una descrizione buona si salva anche se il nome non supera il controllo.
+// Traduzioni scritte a mano («manuale»): non si toccano mai; si completano solo i campi inglesi rimasti vuoti.
+// I nomi dei vini restano quelli originali (sono nomi propri).
+// Regole del progetto: il modello non inventa dati. Un campo che cambia i numeri del testo, contiene HTML o è troppo
+// lungo si scarta (resta l'italiano); prezzi e dati delle schede dei vini non passano mai dal modello.
 import { createHash } from "node:crypto";
 
-/** Impronta del testo italiano da cui nasce la traduzione: cambia se cambiano nome o descrizione. */
-export const impronta = (nome, descrizione) => createHash("sha256").update(`${nome}\u0000${descrizione}`).digest("hex").slice(0, 16);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SCARTATA = ":scartata";
+/** Tentativi già fatti in questo avvio (tabella:id:impronta): niente richieste ripetute al modello ogni minuto. */
+const tentati = new Set();
+export const dimenticaTentativi = () => tentati.clear();
+
+/** Impronta dei testi italiani da cui nasce la traduzione: cambia se cambia uno qualsiasi dei testi. */
+export const impronta = (...testi) => createHash("sha256").update(testi.map((t) => t ?? "").join("\u0000")).digest("hex").slice(0, 16);
 
 const numeri = (t) => (String(t ?? "").match(/\d+(?:[.,]\d+)?/g) ?? []).map((n) => n.replace(",", ".")).sort();
 
@@ -20,52 +27,79 @@ export function traduzioneValida(originale, tradotto, massimo) {
 }
 
 const SISTEMA = [
-  "Traduci in inglese, per il menu di un'enoteca italiana, il nome e la descrizione che ricevi.",
+  "Traduci in inglese, per il menu di un'enoteca italiana, ogni campo che ricevi e restituisci gli stessi campi tradotti.",
   "Regole:",
   "- lascia invariati i nomi propri: vini, denominazioni (DOC, DOCG, IGT), vitigni, cantine, località;",
-  "- lascia in italiano i prodotti tipici che non hanno traduzione (es. pinsa, burrata, 'nduja, speck, bruschetta, tagliere se è il nome del piatto);",
+  "- lascia in italiano i prodotti tipici che non hanno traduzione (es. pinsa, burrata, 'nduja, speck, bruschetta);",
   "- non aggiungere e non togliere informazioni, ingredienti o numeri; nessun prezzo;",
-  "- testo breve e naturale, iniziale maiuscola; se la descrizione è vuota restituisci una stringa vuota.",
+  "- testo naturale, iniziale maiuscola; traduci tutto il testo, anche le descrizioni lunghe.",
 ].join("\n");
-const SCHEMA = { type: "object", properties: { nome: { type: "string" }, descrizione: { type: "string" } }, required: ["nome", "descrizione"] };
+
+/** Tabelle e campi da tradurre: nome del campo italiano, colonna inglese, lunghezza massima. */
+const TABELLE = [
+  { tabella: "categorie", chiave: "id", tipo: "categoria", campi: [["nome", "nome_en", 80], ["descrizione", "descrizione_en", 500]],
+    lettura: "categorie?select=id,nome,descrizione,nome_en,descrizione_en,traduzione_da" },
+  { tabella: "prodotti", chiave: "id", tipo: "piatto", campi: [["nome", "nome_en", 120], ["descrizione", "descrizione_en", 1000]],
+    lettura: "prodotti?select=id,nome,descrizione,nome_en,descrizione_en,traduzione_da,vini(prodotto_id)" },
+  { tabella: "vini", chiave: "prodotto_id", tipo: "note del vino", campi: [["note", "note_en", 600]],
+    lettura: "vini?select=prodotto_id,note,note_en,traduzione_da" },
+];
 
 /**
  * Traduce al massimo «limite» voci da aggiornare del locale e le salva.
  * Dipendenze passate dall'esterno (database e modello), così si prova senza rete. Restituisce quante voci ha salvato.
  */
 export async function traduciMenu({ db, chiediModello, locale, log = () => {}, limite = 15 }) {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(locale))) throw new Error("Locale non valido");
-  const [categorie, prodotti] = await Promise.all([
-    db(`categorie?select=id,nome,descrizione,nome_en,descrizione_en,traduzione_da&locale_id=eq.${locale}`),
-    db(`prodotti?select=id,nome,descrizione,nome_en,descrizione_en,traduzione_da,vini(prodotto_id)&locale_id=eq.${locale}`),
-  ]);
-  const voci = [
-    ...categorie.map((x) => ({ ...x, tabella: "categorie", vino: false, massimoNome: 80, massimoDesc: 500 })),
-    ...prodotti.map((x) => ({ ...x, tabella: "prodotti", vino: !!(Array.isArray(x.vini) ? x.vini.length : x.vini), massimoNome: 120, massimoDesc: 1000 })),
-  ].filter((x) => {
-    const da = x.traduzione_da ?? "";
-    const im = impronta(x.nome, x.descrizione ?? "");
-    return da !== "manuale" && da !== im && da !== im + SCARTATA;
-  }).slice(0, limite);
+  if (!UUID.test(String(locale))) throw new Error("Locale non valido");
+  const righe = await Promise.all(TABELLE.map((t) => db(`${t.lettura}&locale_id=eq.${locale}`)));
+  const voci = [];
+  TABELLE.forEach((t, i) => {
+    for (const x of righe[i]) {
+      const vino = t.tabella === "prodotti" && !!(Array.isArray(x.vini) ? x.vini.length : x.vini);
+      const campi = t.campi.filter(([it]) => !(vino && it === "nome"));   // il nome del vino resta l'originale
+      const im = impronta(...t.campi.map(([it]) => x[it]));
+      const da = x.traduzione_da ?? "";
+      const manuale = da === "manuale";
+      // A mano: solo i campi inglesi vuoti. Altrimenti tutto se l'italiano è cambiato; una traduzione scartata si
+      // ritenta una volta per avvio del bot (il registro dei tentativi evita richieste ripetute ogni minuto)
+      const daFare = manuale ? campi.filter(([it, en]) => String(x[it] ?? "").trim() && !String(x[en] ?? "").trim())
+        : da === im ? [] : campi;
+      const chiave = `${t.tabella}:${x[t.chiave]}:${im}:${daFare.map(([it]) => it).join(",")}`;
+      if (daFare.length && !tentati.has(chiave) && UUID.test(String(x[t.chiave]))) voci.push({ t, x, campi: daFare, im, manuale, chiave });
+    }
+  });
 
   let salvate = 0;
-  for (const x of voci) {
-    const im = impronta(x.nome, x.descrizione ?? "");
-    let r;
-    try {
-      r = await chiediModello({ sistema: SISTEMA, utente: JSON.stringify({ tipo: x.tabella === "categorie" ? "categoria" : x.vino ? "vino" : "piatto", nome: x.nome, descrizione: x.descrizione ?? "" }), schema: SCHEMA });
-    } catch (e) {
-      log(`Traduzione non disponibile: ${e.message}`);
-      return salvate;   // modello spento o occupato: si riprova al giro successivo
+  for (const v of voci.slice(0, limite)) {
+    const { t, x, campi, im, manuale } = v;
+    const daTradurre = campi.filter(([it]) => String(x[it] ?? "").trim());
+    let risposta = {};
+    if (daTradurre.length) {
+      try {
+        risposta = await chiediModello({
+          sistema: SISTEMA,
+          utente: JSON.stringify({ tipo: t.tipo, ...Object.fromEntries(daTradurre.map(([it]) => [it, x[it]])) }),
+          schema: { type: "object", properties: Object.fromEntries(daTradurre.map(([it]) => [it, { type: "string" }])), required: daTradurre.map(([it]) => it) },
+        }) ?? {};
+      } catch (e) {
+        log(`Traduzione non disponibile: ${e.message}`);
+        return salvate;   // modello spento o occupato: si riprova al giro successivo
+      }
     }
-    const nome = x.vino ? "" : String(r?.nome ?? "").trim();   // il nome del vino resta l'originale
-    const descrizione = String(r?.descrizione ?? "").trim();
-    const buona = (x.vino || traduzioneValida(x.nome, nome, x.massimoNome)) && traduzioneValida(x.descrizione ?? "", descrizione, x.massimoDesc);
-    // Una traduzione scartata non si ritenta finché l'italiano non cambia (niente giri a vuoto)
-    const corpo = buona ? { nome_en: nome, descrizione_en: descrizione, traduzione_da: im } : { traduzione_da: im + SCARTATA };
-    await db(`${x.tabella}?id=eq.${x.id}&traduzione_da=neq.manuale`, { metodo: "PATCH", corpo });
-    if (buona) salvate++;
-    else log(`Traduzione scartata per «${x.nome}»: numeri o lunghezza non corrispondono`);
+    tentati.add(v.chiave);
+    const corpo = {};
+    let buoni = 0, scartati = 0;
+    for (const [it, en, massimo] of campi) {
+      const originale = String(x[it] ?? "").trim();
+      if (!originale) { if (!manuale) corpo[en] = ""; continue; }
+      const tradotto = String(risposta[it] ?? "").trim();
+      if (traduzioneValida(originale, tradotto, massimo)) { corpo[en] = tradotto; buoni++; }
+      else { scartati++; if (!manuale) corpo[en] = ""; log(`Traduzione scartata (${t.tabella}.${it} «${originale.slice(0, 40)}»): numeri o lunghezza non corrispondono`); }
+    }
+    if (!manuale) corpo.traduzione_da = buoni || !scartati ? im : im + SCARTATA;
+    if (!Object.keys(corpo).length) continue;
+    await db(`${t.tabella}?${t.chiave}=eq.${x[t.chiave]}${manuale ? "" : "&traduzione_da=neq.manuale"}`, { metodo: "PATCH", corpo });
+    if (buoni) salvate++;
   }
   return salvate;
 }
