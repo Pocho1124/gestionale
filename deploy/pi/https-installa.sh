@@ -1,17 +1,107 @@
 #!/bin/sh
-# HTTPS nella rete del locale per il backoffice (certificati dell'autorità interna di Caddy).
-# Le pagine dei clienti (/t/ tavolo, /m/ menu interno) restano raggiungibili anche in HTTP: i telefoni dei clienti
-# non hanno il certificato del locale. Tutto il resto in HTTP viene reindirizzato su HTTPS.
+# HTTPS nella rete del locale per il backoffice.
+#  - Con --dominio (consigliato): certificato Let's Encrypt valido su tutti i dispositivi, ottenuto con la verifica DNS
+#    di Cloudflare (il server NON deve essere raggiungibile da internet); record DNS creato in automatico verso
+#    l'indirizzo locale; rinnovo automatico ogni notte.
+#  - Senza dominio: certificato dell'autorità interna di Caddy, da installare a mano su ogni dispositivo.
+# Le pagine dei clienti (/t/ tavolo, /m/ menu interno) restano raggiungibili anche in HTTP.
+# Tutto il resto in HTTP viene reindirizzato su HTTPS.
 # Uso:
-#   sudo docker run --rm --entrypoint cat ghcr.io/pocho1124/gestionale-migrator:latest /deploy/https-installa.sh > /tmp/https-installa.sh && sudo sh /tmp/https-installa.sh
+#   sudo docker run --rm --entrypoint cat ghcr.io/pocho1124/gestionale-migrator:latest /deploy/https-installa.sh > /tmp/https-installa.sh && sudo sh /tmp/https-installa.sh --dominio gestionale.enotechiasantalucia.it
 set -eu
 [ "$(id -u)" -eq 0 ] || { echo "Esegui con sudo"; exit 1; }
 
 CADDY=/opt/supabase/Caddyfile
 OVR=/opt/supabase/docker-compose.override.yml
-IP=${1:-$(hostname -I | awk '{print $1}')}
+IP=$(hostname -I | awk '{print $1}')
+DOMINIO=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dominio) DOMINIO=${2:-}; shift 2 ;;
+    *) IP=$1; shift ;;
+  esac
+done
 echo "$IP" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || { echo "Indirizzo IP non valido: $IP"; exit 1; }
+if [ -n "$DOMINIO" ]; then
+  echo "$DOMINIO" | grep -Eq '^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$' || { echo "Dominio non valido: $DOMINIO"; exit 1; }
+fi
+LEGO_IMMAGINE=goacme/lego:v4.29.0
+CERT=/opt/gestionale/certificati
+ENVH=/opt/gestionale/https.env
 grep -q '# BACKOFFICE' "$CADDY" || { echo "Blocco del backoffice non trovato in $CADDY: esegui prima l'installer del gestionale"; exit 1; }
+
+# ---------- Certificato Let's Encrypt (solo con --dominio) ----------
+if [ -n "$DOMINIO" ]; then
+  ZONA=$(echo "$DOMINIO" | awk -F. '{print $(NF-1)"."$NF}')
+  umask 077
+  if [ ! -s "$ENVH" ] || ! grep -q "^DOMINIO=$DOMINIO\$" "$ENVH"; then
+    echo "== Token Cloudflare per la verifica DNS"
+    echo "   Crealo su dash.cloudflare.com → Il mio profilo → Token API → Crea token → «Modifica DNS zona», con i permessi"
+    echo "   Zona → Zona → Lettura e Zona → DNS → Modifica, solo per la zona $ZONA. Resta solo su questo server."
+    printf "Token: "; stty -echo 2>/dev/null || true; read -r TOKEN; stty echo 2>/dev/null || true; echo
+    echo "$TOKEN" | grep -Eq '^[A-Za-z0-9_-]{30,}$' || { echo "Token non valido"; exit 1; }
+    printf "Email per gli avvisi di scadenza di Let's Encrypt: "; read -r EMAIL
+    echo "$EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' || { echo "Email non valida"; exit 1; }
+    printf 'CLOUDFLARE_DNS_API_TOKEN=%s\nLEGO_EMAIL=%s\nDOMINIO=%s\n' "$TOKEN" "$EMAIL" "$DOMINIO" > "$ENVH"
+    chmod 600 "$ENVH"
+  fi
+  . "$ENVH"
+  # Il token arriva a curl da stdin (non compare nella lista dei processi)
+  cf() { printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_DNS_API_TOKEN" | curl -sS --max-time 30 -K - "$@"; }
+  API=https://api.cloudflare.com/client/v4
+
+  echo "== Record DNS $DOMINIO → $IP (solo DNS, non passa da Cloudflare)"
+  ZID=$(cf "$API/zones?name=$ZONA" | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)
+  [ -n "$ZID" ] || { echo "Zona $ZONA non trovata: controlla i permessi del token (Zona → Lettura)"; exit 1; }
+  RID=$(cf "$API/zones/$ZID/dns_records?type=A&name=$DOMINIO" | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)
+  CORPO=$(printf '{"type":"A","name":"%s","content":"%s","ttl":300,"proxied":false,"comment":"Gestionale: solo rete del locale"}' "$DOMINIO" "$IP")
+  if [ -n "$RID" ]; then ESITO=$(cf -X PUT "$API/zones/$ZID/dns_records/$RID" -H "Content-Type: application/json" --data "$CORPO")
+  else ESITO=$(cf -X POST "$API/zones/$ZID/dns_records" -H "Content-Type: application/json" --data "$CORPO"); fi
+  echo "$ESITO" | grep -q '"success":true' || { echo "Record DNS non salvato: controlla i permessi del token (DNS → Modifica)"; exit 1; }
+
+  echo "== Certificato Let's Encrypt (verifica DNS, può richiedere un paio di minuti)"
+  mkdir -p "$CERT"
+  if [ -s "$CERT/certificates/$DOMINIO.crt" ]; then AZIONE="renew --days 30"; else AZIONE="run"; fi
+  # shellcheck disable=SC2086
+  docker run --rm --env-file "$ENVH" -v "$CERT:/lego" "$LEGO_IMMAGINE" --accept-tos --email "$LEGO_EMAIL" --dns cloudflare \
+    --dns.resolvers 1.1.1.1:53 --domains "$DOMINIO" --path /lego $AZIONE \
+    || { echo "Certificato non ottenuto: controlla token e dominio, poi rilancia"; exit 1; }
+  [ -s "$CERT/certificates/$DOMINIO.crt" ] || { echo "Certificato non trovato dopo la richiesta"; exit 1; }
+
+  echo "== Rinnovo automatico ogni notte"
+  cat > /opt/gestionale/rinnova-certificato.sh <<RINNOVO
+#!/bin/sh
+# Rinnova il certificato Let's Encrypt quando mancano meno di 30 giorni; se cambia, riavvia il gateway.
+set -eu
+. $ENVH
+PRIMA=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
+docker run --rm --env-file $ENVH -v "$CERT:/lego" $LEGO_IMMAGINE --accept-tos --email "\$LEGO_EMAIL" --dns cloudflare \\
+  --dns.resolvers 1.1.1.1:53 --domains "\$DOMINIO" --path /lego renew --days 30
+DOPO=\$(sha256sum "$CERT/certificates/\$DOMINIO.crt" | cut -d' ' -f1)
+if [ "\$PRIMA" != "\$DOPO" ]; then (cd /opt/supabase && docker compose restart gateway >/dev/null); echo "Certificato rinnovato"; fi
+RINNOVO
+  chmod 700 /opt/gestionale/rinnova-certificato.sh
+  cat > /etc/systemd/system/gestionale-certificato.service <<UNIT
+[Unit]
+Description=Rinnovo del certificato HTTPS del gestionale
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/opt/gestionale/rinnova-certificato.sh
+UNIT
+  cat > /etc/systemd/system/gestionale-certificato.timer <<UNIT
+[Unit]
+Description=Rinnovo notturno del certificato HTTPS del gestionale
+[Timer]
+OnCalendar=*-*-* 04:15
+RandomizedDelaySec=30m
+Persistent=true
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now gestionale-certificato.timer >/dev/null
+fi
 
 echo "== 1/5 Copia di sicurezza della configurazione"
 STAMP=$(date +%Y%m%d-%H%M%S)
@@ -28,6 +118,8 @@ mkdir -p /opt/gestionale/caddy-dati
 GW=$(cd /opt/supabase && docker compose ps -q gateway)
 DATI=""
 docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' "$GW" | tr ' ' '\n' | grep -qx /data || DATI="      - /opt/gestionale/caddy-dati:/data"
+[ -z "$DOMINIO" ] || DATI="$DATI
+      - $CERT/certificates:/certificati:ro"
 cat > "$OVR" <<YML
 # Gestito da installa-pi.sh e https-installa.sh: backoffice sulle porte 80 e 443
 services:
@@ -90,8 +182,7 @@ cat >> "$CADDY" <<CADDYCONF
 	}
 }
 
-https://$IP {
-	tls internal
+(backoffice) {
 	header {
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
@@ -103,6 +194,12 @@ https://$IP {
 		import sito_gestionale
 	}
 }
+
+https://$IP {
+	tls internal
+	import backoffice
+}
+$(if [ -n "$DOMINIO" ]; then printf '\nhttps://%s {\n\ttls /certificati/%s.crt /certificati/%s.key\n\timport backoffice\n}\n' "$DOMINIO" "$DOMINIO" "$DOMINIO"; fi)
 
 :80 {
 	route {
@@ -144,6 +241,11 @@ if [ "$(docker inspect -f '{{.State.Running}}' "$GW" 2>/dev/null)" != "true" ] |
 fi
 CODICE=$(curl -sk -o /dev/null -w '%{http_code}' "https://$IP/" || true)
 [ "$CODICE" = "200" ] || { echo "Il backoffice in HTTPS non risponde (HTTP $CODICE)"; ripristina; exit 1; }
+if [ -n "$DOMINIO" ]; then
+  # Senza -k: il certificato deve risultare valido
+  CODICE=$(curl -s --resolve "$DOMINIO:443:$IP" -o /dev/null -w '%{http_code}' "https://$DOMINIO/" || true)
+  [ "$CODICE" = "200" ] || { echo "https://$DOMINIO non risponde con un certificato valido (HTTP $CODICE)"; ripristina; exit 1; }
+fi
 REDIR=$(curl -s -o /dev/null -w '%{http_code}' "http://$IP/" || true)
 
 echo "== 5/5 Certificato dell'autorità del locale"
@@ -152,6 +254,12 @@ chmod 644 /opt/gestionale/sito/conf/certificato-locale.crt
 IMPRONTA=$(openssl x509 -in /opt/gestionale/sito/conf/certificato-locale.crt -noout -fingerprint -sha256 | cut -d= -f2)
 
 echo
+if [ -n "$DOMINIO" ]; then
+  echo "HTTPS attivo con certificato valido: https://$DOMINIO  (rinnovo automatico ogni notte)"
+  echo "Sui dispositivi dello staff apri quell'indirizzo: non serve installare nessun certificato."
+  echo "Se il nome non si apre in negozio, il router blocca i nomi che puntano alla rete locale (protezione «DNS rebinding»):"
+  echo "aggiungi un'eccezione per $DOMINIO nelle impostazioni DNS del router."
+fi
 echo "HTTPS attivo: https://$IP  (HTTP del backoffice -> HTTPS: risposta $REDIR)"
 echo "Certificato da installare sui dispositivi dello staff: http://$IP/certificato-locale.crt"
 echo "Impronta SHA-256 da confrontare sul dispositivo: $IMPRONTA"

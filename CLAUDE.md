@@ -32,7 +32,7 @@ Indicare sempre file per file, cartella per cartella, cosa sostituire.
 |-|-|
 |Server|Lenovo i7, 16 GB RAM, Ubuntu Server 24.04, IP fisso `192.168.111.183`, utente SSH `gestionale`|
 |Database|Supabase self-hosted (PostgreSQL 17) in Docker, `/opt/supabase` (gateway Kong porta 8000)|
-|Gateway web|Caddy porta 80 (backoffice), 443 preparato (`https-installa.sh`, non ancora attivo)|
+|Gateway web|Caddy porta 80 (backoffice), 443 con `https-installa.sh --dominio gestionale.enotechiasantalucia.it` (Let's Encrypt via DNS Cloudflare; da lanciare)|
 |Pannello|Cockpit `https://192.168.111.183:9090`|
 |IA locale|Ollama `qwen2.5:3b` (container `ollama`, `http://ollama:11434`); llama.cpp pronto ma in standby|
 |Trascrizione vocali|Whisper `small` (servizio `apps/bot/trascrizione`, porta 9000)|
@@ -51,6 +51,8 @@ Indicare sempre file per file, cartella per cartella, cosa sostituire.
 |`/opt/gestionale/pubblicatore.env`|`SLUGS`, `CLOUDFLARE\_ACCOUNT\_ID`, `CLOUDFLARE\_KV\_ID`, `CLOUDFLARE\_D1\_ID`, `CLOUDFLARE\_TOKEN` (solo KV+D1), `MENU\_URL`|
 |`/opt/gestionale/stampa.env`|token JWT del ruolo `servizio\_stampa`|
 |`/opt/gestionale/immagini.env`|credenziali Storage|
+|`/opt/gestionale/https.env`|token Cloudflare solo DNS della zona (verifica Let's Encrypt), email degli avvisi, dominio|
+|`/opt/gestionale/certificati/`|account e certificati Let's Encrypt (rinnovo: `rinnova-certificato.sh`, timer `gestionale-certificato` alle 04:15)|
 |`/opt/gestionale/bot/`|copia di `apps/bot` (aggiornata da `aggiorna.sh`)|
 |`/opt/gestionale/sito/`|backoffice compilato|
 
@@ -73,7 +75,7 @@ migrazioni + test pgTAP su `supabase/postgres`, poi immagine `ghcr.io/pocho1124/
 |`pubblicatore-installa.sh`|menu su Cloudflare: crea KV, D1, carica il Worker, collega `menu.<dominio>`, scrive l'env (chiede token CONFIGURAZIONE temporaneo + token PUBBLICAZIONE)|
 |`stampa-installa.sh`|servizio stampanti ESC/POS|
 |`archivio-installa.sh`|Supabase Storage per le immagini|
-|`https-installa.sh`|HTTPS interno (da attivare)|
+|`https-installa.sh`|HTTPS: con `--dominio <nome>` certificato Let's Encrypt (verifica DNS su Cloudflare, record A verso l'IP locale creato in automatico, rinnovo notturno); senza, autorità interna di Caddy|
 |`enciclopedia-importa.sh` + `.py`|importa X-Wines (CSV) nell'enciclopedia: `sudo bash /tmp/enciclopedia-importa.sh /tmp/XWines\_Full\_100K\_wines.csv`|
 |`llm-installa.sh`, `llm-confronto.sh`|llama.cpp affiancato a Ollama e confronto prestazioni (in standby)|
 
@@ -194,7 +196,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 67 test superati. Usano `BOT\_T
 
 ## Da fare
 
-1. HTTPS: `gestionale.enotechiasantalucia.it` con certificato Let's Encrypt via DNS Cloudflare (DNS-01), solo rete locale.
+1. HTTPS: installer pronto (`https-installa.sh --dominio gestionale.enotechiasantalucia.it`): da lanciare sul server con un token Cloudflare «Zona → Lettura, DNS → Modifica» della sola zona.
 2. Ponte ordini `ordini.enotechiasantalucia.it` su Cloudflare (ordini dal telefono solo con HTTPS; nel frattempo solo comande dal tablet).
 3. QR stampabili con il nuovo dominio (non ancora stampato nulla).
 4. Verifiche sul posto: accesso di un utente creato dal pannello, stampa di prova su stampante reale.
