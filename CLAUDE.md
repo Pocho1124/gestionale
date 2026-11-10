@@ -206,7 +206,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 79 test superati. Usano `BOT\_T
 1. HTTPS: certificato Let's Encrypt ottenuto e rinnovo notturno attivo (10/11/2026); gateway riportato in HTTP perché la rete aziendale provvisoria blocca il nome (DNS rebinding). In loco: `https-installa.sh --dominio gestionale.enotechiasantalucia.it` (versione con riserva HTTP per IP) e prova da tablet. `https://<IP>` non funziona (Caddy nel container non vede l'IP): usare il nome.
 2. Ponte ordini `ordini.enotechiasantalucia.it` su Cloudflare (ordini dal telefono solo con HTTPS; nel frattempo solo comande dal tablet).
 3. QR stampabili con il nuovo dominio (non ancora stampato nulla).
-4. Verifiche sul posto: accesso di un utente creato dal pannello, stampa di prova su stampante reale.
+4. Verifiche sul posto: seguire `docs/collaudo.md` (scaletta completa, compresi stampa reale, accessi, menu in inglese).
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
 6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; testi in inglese anche nella composizione dei piatti (Componi) e nel menu interno /m/.
 8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.

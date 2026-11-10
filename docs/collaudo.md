@@ -1,0 +1,71 @@
+# Collaudo del gestionale
+
+Prova completa in loco, in quest'ordine: ogni blocco usa quello che ha preparato il precedente.
+Servono un tablet (o PC) per lo staff, un telefono che faccia da cliente e, per la stampa, la stampante collegata.
+Usa solo dati di prova (nomi come «Cliente Prova», nessun dato reale di clienti).
+
+Prima di iniziare: `git push`, pipeline verde, poi sul server `sudo /opt/gestionale/aggiorna.sh --forza`.
+
+## 1. Impostazioni (titolare)
+
+- [ ] Impostazioni → Ordini dal tavolo: **coperto** a persona (es. 2,50 €) e **sconto massimo del caposala** (es. 20 %).
+- [ ] Attiva «Chiedi il nome del cliente» (facoltativo).
+- [ ] Pagamenti con il POS: aggiungi un terminale (es. «POS cassa»).
+- [ ] Reparti e stampanti: «Stampa di prova» sulla stampante reale (accenti ed € leggibili).
+
+## 2. Catalogo e menu
+
+- [ ] Catalogo → **＋ Aggiunte**: crea 2 aggiunte con prezzo (es. Burrata 3 €), una senza categorie (vale per tutto).
+- [ ] Su 2-3 piatti apri «🇬🇧 In inglese» e scrivi nome e descrizione; dai il nome inglese a una categoria.
+- [ ] Menu pubblico `https://menu.enotechiasantalucia.it/enotechia-santalucia/` (dopo pochi secondi):
+  - [ ] in fondo **🇮🇹 Italiano / 🇬🇧 English**; con English: nomi tradotti, gli altri in italiano, allergeni in inglese;
+  - [ ] quiz «Find your wine», scheda di un piatto, mappa delle regioni in inglese;
+  - [ ] foto e logo visibili anche nella pagina inglese.
+
+## 3. Cliente al tavolo (telefono)
+
+- [ ] Sala → Cartoncini QR: inquadra il QR di un tavolo libero.
+- [ ] La pagina si apre nella lingua del telefono; prova le bandierine in fondo e il tasto in alto.
+- [ ] Aggiungi un piatto con **＋ Aggiunte**, scrivi il nome, invia: in Sala arriva la richiesta (🔔 con il nome).
+- [ ] Dal tablet «Apri tavolo e conferma»: sul telefono compare il codice del tavolo.
+- [ ] Secondo ordine dal telefono: va diretto in cucina.
+- [ ] Codice sbagliato 10 volte da un altro telefono: si blocca; nel pannello del tavolo compare **Sblocca codice**.
+
+## 4. Sala (tablet)
+
+- [ ] Piantina: tavolo aperto con alone colorato, tempo e conto; coperti con − e + (il coperto entra nel conto).
+- [ ] **+ Aggiungi all'ordine**: categorie, ricerca, «📝 Nota» con costo «+ €» (es. doppia mozzarella + 2 €), invio.
+- [ ] **↔ Sposta** il tavolo su uno libero; **⊕ Unisci** due tavoli aperti (il secondo si libera, coperti sommati).
+- [ ] **Prenotazioni**: nuova per stasera su un tavolo; sulla piantina compare «📅 ora»; «Arrivati» apre il tavolo.
+  Prova una seconda prenotazione nello stesso orario sullo stesso tavolo: deve essere rifiutata.
+- [ ] Piantina (modifica): muro allungato da un capo solo, oggetti nuovi (botte, bottigliera, divano…).
+- [ ] ⛶ Modalità monitor sul monitor di sala.
+
+## 5. Cucina
+
+- [ ] Voce **Cucina** su un altro dispositivo: le comande compaiono da sole con il suono; filtro per reparto.
+- [ ] «Inizia» → «Pronto»: in Sala il cruscotto mostra «Pronti da servire»; «Servito».
+- [ ] La comanda esce sulla stampante del reparto, con aggiunte, supplemento e note.
+
+## 6. Conto
+
+- [ ] Pannello del tavolo: **Stampa preconto** (coperto e sconto nel preconto) → compare **Chiudi tavolo**.
+- [ ] Sconto: da **caposala** oltre il tetto (es. 30 %) → rifiutato con il messaggio; entro il tetto → accettato.
+- [ ] **Alla romana** diviso 3, **Per piatti** (pinsa e calice di una persona), **Importo o %**.
+- [ ] Contanti con resto, **POS** in attesa → ✓ Approvato (o ✗ Rifiutato: i piatti tornano da pagare).
+- [ ] «Chiudi tavolo» solo con il conto saldato al centesimo.
+
+## 7. Cassa, report e fatture (titolare)
+
+- [ ] Cassa: resoconto per metodo di pagamento e sconti; **Report incassi** (oggi, 7 giorni: barre e confronto).
+- [ ] Fatture: dati fiscali del locale, fattura da un conto chiuso (con riga Coperto), copia di cortesia e **XML**.
+  Prova la prima fattura sul portale «Fatture e Corrispettivi» prima di usarla con un cliente vero.
+- [ ] Magazzino: un articolo sotto la scorta minima → numero arancione sulla voce «Magazzino».
+
+## 8. Accessi e sicurezza
+
+- [ ] Accesso con un utente creato dal pannello (cameriere): non vede Cassa, Fatture, Impostazioni.
+- [ ] Il cameriere non cambia il prezzo del coperto né chiude il tavolo.
+- [ ] HTTPS in loco: `https://gestionale.enotechiasantalucia.it` con il lucchetto (vedi CLAUDE.md, Da fare n. 1).
+
+Annota qui sotto ciò che non va (pagina, cosa hai fatto, cosa è successo) e mandalo con uno screenshot.
