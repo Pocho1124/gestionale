@@ -702,11 +702,11 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .input-inglese { max-width: 200px; font-size: .85rem; }
 .traduzione summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
 .traduzione { display: grid; gap: 8px; }
-.ordina-lingue { display: flex; justify-content: center; gap: 10px; margin: 24px 0 90px; }
-.ordina-lingue button { border: 1px solid var(--m-primario); color: var(--m-primario); background: transparent; border-radius: 999px; padding: 6px 14px; font: 700 .9rem var(--m-font-testo); cursor: pointer; }
+.ordina-lingue { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 12px 0 4px; }
+.ordina-lingue button { border: 1px solid var(--m-primario); color: var(--m-primario); background: color-mix(in srgb, var(--m-sfondo) 70%, transparent); border-radius: 999px; padding: 5px 12px; font: 700 .82rem var(--m-font-testo); cursor: pointer; }
 .ordina-lingue button.attiva { background: var(--m-primario); color: var(--m-sfondo); }
-.menu-lingue { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 0 0 12px; }
-.menu-lingue button { border: 1px solid var(--m-primario); color: var(--m-primario); background: transparent; border-radius: 999px; padding: 6px 14px; font: 700 .9rem var(--m-font-testo); cursor: pointer; }
+.menu-lingue { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0 0; }
+.menu-lingue button { border: 1px solid var(--m-primario); color: var(--m-primario); background: color-mix(in srgb, var(--m-sfondo) 70%, transparent); border-radius: 999px; padding: 5px 12px; font: 700 .82rem var(--m-font-testo); cursor: pointer; }
 .menu-lingue button.attiva { background: var(--m-primario); color: var(--m-sfondo); }
 
 /* Leggibilità: ogni categoria in un riquadro velato (testi pieni anche sopra la foto di sfondo), titoli grandi, descrizioni dritte */

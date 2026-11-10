@@ -21,7 +21,7 @@ Prima di iniziare: `git push`, pipeline verde, poi sul server `sudo /opt/gestion
 - [ ] Correggi a mano una traduzione: diventa «scritta a mano» e non cambia più; «↺ Torna alla traduzione automatica» la fa rifare.
 - [ ] Cambia il nome italiano di un piatto: entro un paio di minuti cambia anche quello inglese.
 - [ ] Menu pubblico `https://menu.enotechiasantalucia.it/enotechia-santalucia/` (dopo pochi secondi):
-  - [ ] in alto nessun tasto della lingua; in fondo **🇮🇹 Italiano / 🇬🇧 English / 🇪🇸 Español**; con English: nomi tradotti, gli altri in italiano, allergeni in inglese;
+  - [ ] **🇮🇹 Italiano / 🇬🇧 English / 🇪🇸 Español** in alto, sopra «Trova il tuo vino» (pagina del tavolo: sotto il numero del tavolo), e non più in fondo; con English: nomi tradotti, gli altri in italiano, allergeni in inglese;
   - [ ] con Español: nomi, descrizioni, note dei vini, allergeni e testi della pagina in spagnolo (anche pagina del tavolo e menu interno `/m/`);
   - [ ] «Vini per regione» in un riquadro, con «Scegli dalla mappa» grande al centro e le regioni sotto;
   - [ ] quiz «Find your wine», scheda di un piatto, mappa delle regioni in inglese;

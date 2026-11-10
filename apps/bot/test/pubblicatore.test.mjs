@@ -191,12 +191,14 @@ describe("pagina statica", () => {
     assert.match(pub.pagina(v, "ora", null, null, {}, "v1", "es"), /<p class="desc">Tinto de buena estructura<\/p>/);   // colore sistemato in pubblicazione
   });
 
-  test("pagina italiana: lingue solo in fondo, testi invariati", () => {
+  test("pagina italiana: lingue in alto sopra «Trova il tuo vino», testi invariati", () => {
     const html = pub.pagina(menuEsempio(), "ora");
     assert.match(html, /<html lang="it">/);
     assert.doesNotMatch(html, /class="lingua"/);
-    // In fondo: bandierine delle tre lingue, l'italiano attivo
-    assert.match(html, /<nav class="lingue"[^>]*>\s*<a href="\.\/" hreflang="it" lang="it" aria-current="page">🇮🇹 Italiano<\/a>\s*<a href="en\/" hreflang="en" lang="en">🇬🇧 English<\/a>\s*<a href="es\/" hreflang="es" lang="es">🇪🇸 Español<\/a>/);
+    // In alto: bandierine delle tre lingue, l'italiano attivo; in fondo non ci sono più
+    assert.ok(html.indexOf('class="lingue"') < html.indexOf("<footer>"));
+    assert.equal(html.split('class="lingue"').length, 2);
+    assert.match(html, /<div class="lingue"[^>]*>\s*<a href="\.\/" hreflang="it" lang="it" aria-current="page">🇮🇹 Italiano<\/a>\s*<a href="en\/" hreflang="en" lang="en">🇬🇧 English<\/a>\s*<a href="es\/" hreflang="es" lang="es">🇪🇸 Español<\/a>/);
     assert.match(html, /Per informazioni sugli allergeni rivolgersi al personale/);
   });
 });

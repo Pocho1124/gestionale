@@ -165,6 +165,11 @@ export function OrdinaTavolo() {
           ? <img className="menu-logo" src={sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url)!} alt={info.locale} /> : <h1>{info.locale}</h1>}
         <p className="ordina-tavolo">{T.tavolo} {info.tavolo}</p>
       </header>
+      <div className="ordina-lingue" role="navigation" aria-label="Lingua / Language">
+        {LINGUE.map(([l, bandiera, nome]) => (
+          <button key={l} lang={l} aria-pressed={lingua === l} className={lingua === l ? "attiva" : ""} onClick={() => setLingua(l)}>{bandiera} {nome}</button>
+        ))}
+      </div>
       {richiesta && <p className="ordina-avviso" role="status">{T.richiestaInviata}</p>}
       {messaggio && <p className={`ordina-avviso${messaggio.errore ? " errore" : " ok"}`} role="status">{messaggio.testo}</p>}
 
@@ -298,11 +303,6 @@ export function OrdinaTavolo() {
           onConferma={(scelte) => { cambiaRiga(componendo.p, scelte, 1); setComponendo(null); setMessaggio({ testo: `${nomeIn(lingua, componendo.p)} ${T.aggiuntoAlTuo}` }); }} />
       )}
 
-      <nav className="ordina-lingue" aria-label="Lingua / Language">
-        {LINGUE.map(([l, bandiera, nome]) => (
-          <button key={l} lang={l} aria-pressed={lingua === l} className={lingua === l ? "attiva" : ""} onClick={() => setLingua(l)}>{bandiera} {nome}</button>
-        ))}
-      </nav>
 
       {vista === "menu" && pezzi > 0 && (
         <button className="ordina-barra" onClick={() => setVista("carrello")}>

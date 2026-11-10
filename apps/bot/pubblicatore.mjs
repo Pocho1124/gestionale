@@ -251,8 +251,8 @@ body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit
 .sfondo-menu-testata{position:absolute;inset:0;border-radius:0 0 18px 18px}
 .sfondo-menu-img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.08)}
 .sfondo-menu-velo{position:absolute;inset:0;background:var(--s)}
-.lingue{display:flex;justify-content:center;gap:10px;margin:0 0 12px}.lingue a{color:var(--p);text-decoration:none;font-weight:700;border:1px solid currentColor;border-radius:999px;padding:6px 14px;font-size:.9rem}.lingue a[aria-current]{background:var(--p);color:var(--s)}
-.lingue{flex-wrap:wrap}
+/* Scelta della lingua in alto, sopra «Trova il tuo vino» */
+.lingue{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0 0}.lingue a{color:var(--p);text-decoration:none;font-weight:700;border:1px solid color-mix(in srgb,var(--p) 60%,transparent);border-radius:999px;padding:5px 12px;font-size:.82rem;background:color-mix(in srgb,var(--s) 70%,transparent)}.lingue a[aria-current]{background:var(--p);color:var(--s);border-color:var(--p)}
 .filtro-regioni{margin:16px 0 0;padding:16px 14px 14px;border-radius:18px;text-align:center;background:color-mix(in srgb,var(--s) 90%,transparent);border:1px solid color-mix(in srgb,var(--p) 30%,transparent);box-shadow:0 10px 30px rgba(0,0,0,.2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .filtro-titolo{margin:0 0 10px;font:600 .78rem var(--fc);letter-spacing:.2em;text-transform:uppercase;color:var(--p)}
 .filtro-scelte{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--p) 22%,transparent)}
@@ -367,8 +367,8 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .con-sfondo header{text-shadow:0 1px 4px rgba(0,0,0,.55)}
 /* Barra delle categorie nello stesso stile dei riquadri: arrotondata, velata, fissa in alto staccata dal bordo */
 html{scroll-padding-top:76px}
-.menu > nav:not(.lingue){top:8px;margin:16px 0 0;padding:10px 16px;border-radius:14px;background:color-mix(in srgb,var(--s) 92%,transparent);border:1px solid color-mix(in srgb,var(--p) 30%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-.menu > nav:not(.lingue) a:hover,.menu > nav:not(.lingue) a:focus-visible{color:var(--p);opacity:1}
+.menu > nav{top:8px;margin:16px 0 0;padding:10px 16px;border-radius:14px;background:color-mix(in srgb,var(--s) 92%,transparent);border:1px solid color-mix(in srgb,var(--p) 30%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.menu > nav a:hover,.menu > nav a:focus-visible{color:var(--p);opacity:1}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
 </head>
@@ -381,6 +381,9 @@ html{scroll-padding-top:76px}
     ${mostraNome ? `<h1>${esc(menu.locale.nome)}</h1>` : ""}
     ${menu.locale.indirizzo ? `<p>${esc(menu.locale.indirizzo)}</p>` : ""}
   </header>
+  <div class="lingue" role="navigation" aria-label="Lingua / Language">
+    ${LINGUE.map(([l, bandiera, nome]) => `<a href="${l === "it" ? su || "./" : `${su}${l}/`}" hreflang="${l}" lang="${l}"${l === L.lang ? ' aria-current="page"' : ""}>${bandiera} ${nome}</a>`).join("\n    ")}
+  </div>
   ${numeroVini >= 2 ? `<button class="trova-vino">${esc(L.trova)}</button>` : ""}
   ${filtroRegioni}
   ${mappa}
@@ -392,9 +395,6 @@ html{scroll-padding-top:76px}
   </div></div>
   <footer>
     ${a.testo_piede ? `<p>${esc(a.testo_piede)}</p>` : ""}
-    <nav class="lingue" aria-label="Lingua / Language">
-      ${LINGUE.map(([l, bandiera, nome]) => `<a href="${l === "it" ? su || "./" : `${su}${l}/`}" hreflang="${l}" lang="${l}"${l === L.lang ? ' aria-current="page"' : ""}>${bandiera} ${nome}</a>`).join("\n      ")}
-    </nav>
     <p>${esc(L.infoAllergeni)}</p>
     <p>${esc(L.aggiornato)}${esc(aggiornato)}</p>
   </footer>

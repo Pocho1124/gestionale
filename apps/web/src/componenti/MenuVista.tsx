@@ -73,6 +73,15 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
         {menu.locale.indirizzo && <p>{menu.locale.indirizzo}</p>}
       </header>
 
+      {/* Scelta della lingua in alto, sopra «Trova il tuo vino» */}
+      {onLingua && (
+        <div className="menu-lingue" role="navigation" aria-label="Lingua / Language">
+          {LINGUE.map(([l, bandiera, nome]) => (
+            <button key={l} lang={l} aria-pressed={lingua === l} className={lingua === l ? "attiva" : ""} onClick={() => onLingua(l)}>{bandiera} {nome}</button>
+          ))}
+        </div>
+      )}
+
       {numeroVini >= 2 && (
         <button className="menu-trova-vino" onClick={() => setQuiz(true)}>{T.trova}</button>
       )}
@@ -152,13 +161,6 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
 
       <footer className="menu-piede">
         {aspetto.testo_piede && <p>{aspetto.testo_piede}</p>}
-        {onLingua && (
-          <nav className="menu-lingue" aria-label="Lingua / Language">
-            {LINGUE.map(([l, bandiera, nome]) => (
-              <button key={l} lang={l} aria-pressed={lingua === l} className={lingua === l ? "attiva" : ""} onClick={() => onLingua(l)}>{bandiera} {nome}</button>
-            ))}
-          </nav>
-        )}
         <p>{T.infoAllergeni}</p>
       </footer>
     </div>
