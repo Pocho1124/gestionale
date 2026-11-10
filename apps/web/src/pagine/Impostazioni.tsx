@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { daEuro } from "@gest/core";
+import { euroTesto } from "../lib/formato";
 import { sb } from "../lib/supabase";
 import { useSessione } from "../lib/sessione";
 import { useAvviso } from "../componenti/Avviso";
@@ -141,8 +143,8 @@ function SezionePos() {
   );
 }
 
-interface ImpostazioniTavolo { chiedi_nome: boolean; nome_obbligatorio: boolean }
-const TAVOLO_PREDEFINITO: ImpostazioniTavolo = { chiedi_nome: false, nome_obbligatorio: false };
+interface ImpostazioniTavolo { chiedi_nome: boolean; nome_obbligatorio: boolean; coperto_cent: number }
+const TAVOLO_PREDEFINITO: ImpostazioniTavolo = { chiedi_nome: false, nome_obbligatorio: false, coperto_cent: 0 };
 
 /** Personalizzazioni della pagina del tavolo (QR): ognuna si attiva o disattiva qui. */
 function SezioneTavolo() {
@@ -152,7 +154,7 @@ function SezioneTavolo() {
 
   const carica = useCallback(async () => {
     if (!locale) return;
-    const { data, error } = await sb().from("impostazioni_tavolo").select("chiedi_nome, nome_obbligatorio").eq("locale_id", locale.id).maybeSingle();
+    const { data, error } = await sb().from("impostazioni_tavolo").select("chiedi_nome, nome_obbligatorio, coperto_cent").eq("locale_id", locale.id).maybeSingle();
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
     setImp((data as ImpostazioniTavolo | null) ?? TAVOLO_PREDEFINITO);
   }, [locale, avvisa]);
@@ -182,6 +184,18 @@ function SezioneTavolo() {
         <input type="checkbox" checked={imp.nome_obbligatorio} disabled={!imp.chiedi_nome}
           onChange={(e) => void salva({ nome_obbligatorio: e.target.checked })} />
         Nome obbligatorio (senza nome la richiesta non parte)
+      </label>
+      <label className="riga-form" key={`coperto-${imp.coperto_cent}`}>
+        Coperto a persona €
+        <input className="input-prezzo" inputMode="decimal" defaultValue={euroTesto(imp.coperto_cent)} aria-label="Prezzo del coperto a persona"
+          onBlur={(e) => {
+            try {
+              const c = e.target.value.trim() ? daEuro(e.target.value) : 0;
+              if (c < 0 || c > 2000) throw new RangeError("fuori limite");
+              if (c !== imp.coperto_cent) void salva({ coperto_cent: c });
+            } catch { e.target.value = euroTesto(imp.coperto_cent); avvisa("Coperto da 0 a 20 € (es. 2,50)", "errore"); }
+          }} />
+        <span className="muto piccolo">si aggiunge da solo ai tavoli aperti da ora in poi (0 = niente coperto)</span>
       </label>
     </section>
   );

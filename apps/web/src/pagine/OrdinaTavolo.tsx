@@ -47,6 +47,7 @@ export function OrdinaTavolo() {
   const [nome, setNome] = useState("");
   const [ordini, setOrdini] = useState<OrdineCliente[]>([]);
   const [conto, setConto] = useState<string | null>(null);
+  const [coperto, setCoperto] = useState<{ coperti: number; prezzo_cent: number } | null>(null);
   const [notaConto, setNotaConto] = useState("");
   const [messaggio, setMessaggio] = useState<{ testo: string; errore?: boolean } | null>(null);
   const [invio, setInvio] = useState(false);
@@ -65,6 +66,7 @@ export function OrdinaTavolo() {
     if (data && !(data as { errore?: string }).errore) {
       setOrdini((data as { ordini: OrdineCliente[] }).ordini);
       setConto((data as { conto?: string | null }).conto ?? null);
+      setCoperto((data as { coperto?: { coperti: number; prezzo_cent: number } | null }).coperto ?? null);
     }
   }, [token, codice]);
 
@@ -270,7 +272,9 @@ export function OrdinaTavolo() {
                   const esito = data as { errore?: string } | null;
                   if (error || esito?.errore) { setMessaggio({ testo: esito?.errore ?? error?.message ?? "Richiesta non riuscita", errore: true }); return; }
                   setConto("in_attesa"); setMessaggio({ testo: "Conto richiesto: il personale sta arrivando. 🧾" });
-                }}>🧾 Chiedi il conto · {euro(ordini.filter((o) => o.stato !== "rifiutato").reduce((n, o) => n + o.righe.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0))}</button>
+                }}>🧾 Chiedi il conto · {euro(ordini.filter((o) => o.stato !== "rifiutato").reduce((n, o) => n + o.righe.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0)
+                  + (coperto ? coperto.coperti * coperto.prezzo_cent : 0))}</button>
+                {coperto && <p className="menu-allergeni">Comprende il coperto: {coperto.coperti} × {euro(coperto.prezzo_cent)}</p>}
               </div>
             )
           )}

@@ -16,7 +16,7 @@ export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string
 export interface RichiestaSala { id: string; tavolo_id: string; righe: { prodotto_id: string; quantita: number; nota?: string; opzioni?: string[] }[]; nota: string; creato_at: string; nomi_clienti?: { nome: string } | { nome: string }[] | null }
 export interface ProdottoBreve { id: string; nome: string; prezzo_cent: number; disponibile: boolean; visibile: boolean; categoria_id: string; gruppi: GruppoScelte[]; aggiunte: Scelta[] }
 export interface CategoriaBreve { id: string; nome: string }
-interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; nomi_clienti?: { nome: string }[] }
+interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; coperto_cent?: number; nomi_clienti?: { nome: string }[] }
 export interface ComandaStampa { id: string; ordine_id: string | null; stato: string; tipo: string; errore: string; reparti: { nome: string } | null }
 interface TavoloBreve { id: string; nome: string; posti: number }
 
@@ -136,10 +136,13 @@ function segnaPreconto(sessione: string): string[] {
 export function PannelloTavolo(props: {
   tavolo: TavoloBreve | null; sessione?: SessioneBreve; ordini: OrdineSala[]; prodotti: ProdottoBreve[]; categorie: CategoriaBreve[];
   comande?: ComandaStampa[]; onFatto: () => Promise<void>;
+  /** Tutti i tavoli attivi e quelli aperti: servono a «Sposta» e «Unisci». */
+  tavoli?: TavoloBreve[]; aperti?: Set<string>;
 }) {
   const avvisa = useAvviso();
   const { locale, ruolo } = useSessione();
   const { tavolo, sessione } = props;
+  const [destinazione, setDestinazione] = useState<{ modo: "sposta" | "unisci"; tavolo: string } | null>(null);
   const [cassa, setCassa] = useState<string | null>(null);   // sessione del conto aperto nel popup
   const [preconti, setPreconti] = useState<string[]>(precontiStampati);
   const [coperti, setCoperti] = useState(2);
@@ -155,7 +158,9 @@ export function PannelloTavolo(props: {
     if (error) { avvisa(messaggioErrore(error), "errore"); return false; }
     avvisa(ok); await props.onFatto(); return true;
   }
-  const conto = ordiniTavolo.filter((o) => o.stato !== "rifiutato" && o.stato !== "annullato").reduce((n, o) => n + totale(o.righe_ordine), 0);
+  const coperto = sessione ? sessione.coperti * (sessione.coperto_cent ?? 0) : 0;
+  const conto = ordiniTavolo.filter((o) => o.stato !== "rifiutato" && o.stato !== "annullato").reduce((n, o) => n + totale(o.righe_ordine), 0) + coperto;
+  const candidati = (props.tavoli ?? []).filter((t) => t.id !== tavolo.id && (destinazione?.modo === "unisci" ? props.aperti?.has(t.id) : !props.aperti?.has(t.id)));
   const stampe = (ordine: string) => (props.comande ?? []).filter((c) => c.ordine_id === ordine);
 
   return (
@@ -175,7 +180,36 @@ export function PannelloTavolo(props: {
         </>
       ) : (
         <>
-          <p>Aperto alle {ora(sessione.aperta_at)} · {sessione.coperti} coperti</p>
+          <div className="riga-form">
+            <span>Aperto alle {ora(sessione.aperta_at)} · Coperti</span>
+            <button className="btn btn-icona" disabled={attesa || sessione.coperti <= 1} aria-label="Un coperto in meno"
+              onClick={() => void esegui(() => sb().rpc("imposta_coperti", { p_sessione: sessione.id, p_coperti: sessione.coperti - 1 }), "Coperti aggiornati")}>−</button>
+            <strong>{sessione.coperti}</strong>
+            <button className="btn btn-icona" disabled={attesa || sessione.coperti >= 60} aria-label="Un coperto in più"
+              onClick={() => void esegui(() => sb().rpc("imposta_coperti", { p_sessione: sessione.id, p_coperti: sessione.coperti + 1 }), "Coperti aggiornati")}>+</button>
+            {coperto > 0 && <span className="muto piccolo">coperto {euro(sessione.coperto_cent ?? 0)} × {sessione.coperti} = {euro(coperto)}</span>}
+          </div>
+          <div className="riga-form">
+            <button className="btn btn-piccolo" onClick={() => setDestinazione(destinazione?.modo === "sposta" ? null : { modo: "sposta", tavolo: "" })}>↔ Sposta</button>
+            <button className="btn btn-piccolo" onClick={() => setDestinazione(destinazione?.modo === "unisci" ? null : { modo: "unisci", tavolo: "" })}>⊕ Unisci</button>
+          </div>
+          {destinazione && (
+            <div className="riga-form sposta-tavolo">
+              <select value={destinazione.tavolo} onChange={(e) => setDestinazione({ ...destinazione, tavolo: e.target.value })}
+                aria-label={destinazione.modo === "sposta" ? "Tavolo libero di destinazione" : "Tavolo aperto da unire"}>
+                <option value="">{destinazione.modo === "sposta" ? "Sposta sul tavolo libero…" : "Unisci il conto del tavolo…"}</option>
+                {candidati.map((t) => <option key={t.id} value={t.id}>Tavolo {t.nome}</option>)}
+              </select>
+              <button className="btn btn-pieno btn-piccolo" disabled={!destinazione.tavolo || attesa} onClick={async () => {
+                const altro = props.tavoli?.find((t) => t.id === destinazione.tavolo);
+                if (destinazione.modo === "unisci" && !confirm(`Unire il conto del tavolo ${altro?.nome} a quello del tavolo ${tavolo.nome}? Il tavolo ${altro?.nome} si libera.`)) return;
+                const ok = destinazione.modo === "sposta"
+                  ? await esegui(() => sb().rpc("sposta_tavolo", { p_da: tavolo.id, p_a: destinazione.tavolo }), `Conto spostato sul tavolo ${altro?.nome}`)
+                  : await esegui(() => sb().rpc("unisci_tavoli", { p_principale: tavolo.id, p_altro: destinazione.tavolo }), `Tavolo ${altro?.nome} unito al ${tavolo.nome}`);
+                if (ok) setDestinazione(null);
+              }}>Conferma</button>
+            </div>
+          )}
           {!!sessione.nomi_clienti?.length && <p>👤 {sessione.nomi_clienti.map((n) => n.nome).join(", ")}</p>}
           <div className="codice-tavolo"><span className="muto piccolo">Codice del tavolo</span><strong>{sessione.codice}</strong></div>
           {(sessione.codice_errati ?? 0) >= 10 && (

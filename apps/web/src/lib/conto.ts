@@ -18,7 +18,7 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
   const pagina = apriStampa({ larghezza: 420, altezza: 640, titolo: "Preconto", stile: STILE });
   if (!pagina) return POPUP_BLOCCATO;
   const [s, o] = await Promise.all([
-    sb().from("sessioni_tavolo").select("coperti, aperta_at, sconto_cent, tavoli(nome)").eq("id", sessioneId).single(),
+    sb().from("sessioni_tavolo").select("coperti, aperta_at, sconto_cent, coperto_cent, tavoli(nome)").eq("id", sessioneId).single(),
     sb().from("ordini").select("stato, righe_ordine(nome, quantita, prezzo_cent, opzioni)").eq("sessione_id", sessioneId).not("stato", "in", "(rifiutato,annullato)"),
   ]);
   if (s.error || o.error) { pagina.chiudi(); return (s.error ?? o.error)!.message; }
@@ -34,6 +34,8 @@ export async function stampaConto(sessioneId: string, localeNome: string): Promi
     }
   }
   const lista = [...righe.values()];
+  const sessCoperto = s.data as unknown as { coperti: number; coperto_cent?: number };
+  if ((sessCoperto.coperto_cent ?? 0) > 0) lista.push({ nome: "Coperto", quantita: Number(sessCoperto.coperti), prezzo_cent: Number(sessCoperto.coperto_cent) });
   const totale = lista.reduce((n, r) => n + r.quantita * r.prezzo_cent, 0);
   const sess = s.data as unknown as { coperti: number; sconto_cent?: number; tavoli: { nome: string } | null };
   const sconto = Math.min(Number(sess.sconto_cent ?? 0), totale);

@@ -7,7 +7,7 @@ import { messaggioErrore } from "../lib/errori";
 import { stampaConto } from "../lib/conto";
 import { useSessione } from "../lib/sessione";
 import { puo } from "../lib/permessi";
-import { euro } from "../lib/formato";
+import { euro, euroTesto } from "../lib/formato";
 
 type Metodo = "contanti" | "carta" | "altro";
 interface PagamentoConto {
@@ -49,6 +49,13 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
   const [ricevuto, setRicevuto] = useState("");
   const [terminale, setTerminale] = useState("");
   const [sconto, setSconto] = useState("");
+  const [coperto, setCoperto] = useState<{ coperti: number; prezzo: number } | null>(null);
+  const caricaCoperto = useCallback(async () => {
+    const { data } = await sb().from("sessioni_tavolo").select("coperti, coperto_cent").eq("id", props.sessioneId).maybeSingle();
+    const d = data as { coperti: number; coperto_cent: number } | null;
+    setCoperto(d ? { coperti: d.coperti, prezzo: d.coperto_cent } : null);
+  }, [props.sessioneId]);
+  useEffect(() => { void caricaCoperto(); }, [caricaCoperto]);
   const [scontoPct, setScontoPct] = useState(true);
   const [codici, setCodici] = useState<Record<string, string>>({});
   const [attesa, setAttesa] = useState(false);
@@ -193,7 +200,7 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
             </div>
 
             <details className="pagamento-sconto">
-              <summary>Sconto {conto.sconto_cent > 0 ? `(${euro(conto.sconto_cent)})` : ""}</summary>
+              <summary>Sconto {conto.sconto_cent > 0 ? `(${euro(conto.sconto_cent)})` : ""}{coperto && coperto.prezzo > 0 ? ` · coperto ${coperto.coperti} × ${euro(coperto.prezzo)}` : ""}</summary>
               <div className="riga-form">
                 <input inputMode="decimal" placeholder={scontoPct ? "10" : "5,00"} value={sconto} onChange={(e) => setSconto(e.target.value)} aria-label="Sconto" style={{ width: 90 }} />
                 <div className="scelte">
@@ -203,6 +210,21 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
                 <button className="btn" disabled={attesa || !sconto.trim()} onClick={() => void applicaSconto()}>Applica</button>
                 {conto.sconto_cent > 0 && <button className="btn btn-testo" disabled={attesa} onClick={() => void applicaSconto(true)}>Togli sconto</button>}
               </div>
+              {coperto && (
+                <div className="riga-form" key={`cop-${coperto.prezzo}`}>
+                  <span>Coperto a persona €</span>
+                  <input inputMode="decimal" defaultValue={euroTesto(coperto.prezzo)} style={{ width: 90 }} aria-label="Coperto a persona per questo tavolo"
+                    onBlur={async (e) => {
+                      let c: number;
+                      try { c = e.target.value.trim() ? daEuro(e.target.value) : 0; } catch { e.target.value = euroTesto(coperto.prezzo); avvisa("Coperto non valido (es. 2,50)", "errore"); return; }
+                      if (c === coperto.prezzo) return;
+                      const { error } = await sb().rpc("imposta_coperto", { p_sessione: props.sessioneId, p_cent: c });
+                      if (error) { avvisa(messaggioErrore(error), "errore"); e.target.value = euroTesto(coperto.prezzo); return; }
+                      avvisa(c ? "Coperto aggiornato" : "Coperto tolto"); await caricaCoperto(); await carica();
+                    }} />
+                  <span className="muto piccolo">solo per questo tavolo</span>
+                </div>
+              )}
             </details>
 
             {conto.residuo_cent > 0 && (
@@ -243,6 +265,9 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
                       {Object.values(scelti).some(Boolean) && <button className="btn btn-testo" onClick={() => setScelti({})}>Azzera</button>}
                       {importo > 0 && <span className="muto">= {euro(importo)}{conto.sconto_cent > 0 ? " con lo sconto" : ""}</span>}
                     </div>
+                    {coperto && coperto.prezzo > 0 && (
+                      <p className="muto piccolo">Il coperto ({euro(coperto.coperti * coperto.prezzo)}) si paga con l'ultimo piatto oppure con «Tutto».</p>
+                    )}
                   </div>
                 )}
 

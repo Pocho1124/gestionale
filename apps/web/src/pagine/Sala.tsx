@@ -18,7 +18,7 @@ type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna" | "pia
 type Lato = "sinistra" | "destra" | "sopra" | "sotto";
 interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoElemento; x: number; y: number; w: number; h: number; rotazione: number; etichetta: string }
 type Selezione = { tipo: "tavolo" | "elemento"; id: string } | null;
-interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; nomi_clienti?: { nome: string }[] }
+interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; coperto_cent?: number; nomi_clienti?: { nome: string }[] }
 interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "nopass"; password: string; nascosta: boolean; url_ordini: string }
 
 /** Prodotto letto dal database con gruppi e voci, nel formato usato dalla composizione. */
@@ -114,7 +114,7 @@ export function Sala() {
     const [s, t, x, e, o, r, p, c] = await Promise.all([
       sb().from("sale").select("*").eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("tavoli").select("*").eq("locale_id", locale.id).order("nome"),
-      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at, codice_errati, nomi_clienti(nome)").eq("locale_id", locale.id).is("chiusa_at", null),
+      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at, codice_errati, coperto_cent, nomi_clienti(nome)").eq("locale_id", locale.id).is("chiusa_at", null),
       sb().from("elementi_sala").select("*").eq("locale_id", locale.id),
       sb().from("ordini").select("id, tavolo_id, sessione_id, stato, origine, nota, motivo, creato_at, righe_ordine(nome, quantita, prezzo_cent, nota, opzioni)")
         .eq("locale_id", locale.id).gte("creato_at", new Date(Date.now() - 24 * 3600_000).toISOString()).order("creato_at", { ascending: false }),
@@ -166,7 +166,8 @@ export function Sala() {
   const elementoSel = selezione?.tipo === "elemento" ? elementi.find((x) => x.id === selezione.id) ?? null : null;
   const salaCorrente = sale.find((s) => s.id === salaId);
   const conto = useCallback((sessione: string) => ordini.filter((o) => o.sessione_id === sessione && !["rifiutato", "annullato"].includes(o.stato))
-    .reduce((n, o) => n + o.righe_ordine.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0), [ordini]);
+    .reduce((n, o) => n + o.righe_ordine.reduce((m, r) => m + r.quantita * r.prezzo_cent, 0), 0)
+    + ((s) => (s ? s.coperti * (s.coperto_cent ?? 0) : 0))(sessioni.find((z) => z.id === sessione)), [ordini, sessioni]);
 
   // Modalità monitor: sala a schermo intero (Esc per uscire)
   const monitor = useRef<HTMLDivElement>(null);
@@ -245,7 +246,8 @@ export function Sala() {
               <aside className="sala-pannello">
                 {vista === "servizio"
                   ? <PannelloTavolo tavolo={tavoloSel} sessione={tavoloSel ? sessionePer(tavoloSel.id) : undefined} ordini={ordini}
-                      prodotti={prodotti} categorie={categorie} comande={comande} onFatto={carica} />
+                      prodotti={prodotti} categorie={categorie} comande={comande} onFatto={carica}
+                      tavoli={tavoli.filter((t) => t.attivo)} aperti={new Set(sessioni.map((z) => z.tavolo_id))} />
                   : <PannelloPiantina locale={locale.id} sala={salaCorrente!} tavolo={tavoloSel} elemento={elementoSel} tavoli={tavoli}
                       onFatto={carica} onSeleziona={setSelezione} />}
               </aside>
