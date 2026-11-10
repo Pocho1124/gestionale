@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as PE } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as PE } from "react";
 import QRCode from "qrcode";
 import { sb } from "../lib/supabase";
 import { useSessione } from "../lib/sessione";
@@ -326,31 +326,60 @@ export function Piantina(props: {
   };
 
   return (
-    <svg ref={svg} className="piantina" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Piantina della sala"
+    <svg ref={svg} className="piantina" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Piantina della sala" style={{ "--rapporto": W / H } as CSSProperties}
       onPointerMove={muovi} onPointerUp={rilascia} onPointerCancel={() => setAzione(null)}
       onPointerDown={() => { if (props.modificabile) props.onSeleziona(null); }}>
       <defs>
         <pattern id="griglia" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" className="griglia" /></pattern>
-        <pattern id="pav-parquet" width="120" height="24" patternUnits="userSpaceOnUse">
-          <rect width="120" height="12" fill="#D8B88A" /><rect y="12" width="120" height="12" fill="#CFAE7E" />
-          <path d="M0 12H120M0 24H120M40 0V12M100 0V12M70 12V24M10 12V24" stroke="#B8955F" strokeWidth="1" opacity=".55" />
+        {/* Parquet a listoni sfalsati con venature e fughe */}
+        <pattern id="pav-parquet" width="240" height="40" patternUnits="userSpaceOnUse">
+          <rect width="240" height="20" fill="#C99A62" /><rect y="20" width="240" height="20" fill="#BF8F58" />
+          <rect width="90" height="20" fill="#D0A36C" /><rect x="150" width="90" height="20" fill="#C4955D" />
+          <rect x="40" y="20" width="110" height="20" fill="#CA9C65" /><rect x="200" y="20" width="40" height="20" fill="#C69860" />
+          <path d="M0 5C50 3 110 8 240 4M0 13C70 15 150 11 240 14M0 26C60 24 140 29 240 25M0 34C90 37 170 32 240 35" stroke="#9E6F3E" strokeWidth=".7" fill="none" opacity=".35" />
+          <path d="M18 9c6-2 10 2 16 0M120 30c5-2 9 1 14-1" stroke="#8A5E31" strokeWidth=".8" fill="none" opacity=".4" />
+          <path d="M0 20H240M0 40H240M90 0V20M150 0V20M40 20V40M150 20V40M200 20V40" stroke="#7E5630" strokeWidth="1" opacity=".55" />
+          <path d="M0 .6H240M0 20.6H240" stroke="#F0D2A2" strokeWidth=".8" opacity=".45" />
         </pattern>
         <pattern id="pav-cotto" width="44" height="44" patternUnits="userSpaceOnUse">
-          <rect width="44" height="44" fill="#E9DCCB" /><rect x="2" y="2" width="40" height="40" rx="2" fill="#C97B55" /><rect x="2" y="2" width="20" height="20" fill="#C27350" opacity=".6" />
+          <rect width="44" height="44" fill="#D9C7B0" /><rect x="1.5" y="1.5" width="41" height="41" rx="2" fill="#C2734D" />
+          <rect x="1.5" y="1.5" width="41" height="41" rx="2" fill="url(#cotto-sfumato)" /><circle cx="12" cy="30" r="1.2" fill="#A85E3C" opacity=".6" />
         </pattern>
+        <radialGradient id="cotto-sfumato" cx=".3" cy=".25" r=".9"><stop offset="0" stopColor="#D88C64" stopOpacity=".7" /><stop offset="1" stopColor="#A85A38" stopOpacity=".5" /></radialGradient>
         <pattern id="pav-marmo" width="200" height="200" patternUnits="userSpaceOnUse">
-          <rect width="200" height="200" fill="#F1EEE9" /><path d="M0 60 C50 40 80 90 140 70 S200 90 200 90 M30 200 C60 150 120 170 170 120" stroke="#D5CFC6" strokeWidth="2" fill="none" />
-          <path d="M100 0V200M0 100H200" stroke="#E2DDD5" strokeWidth="1.5" />
+          <rect width="200" height="200" fill="#F2EFEA" /><path d="M0 60C50 40 80 90 140 70S200 90 200 90M30 200C60 150 120 170 170 120M110 0C100 30 130 50 120 80" stroke="#CFC7BB" strokeWidth="1.6" fill="none" opacity=".8" />
+          <path d="M0 62C50 44 80 92 140 72" stroke="#B9B0A2" strokeWidth=".6" fill="none" /><path d="M100 0V200M0 100H200" stroke="#E0DAD1" strokeWidth="1.5" />
         </pattern>
         <pattern id="pav-cemento" width="60" height="60" patternUnits="userSpaceOnUse">
-          <rect width="60" height="60" fill="#CDCBC6" /><circle cx="12" cy="18" r="1.2" fill="#B9B6B0" /><circle cx="44" cy="40" r="1" fill="#B9B6B0" /><circle cx="30" cy="8" r=".8" fill="#DEDCD8" /><circle cx="50" cy="12" r="1.4" fill="#C2BFB9" />
+          <rect width="60" height="60" fill="#C9C6C0" /><circle cx="12" cy="18" r="1.2" fill="#B3AFA8" /><circle cx="44" cy="40" r="1" fill="#B3AFA8" /><circle cx="30" cy="8" r=".8" fill="#DEDCD8" /><circle cx="50" cy="12" r="1.4" fill="#BDB9B2" />
         </pattern>
-        <linearGradient id="legno" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#A8743F" /><stop offset="1" stopColor="#7E5229" /></linearGradient>
-        <radialGradient id="ripiano" cx=".35" cy=".3" r=".9"><stop offset="0" stopColor="#FFFDF8" /><stop offset="1" stopColor="#EADFCC" /></radialGradient>
-        <filter id="ombra" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000" floodOpacity=".28" /></filter>
+        <pattern id="piastrelle" width="16" height="16" patternUnits="userSpaceOnUse">
+          <rect width="16" height="16" fill="#B9D3DE" /><rect x=".7" y=".7" width="14.6" height="14.6" rx="1" fill="#D3E5EC" />
+        </pattern>
+        {/* Luce: vignettatura ai bordi, luce calda dall'alto a sinistra, lampade sopra i tavoli */}
+        <radialGradient id="vignetta" cx=".5" cy=".45" r=".78"><stop offset=".55" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#1A0E04" stopOpacity=".38" /></radialGradient>
+        <linearGradient id="luce-ambiente" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FFF1D0" stopOpacity=".28" /><stop offset=".55" stopColor="#FFF1D0" stopOpacity="0" /></linearGradient>
+        <radialGradient id="lampada"><stop offset="0" stopColor="#FFE6B0" stopOpacity=".9" /><stop offset=".45" stopColor="#FFD488" stopOpacity=".38" /><stop offset="1" stopColor="#FFD488" stopOpacity="0" /></radialGradient>
+        <radialGradient id="tovaglia" cx=".38" cy=".3" r=".95"><stop offset="0" stopColor="#FFFFFF" /><stop offset=".7" stopColor="#F7F2E9" /><stop offset="1" stopColor="#E6DCCB" /></radialGradient>
+        <radialGradient id="seduta" cx=".4" cy=".35" r=".8"><stop offset="0" stopColor="#9B7350" /><stop offset="1" stopColor="#5E3F27" /></radialGradient>
+        <linearGradient id="legno" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#9A6533" /><stop offset=".5" stopColor="#7A4A22" /><stop offset="1" stopColor="#5C3516" /></linearGradient>
+        <linearGradient id="granito" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#4B4643" /><stop offset=".45" stopColor="#2F2B29" /><stop offset=".5" stopColor="#5A5552" /><stop offset=".55" stopColor="#2F2B29" /><stop offset="1" stopColor="#1F1C1A" /></linearGradient>
+        <linearGradient id="muro" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#56504A" /><stop offset="1" stopColor="#2A2622" /></linearGradient>
+        <linearGradient id="vetro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#DFF2FB" /><stop offset=".5" stopColor="#A9D4EA" /><stop offset="1" stopColor="#CFEAF6" /></linearGradient>
+        <linearGradient id="luce-finestra" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFF6D8" stopOpacity=".55" /><stop offset="1" stopColor="#FFF6D8" stopOpacity="0" /></linearGradient>
+        <linearGradient id="marmo-colonna" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#F4F1EC" /><stop offset=".6" stopColor="#D8D2C8" /><stop offset="1" stopColor="#BDB5A9" /></linearGradient>
+        <radialGradient id="terracotta" cx=".35" cy=".3" r=".9"><stop offset="0" stopColor="#D27A4A" /><stop offset="1" stopColor="#8A4322" /></radialGradient>
+        <radialGradient id="foglia" cx=".5" cy=".2" r=".9"><stop offset="0" stopColor="#7FC46F" /><stop offset="1" stopColor="#2E6E2A" /></radialGradient>
+        <linearGradient id="metallo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#4A4D52" /><stop offset="1" stopColor="#222427" /></linearGradient>
+        <linearGradient id="schermo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#5FD0FF" /><stop offset="1" stopColor="#1C6E9C" /></linearGradient>
+        <filter id="ombra" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="2" dy="6" stdDeviation="5" floodColor="#2A1606" floodOpacity=".38" /></filter>
+        <filter id="ombra-lieve" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="1" dy="2" stdDeviation="1.6" floodColor="#2A1606" floodOpacity=".4" /></filter>
+        <filter id="ombra-muro" x="-10%" y="-60%" width="120%" height="220%"><feDropShadow dx="0" dy="4" stdDeviation="3.5" floodColor="#000" floodOpacity=".45" /></filter>
+        <filter id="sfoca" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" /></filter>
       </defs>
       <rect width={W} height={H} fill={props.sala && props.sala.pavimento !== "nessuno" ? `url(#pav-${props.sala.pavimento})` : "transparent"} />
       {props.sala && sorgenteImmagine(props.sala.sfondo_path, props.sala.sfondo_dati) && <image href={sorgenteImmagine(props.sala.sfondo_path, props.sala.sfondo_dati)!} width={W} height={H} preserveAspectRatio="xMidYMid meet" opacity={props.sala.sfondo_opacita / 100} />}
+      <rect width={W} height={H} fill="url(#luce-ambiente)" pointerEvents="none" />
       {props.modificabile && <rect width={W} height={H} fill="url(#griglia)" pointerEvents="none" />}
 
       {[...props.elementi].sort((a, b) => Number(b.tipo === "zona") - Number(a.tipo === "zona")).map((el) => {
@@ -378,21 +407,37 @@ export function Piantina(props: {
             onClick={(e) => { e.stopPropagation(); props.onSeleziona({ tipo: "tavolo", id: t.id }); }}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") props.onSeleziona({ tipo: "tavolo", id: t.id }); }}
             onPointerDown={(e) => { if (props.modificabile) inizia(e, "sposta", "tavolo", t); else e.stopPropagation(); }}>
-            <g transform={`rotate(${t.rotazione})`} className={`tavolo-corpo stato-${stato(s)}`} filter="url(#ombra)">
+            <circle r={Math.max(w, h) * 0.95} fill="url(#lampada)" className="luce-tavolo" />
+            <g transform={`rotate(${t.rotazione})`} className={`tavolo-corpo stato-${stato(s)}`}>
+              {s && (t.forma === "tondo"
+                ? <circle r={w / 2 + 7} className="tavolo-alone" filter="url(#sfoca)" />
+                : <rect x={-w / 2 - 7} y={-h / 2 - 7} width={w + 14} height={h + 14} rx={16} className="tavolo-alone" filter="url(#sfoca)" />)}
               {sedie(t, w, h).map((c, i) => (
-                <rect key={i} className="sedia" x={-9} y={-7} width={18} height={14} rx={5} transform={`translate(${c.x} ${c.y}) rotate(${c.a})`} />
+                <g key={i} transform={`translate(${c.x} ${c.y}) rotate(${c.a})`} filter="url(#ombra-lieve)">
+                  <rect x={-9} y={-7} width={18} height={14} rx={5} className="sedia-seduta" />
+                  <rect x={-9} y={-9.5} width={18} height={4.5} rx={2.2} className="sedia-schienale" />
+                </g>
               ))}
+              <g filter="url(#ombra)">
+                {t.forma === "tondo"
+                  ? <circle r={w / 2} className="tavolo-forma" />
+                  : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={10} className="tavolo-forma" />}
+              </g>
               {t.forma === "tondo"
-                ? <circle r={w / 2} className="tavolo-forma" />
-                : <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={10} className="tavolo-forma" />}
+                ? <circle r={w / 2 - 3.5} className="tovaglia-orlo" />
+                : <rect x={-w / 2 + 3.5} y={-h / 2 + 3.5} width={w - 7} height={h - 7} rx={7} className="tovaglia-orlo" />}
+              {/* Tavolo libero: apparecchiato (piatto, bicchiere e posate per ogni sedia) */}
+              {!s && sedie(t, w, h).map((c, i) => <Coperto key={`c${i}`} {...c} />)}
             </g>
             {(() => {
-              // Con il conto (tavoli da 4 posti in su) le tre righe si stringono al centro
+              // Tavolo aperto: segnaposto colorato con nome, tempo e conto
               const euro = s && props.conto && h >= 44 ? props.conto(s.id) : 0;
+              const pw = Math.min(w - 6, 72), ph = euro ? 44 : 34;
               return <>
-                <text className="tavolo-nome" dy={s ? (euro ? -8 : -3) : 7}>{t.nome}</text>
-                {s && <text className="tavolo-info" dy={euro ? 7 : 15}>{w < 70 ? durataBreve(minuti(s.aperta_at)) : durata(minuti(s.aperta_at))}</text>}
-                {euro > 0 && <text className="tavolo-info tavolo-conto" dy={20}>{Math.round(euro / 100)} €</text>}
+                {s && <rect x={-pw / 2} y={-ph / 2} width={pw} height={ph} rx={10} className={`segnaposto stato-${stato(s)}`} />}
+                <text className="tavolo-nome" dy={s ? (euro ? -6 : -1) : 7}>{t.nome}</text>
+                {s && <text className="tavolo-info" dy={euro ? 7 : 12}>{w < 70 ? durataBreve(minuti(s.aperta_at)) : durata(minuti(s.aperta_at))}</text>}
+                {euro > 0 && <text className="tavolo-info tavolo-conto" dy={18}>{Math.round(euro / 100)} €</text>}
               </>;
             })()}
             {s && <g transform={`translate(${w / 2 + 6} ${-h / 2 - 6})`} className="tavolo-badge"><circle r={11} /><text dy={4}>{s.coperti}</text></g>}
@@ -400,7 +445,26 @@ export function Piantina(props: {
           </g>
         );
       })}
+      {/* Vignettatura e cornice dentro il disegno: la sala resta sempre nei bordi */}
+      <rect width={W} height={H} fill="url(#vignetta)" pointerEvents="none" />
+      <rect x={6} y={6} width={W - 12} height={H - 12} rx={12} className="cornice-sala" />
+      <rect x={12.5} y={12.5} width={W - 25} height={H - 25} rx={8} className="cornice-luce" />
     </svg>
+  );
+}
+
+/** Coperto davanti a una sedia: piatto, bicchiere a destra e posate ai lati, verso il centro del tavolo. */
+function Coperto({ x, y, a }: { x: number; y: number; a: number }) {
+  const rad = (a * Math.PI) / 180, fuori = { x: Math.sin(rad), y: -Math.cos(rad) }, lato = { x: Math.cos(rad), y: Math.sin(rad) };
+  const px = x - fuori.x * 23, py = y - fuori.y * 23;
+  const punto = (l: number, f: number) => ({ x: px + lato.x * l - fuori.x * f, y: py + lato.y * l - fuori.y * f });
+  const b = punto(8, 5), f1 = punto(-8.5, -3), f2 = punto(-8.5, 3), c1 = punto(8.5, -3), c2 = punto(8.5, 1);
+  return (
+    <g className="coperto" pointerEvents="none">
+      <circle cx={px} cy={py} r={5.8} className="piatto" /><circle cx={px} cy={py} r={3.4} className="piatto-fondo" />
+      <line x1={f1.x} y1={f1.y} x2={f2.x} y2={f2.y} className="posata" /><line x1={c1.x} y1={c1.y} x2={c2.x} y2={c2.y} className="posata" />
+      <circle cx={b.x} cy={b.y} r={2.3} className="bicchiere" />
+    </g>
   );
 }
 
@@ -409,18 +473,31 @@ function Arredo({ tipo, w, h, etichetta }: { tipo: TipoElemento; w: number; h: n
   const r = { x: -w / 2, y: -h / 2, width: w, height: h };
   const scritta = etichetta ? <text className="arredo-testo" dy={5}>{etichetta}</text> : null;
   switch (tipo) {
+    case "muro": return <g filter="url(#ombra-muro)"><rect {...r} rx={1.5} className="muro" /><rect x={-w / 2} y={-h / 2} width={w} height={Math.min(2.5, h / 3)} className="muro-luce" /></g>;
     case "porta": return <><rect {...r} className="porta-vano" /><path d={`M${-w / 2} ${-h / 2 - w} A ${w} ${w} 0 0 1 ${w / 2} ${-h / 2}`} className="porta-arco" /><line x1={-w / 2} y1={-h / 2} x2={-w / 2} y2={-h / 2 - w} className="porta-anta" /></>;
-    case "colonna": return <rect {...r} rx={4} filter="url(#ombra)" />;
+    case "finestra": return <>
+      <path d={`M${-w / 2} ${h / 2} L${w / 2} ${h / 2} L${w / 2 + w * 0.25} ${h / 2 + w * 0.7} L${-w / 2 - w * 0.25} ${h / 2 + w * 0.7} Z`} className="luce-finestra" />
+      <rect {...r} className="vetro" /><line x1={-w / 2 + 4} y1={-h / 6} x2={w / 2 - 4} y2={-h / 6} className="vetro-riflesso" />
+    </>;
+    case "colonna": return <rect {...r} rx={4} className="colonna" filter="url(#ombra)" />;
     case "pianta": {
       const r0 = Math.min(w, h) / 2;
-      return <><circle r={r0 * 0.55} className="vaso" />{[0, 60, 120, 180, 240, 300].map((a) => (
-        <ellipse key={a} rx={r0 * 0.28} ry={r0 * 0.62} transform={`rotate(${a}) translate(0 ${-r0 * 0.45})`} className="foglia" />
-      ))}<circle r={r0 * 0.18} className="pianta-centro" /></>;
+      return <g filter="url(#ombra-lieve)"><circle r={r0 * 0.55} className="vaso" />{[0, 45, 90, 135, 180, 225, 270, 315].map((a, i) => (
+        <ellipse key={a} rx={r0 * 0.26} ry={r0 * (i % 2 ? 0.5 : 0.66)} transform={`rotate(${a}) translate(0 ${-r0 * 0.42})`} className="foglia" />
+      ))}<circle r={r0 * 0.16} className="pianta-centro" /></g>;
     }
-    case "bancone": return <g filter="url(#ombra)"><rect {...r} rx={8} className="bancone-piano" />{scritta}</g>;
+    case "bancone": {
+      const m = Math.min(8, Math.min(w, h) / 5);
+      return <g filter="url(#ombra)"><rect {...r} rx={8} className="bancone-piano" />
+        <rect x={-w / 2 + m} y={-h / 2 + m} width={Math.max(0, w - 2 * m)} height={Math.max(0, h - 2 * m)} rx={4} className="bancone-top" />{scritta}</g>;
+    }
+    case "cassa": return <g filter="url(#ombra)"><rect {...r} rx={6} className="cassa-corpo" />
+      <rect x={-w / 2 + 5} y={-h / 2 + 5} width={Math.max(0, w - 10)} height={Math.max(6, h * 0.32)} rx={3} className="cassa-schermo" />
+      {etichetta && <text className="arredo-testo" y={h / 2 - 7}>{etichetta}</text>}</g>;
+    case "bagni": return <><rect {...r} rx={6} className="bagni" />{scritta}</>;
     case "zona": return <><rect {...r} rx={12} /><text className="arredo-testo zona-testo" y={-h / 2 + 22}>{etichetta}</text></>;
     case "testo": return <><rect {...r} className="testo-area" />{scritta}</>;
-    default: return <><rect {...r} rx={tipo === "cassa" || tipo === "bagni" ? 6 : 1} />{tipo !== "muro" && tipo !== "finestra" && scritta}</>;
+    default: return <><rect {...r} rx={4} />{scritta}</>;
   }
 }
 
