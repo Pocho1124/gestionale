@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { riconosciVino } from "./vitigni.mjs";
 import { descriviVino } from "./descrizioni.mjs";
 import { regioneDi } from "./regioni.mjs";
+import { traduciMenu } from "./traduttore.mjs";
 // Bot Telegram privato del gestionale.
 // Interpreta le richieste (prima con regole, poi con il modello locale Ollama), mostra un'anteprima
 // e applica la modifica solo dopo conferma, con l'account dedicato del bot (permessi RLS, audit).
@@ -1229,6 +1230,15 @@ async function avvia() {
     catch (e) { if (!erroreSalaSegnalato) { log(`Notifiche di sala non disponibili: ${e.message}`); erroreSalaSegnalato = true; } }
     finally { inCorso = false; }
   }, 5_000);
+  // Menu in inglese: ogni minuto traduce con l'IA locale le voci nuove o cambiate, poi aggiorna il menu pubblico
+  let traduzioneInCorso = false;
+  setInterval(async () => {
+    if (traduzioneInCorso) return;
+    traduzioneInCorso = true;
+    try { if (await traduciMenu({ db, chiediModello, locale: C.locale, log }) > 0) await aggiornaMenuPubblico(); }
+    catch (e) { log(`Traduzione del menu non riuscita: ${e.message}`); }
+    finally { traduzioneInCorso = false; }
+  }, 60_000);
   await jwt();
   let offset = 0, attesa = 1000;
   for (;;) {

@@ -196,7 +196,8 @@ export function Catalogo() {
               {puoModificare && (
                 <input className="input-inglese" defaultValue={cat.nome_en ?? ""} key={`en-${cat.nome_en}`} maxLength={80} placeholder="🇬🇧 in inglese"
                        aria-label="Nome della categoria in inglese"
-                       onBlur={(e) => { const v = e.target.value.trim(); if (v !== (cat.nome_en ?? "")) void aggiornaCategoria(cat.id, { nome_en: v }); }} />
+                       title={cat.traduzione_da && cat.traduzione_da !== "manuale" ? "Tradotto in automatico: se lo correggi resta la tua versione" : undefined}
+                       onBlur={(e) => { const v = e.target.value.trim(); if (v !== (cat.nome_en ?? "")) void aggiornaCategoria(cat.id, { nome_en: v, traduzione_da: v ? "manuale" : "" }); }} />
               )}
               {puoModificare && (
                 <div className="azioni">
@@ -334,16 +335,22 @@ function RigaProdotto(props: {
                       onBlur={(e) => { if (e.target.value !== p.descrizione) onAggiorna({ descrizione: e.target.value }); }} />
           </label>
           <details className="traduzione">
-            <summary>🇬🇧 In inglese {p.nome_en ? `· ${p.nome_en}` : "(facoltativo)"}</summary>
+            <summary>🇬🇧 In inglese {p.nome_en ? `· ${p.nome_en}` : p.traduzione_da ? "" : "(traduzione automatica in arrivo)"}
+              {p.traduzione_da === "manuale" ? <span className="muto piccolo"> · scritta a mano</span>
+                : p.traduzione_da?.endsWith(":scartata") ? <span className="muto piccolo"> · da scrivere a mano</span>
+                : p.traduzione_da ? <span className="muto piccolo"> · automatica</span> : null}</summary>
             <label className="campo">Nome in inglese
               <input defaultValue={p.nome_en ?? ""} maxLength={120} placeholder={p.nome}
-                     onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.nome_en ?? "")) onAggiorna({ nome_en: v }); }} />
+                     onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.nome_en ?? "")) onAggiorna({ nome_en: v, traduzione_da: "manuale" }); }} />
             </label>
             <label className="campo">Descrizione in inglese
               <textarea defaultValue={p.descrizione_en ?? ""} maxLength={1000} rows={2}
-                        onBlur={(e) => { if (e.target.value !== (p.descrizione_en ?? "")) onAggiorna({ descrizione_en: e.target.value }); }} />
+                        onBlur={(e) => { if (e.target.value !== (p.descrizione_en ?? "")) onAggiorna({ descrizione_en: e.target.value, traduzione_da: "manuale" }); }} />
             </label>
-            <span className="muto piccolo">Compare nel menu in inglese; se lo lasci vuoto resta il testo italiano.</span>
+            <span className="muto piccolo">
+              La traduzione la fa da sola l'IA del server (entro qualche minuto da ogni modifica). Se la correggi qui resta la tua.
+              {p.traduzione_da === "manuale" && <> <button type="button" className="btn btn-testo btn-piccolo" onClick={() => onAggiorna({ traduzione_da: "" })}>↺ Torna alla traduzione automatica</button></>}
+            </span>
           </details>
           <fieldset className="chip-gruppo"><legend>Allergeni</legend>
             {ALLERGENI.map((a) => (

@@ -16,7 +16,10 @@ Prima di iniziare: `git push`, pipeline verde, poi sul server `sudo /opt/gestion
 ## 2. Catalogo e menu
 
 - [ ] Catalogo → **＋ Aggiunte**: crea 2 aggiunte con prezzo (es. Burrata 3 €), una senza categorie (vale per tutto).
-- [ ] Su 2-3 piatti apri «🇬🇧 In inglese» e scrivi nome e descrizione; dai il nome inglese a una categoria.
+- [ ] Menu in inglese **automatico**: aspetta qualche minuto dopo l'aggiornamento (l'IA del server traduce un po' di voci al minuto).
+  Nel Catalogo, aprendo «🇬🇧 In inglese» di un piatto, compare la traduzione con la scritta «automatica».
+- [ ] Correggi a mano una traduzione: diventa «scritta a mano» e non cambia più; «↺ Torna alla traduzione automatica» la fa rifare.
+- [ ] Cambia il nome italiano di un piatto: entro un paio di minuti cambia anche quello inglese.
 - [ ] Menu pubblico `https://menu.enotechiasantalucia.it/enotechia-santalucia/` (dopo pochi secondi):
   - [ ] in fondo **🇮🇹 Italiano / 🇬🇧 English**; con English: nomi tradotti, gli altri in italiano, allergeni in inglese;
   - [ ] quiz «Find your wine», scheda di un piatto, mappa delle regioni in inglese;

@@ -3,11 +3,11 @@ export type Ruolo = "owner" | "manager" | "caposala" | "cameriere" | "cucina";
 export interface Locale { id: string; nome: string; slug: string; organizzazione_id: string }
 
 export interface Categoria {
-  id: string; locale_id: string; nome: string; descrizione: string; posizione: number; visibile: boolean; nome_en?: string; descrizione_en?: string;
+  id: string; locale_id: string; nome: string; descrizione: string; posizione: number; visibile: boolean; nome_en?: string; descrizione_en?: string; traduzione_da?: string;
 }
 
 export interface Prodotto {
-  id: string; locale_id: string; categoria_id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string;
+  id: string; locale_id: string; categoria_id: string; nome: string; descrizione: string; nome_en?: string; descrizione_en?: string; traduzione_da?: string;
   prezzo_cent: number; aliquota_iva: number; disponibile: boolean; visibile: boolean;
   allergeni: string[]; etichette: string[]; immagine_url: string | null; posizione: number;
 }

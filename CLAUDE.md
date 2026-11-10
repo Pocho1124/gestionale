@@ -93,14 +93,15 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   stampa.mjs         comande su stampanti ESC/POS di rete
   vitigni.mjs        base di conoscenza dei vitigni (ripiego se l'enciclopedia non risponde)
   descrizioni.mjs    descrizioni dei vini composte da dati verificati
+  traduttore.mjs     menu in inglese tradotto dall'IA locale (ogni minuto, solo voci nuove o cambiate; numeri controllati, nomi dei vini invariati, traduzioni a mano intoccabili)
   regioni.mjs        zona di produzione → regione italiana (copia in apps/web/src/lib/regioni.ts: tenerle allineate)
   mappa-italia.mjs   confini regioni ISTAT (CC BY 4.0) in SVG (copia in apps/web/src/lib/mappaItalia.ts)
   migra-immagini.mjs migrazione immagini base64 → Storage
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 34 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (362 test)
+supabase/migrations/ 35 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (366 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -137,6 +138,7 @@ deploy/pi/           installer per il server
 |`report\_incassi`|`report\_incassi(locale, dal, al)`: totali, medie, per giorno/ora/categoria/metodo, più venduti, confronto col periodo precedente (solo cassa)|
 |`menu\_inglese`|`nome\_en`, `descrizione\_en` su categorie e prodotti, esposti da `menu\_pubblico` (pagina pubblica `<slug>/en/`)|
 |`sconto\_massimo\_stampa`|tetto allo sconto per chi non ha `impostazioni` (`sconto\_max\_pct`); `servizio\_stampa` con permessi solo sulle colonne stampate|
+|`traduzione\_automatica`|`traduzione\_da` su categorie e prodotti: impronta dell'italiano tradotto, «manuale» se scritta a mano, «…:scartata» se il controllo dei numeri l'ha rifiutata|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -187,11 +189,11 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 362 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 366 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
   **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 11 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
-jsdom solo come dipendenza di sviluppo). Atteso: 79 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
+jsdom solo come dipendenza di sviluppo). Atteso: 87 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
 (non avviano i servizi) e `fetch` simulato (`test/simula.mjs`): nessuna chiamata reale a Telegram, Supabase, Ollama, Cloudflare.
   * `bot.test.mjs`: regole, IA vincolata (numeri solo dal testo, enum), anteprima → conferma → /annulla, notifiche di sala.
   * `pubblicatore.test.mjs`: D1/KV, immagini versionate e pulizia, percorsi, escape dell'HTML.
@@ -199,6 +201,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 79 test superati. Usano `BOT\_T
   * `worker.test.mjs`: Worker con D1/KV simulati.
   * **Visibilità**: jsdom ignora specificità e `!important` in `getComputedStyle`; usare sempre `visibile()` di
   `test/visibilita.mjs`, che risolve la cascata di `display` come un browser.
+  * `traduttore.test.mjs`: traduzione automatica (voci nuove/cambiate, manuali intoccabili, vini, numeri, modello spento).
   * `stampa.test.mjs`: indirizzi e porte ammessi, code page 858, contenuto del biglietto, comandi ESC/POS nei testi neutralizzati (`STAMPA\_TEST=1`).
 
 ## Da fare
