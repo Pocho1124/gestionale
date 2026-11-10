@@ -3,6 +3,7 @@
 import { euro, euroTesto } from "./formato";
 import { LATI, dimensioni, sedie, stacco, stato, type Tavolo } from "./piantina";
 import { nomeFileXml, xmlFattura, type Fattura } from "./fatture";
+import { conAggiunte } from "../componenti/Componi";
 import { TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, menuInLingua, nomeIn } from "./traduzioni";
 
 const tavolo = (forma: Tavolo["forma"], posti: number): Tavolo =>
@@ -107,5 +108,15 @@ describe("traduzioni della pagina del tavolo", () => {
     expect(es.categorie[0]!.nome).toBe("Tintos");
     expect(es.categorie[0]!.prodotti[0]).toMatchObject({ descrizione: "Rosso strutturato", allergeni: ["Sulfitos"], etichette: ["Vegano"], vino: { note: "Criado en barrica" } });
     expect(nomeIn("es", { nome: "Tagliere", nome_es: "Tabla" })).toBe("Tabla");
+  });
+});
+
+describe("aggiunte divise per gruppo", () => {
+  it("prima i gruppi in ordine alfabetico, poi le generiche; sempre facoltative", () => {
+    const a = (id: string, gruppo = "") => ({ id, nome: id, sovrapprezzo_cent: 200, gruppo });
+    const g = conAggiunte([{ id: "s", nome: "Salumi", min: 3, max: 3, scelte: [] }], [a("Miele"), a("Speck", "Salumi"), a("Pecorino", "Formaggi"), a("Coppa", "Salumi")]);
+    expect(g.map((x) => [x.nome, x.min, x.max, x.scelte.length])).toEqual([
+      ["Salumi", 3, 3, 0], ["Aggiunte · Formaggi", 0, 1, 1], ["Aggiunte · Salumi", 0, 2, 2], ["Altre aggiunte", 0, 1, 1]]);
+    expect(conAggiunte([], [a("Miele")]).map((x) => x.nome)).toEqual(["Aggiunte"]);
   });
 });

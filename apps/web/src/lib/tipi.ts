@@ -39,7 +39,7 @@ export interface MenuPubblico {
 
 /** Gruppo di scelte di un piatto componibile (es. «Salumi», da 1 a 3 voci). */
 export interface GruppoScelte { id: string; nome: string; min: number; max: number; scelte: Scelta[] }
-export interface Scelta { id: string; nome: string; sovrapprezzo_cent: number }
+export interface Scelta { id: string; nome: string; sovrapprezzo_cent: number; /** solo aggiunte: «Salumi», «Formaggi»… */ gruppo?: string }
 
 export interface SchedaVino {
   tipo: "rosso" | "bianco" | "rosato" | "bollicine" | "dolce";

@@ -6,7 +6,7 @@ import { messaggioErrore } from "../lib/errori";
 import type { Categoria } from "../lib/tipi";
 import { euroTesto } from "../lib/formato";
 
-interface Aggiunta { id: string; locale_id: string; nome: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
+interface Aggiunta { id: string; locale_id: string; nome: string; gruppo?: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
 
 /**
  * Elenco delle aggiunte del locale (es. «Mozzarella di bufala» + 2 €) e categorie su cui valgono.
@@ -18,10 +18,11 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
   const [aperto, setAperto] = useState(false);
   const [nome, setNome] = useState("");
   const [prezzo, setPrezzo] = useState("");
+  const [gruppo, setGruppo] = useState("");
 
   const carica = useCallback(async () => {
-    const { data, error } = await sb().from("aggiunte").select("id, locale_id, nome, prezzo_cent, disponibile, posizione, aggiunte_categorie(categoria_id)")
-      .eq("locale_id", locale).order("posizione").order("nome");
+    const { data, error } = await sb().from("aggiunte").select("id, locale_id, nome, gruppo, prezzo_cent, disponibile, posizione, aggiunte_categorie(categoria_id)")
+      .eq("locale_id", locale).order("gruppo").order("posizione").order("nome");
     if (error) { setAggiunte([]); return; }   // database non ancora aggiornato
     setAggiunte(data as Aggiunta[]);
     if (!data.length) setAperto(true);
@@ -38,12 +39,12 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
     let cent = 0;
     try { cent = prezzo.trim() ? daEuro(prezzo) : 0; } catch { avvisa("Prezzo non valido (es. 1,50)", "errore"); return; }
     const posizione = (aggiunte ?? []).reduce((m, a) => Math.max(m, a.posizione + 1), 0);
-    const { data, error } = await sb().from("aggiunte").insert({ locale_id: locale, nome: nome.trim(), prezzo_cent: cent, posizione }).select("id").single();
+    const { data, error } = await sb().from("aggiunte").insert({ locale_id: locale, nome: nome.trim(), gruppo: gruppo.trim().slice(0, 40), prezzo_cent: cent, posizione }).select("id").single();
     if (error) { avvisa(messaggioErrore(error), "errore"); return; }
     // Una nuova aggiunta parte attiva sulle categorie della prima aggiunta, o su nessuna: si sceglie qui sotto
     const modello = aggiunte?.[0]?.aggiunte_categorie ?? [];
     if (modello.length) await sb().from("aggiunte_categorie").insert(modello.map((c) => ({ aggiunta_id: data.id, categoria_id: c.categoria_id, locale_id: locale })));
-    setNome(""); setPrezzo("");
+    setNome(""); setPrezzo("");   // il gruppo resta: si inseriscono di fila le aggiunte dello stesso gruppo
     avvisa(`Aggiunta «${nome.trim()}» creata`);
     await carica();
   }
@@ -52,6 +53,7 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
     : esegui(() => sb().from("aggiunte_categorie").insert({ aggiunta_id: a.id, categoria_id: cat, locale_id: locale }));
 
   if (aggiunte === null) return null;
+  const gruppiNoti = [...new Set(["Salumi", "Formaggi", ...aggiunte.map((a) => a.gruppo ?? "").filter(Boolean)])];
   return (
     <section className="blocco aggiunte-blocco">
       <div className="blocco-testa">
@@ -60,8 +62,11 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
       </div>
       {aperto && (
         <div className="aggiunte-gestione">
-          <p className="muto piccolo">Le aggiunte si scelgono al tavolo, dal tablet e dal telefono, con il tasto «＋ Aggiunte» sui piatti delle categorie indicate (se non ne scegli nessuna, su tutti i piatti).</p>
+          <p className="muto piccolo">Le aggiunte si scelgono al tavolo, dal tablet e dal telefono, con il tasto «＋ Aggiunte» sui piatti delle categorie indicate (se non ne scegli nessuna, su tutti i piatti).
+            Il <strong>gruppo</strong> (es. Salumi, Formaggi) le divide nella scelta: «Aggiunte · Salumi», «Aggiunte · Formaggi»; senza gruppo vanno in «Aggiunte».</p>
+          <datalist id="gruppi-aggiunte">{gruppiNoti.map((g) => <option key={g} value={g} />)}</datalist>
           <form className="riga-form" onSubmit={aggiungi}>
+            <input placeholder="Gruppo (es. Salumi)" list="gruppi-aggiunte" value={gruppo} maxLength={40} onChange={(e) => setGruppo(e.target.value)} aria-label="Gruppo" style={{ width: 160 }} />
             <input placeholder="Nuova aggiunta (es. Mozzarella di bufala)" value={nome} maxLength={60} onChange={(e) => setNome(e.target.value)} />
             <input className="input-prezzo" inputMode="decimal" placeholder="€ 0,00" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} aria-label="Prezzo" />
             <button className="btn btn-pieno" disabled={!nome.trim()}>Aggiungi</button>
@@ -71,6 +76,8 @@ export function GestioneAggiunte({ locale, categorie }: { locale: string; catego
               <div className="riga-form">
                 <input defaultValue={a.nome} key={a.nome} maxLength={60} aria-label="Nome dell'aggiunta"
                   onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== a.nome) void esegui(() => sb().from("aggiunte").update({ nome: v }).eq("id", a.id)); else e.target.value = a.nome; }} />
+                <input placeholder="Gruppo" list="gruppi-aggiunte" defaultValue={a.gruppo ?? ""} key={`g${a.gruppo}`} maxLength={40} aria-label={`Gruppo di ${a.nome}`} style={{ width: 140 }}
+                  onBlur={(e) => { const v = e.target.value.trim(); if (v !== (a.gruppo ?? "")) void esegui(() => sb().from("aggiunte").update({ gruppo: v }).eq("id", a.id), v ? `${a.nome}: gruppo «${v}»` : `${a.nome}: senza gruppo`); }} />
                 <input className="input-prezzo" inputMode="decimal" defaultValue={euroTesto(a.prezzo_cent)} key={`p${a.prezzo_cent}`} aria-label={`Prezzo di ${a.nome}`}
                   onBlur={(e) => {
                     try {

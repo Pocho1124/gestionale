@@ -15,7 +15,7 @@ import { type Elemento, type Sala, type Selezione, type SessioneT, type Tavolo }
 type GrezzoProdotto = Omit<ProdottoBreve, "gruppi" | "aggiunte"> & { gruppi_opzioni: { id: string; nome: string; min_scelte: number; max_scelte: number; posizione: number;
   opzioni: { id: string; nome: string; sovrapprezzo_cent: number; disponibile: boolean; posizione: number }[] }[] };
 /** Aggiunte del locale con le categorie su cui sono attive (nessuna categoria = tutte). */
-interface GrezzaAggiunta { id: string; nome: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
+interface GrezzaAggiunta { id: string; nome: string; gruppo?: string; prezzo_cent: number; disponibile: boolean; posizione: number; aggiunte_categorie: { categoria_id: string }[] }
 const daGrezzo = (aggiunte: GrezzaAggiunta[]) => ({ gruppi_opzioni, ...p }: GrezzoProdotto): ProdottoBreve => ({
   ...p,
   aggiunte: aggiunte.filter((a) => a.disponibile && (!a.aggiunte_categorie.length || a.aggiunte_categorie.some((c) => c.categoria_id === p.categoria_id)))
@@ -72,7 +72,7 @@ export function Sala() {
       .eq("stato", "attiva").not("tavolo_id", "is", null).gte("data_ora", new Date(Date.now() - 3 * 3600_000).toISOString()).lt("data_ora", fine.toISOString()).order("data_ora");
     if (!pr.error) setPrenotati(pr.data as Prenotazione[]);
     // Aggiunte (tabella assente prima dell'aggiornamento del database: si ignora)
-    const ag = await sb().from("aggiunte").select("id, nome, prezzo_cent, disponibile, posizione, aggiunte_categorie(categoria_id)").eq("locale_id", locale.id);
+    const ag = await sb().from("aggiunte").select("id, nome, gruppo, prezzo_cent, disponibile, posizione, aggiunte_categorie(categoria_id)").eq("locale_id", locale.id);
     const aggiunte = ag.error ? [] : (ag.data as unknown as GrezzaAggiunta[]);
     const errore = s.error ?? t.error ?? x.error ?? e.error ?? o.error ?? r.error ?? p.error ?? c.error;
     if (errore) { avvisa(messaggioErrore(errore), "errore"); return; }

@@ -4,10 +4,21 @@ import { euro } from "../lib/formato";
 
 export const prezzoComposto = (base: number, scelte: Scelta[]) => base + scelte.reduce((n, s) => n + s.sovrapprezzo_cent, 0);
 export const chiaveRiga = (prodotto: string, scelte: Scelta[]) => `${prodotto}|${scelte.map((s) => s.id).sort().join(",")}`;
-/** Gruppo «Aggiunte» in coda alle scelte del piatto: sempre facoltativo, massimo 10 (stesso limite del database). */
+/**
+ * Aggiunte in coda alle scelte del piatto, divise per gruppo («Aggiunte · Salumi», «Aggiunte · Formaggi», poi le generiche):
+ * sempre facoltative, al massimo 10 in tutto (stesso limite del database).
+ */
 const ID_AGGIUNTE = "aggiunte";
-export const conAggiunte = (gruppi: GruppoScelte[], aggiunte: Scelta[] | undefined): GruppoScelte[] =>
-  aggiunte?.length ? [...gruppi, { id: ID_AGGIUNTE, nome: "Aggiunte", min: 0, max: Math.min(10, aggiunte.length), scelte: aggiunte }] : gruppi;
+const eAggiunte = (id: string) => id === ID_AGGIUNTE || id.startsWith(`${ID_AGGIUNTE}:`);
+export function conAggiunte(gruppi: GruppoScelte[], aggiunte: Scelta[] | undefined): GruppoScelte[] {
+  if (!aggiunte?.length) return gruppi;
+  const nomi = [...new Set(aggiunte.map((a) => a.gruppo?.trim() ?? ""))].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b, "it"));
+  return [...gruppi, ...nomi.map((n) => {
+    const scelte = aggiunte.filter((a) => (a.gruppo?.trim() ?? "") === n);
+    return { id: n ? `${ID_AGGIUNTE}:${n}` : ID_AGGIUNTE, nome: n ? `Aggiunte · ${n}` : nomi.length > 1 ? "Altre aggiunte" : "Aggiunte",
+      min: 0, max: Math.min(10, scelte.length), scelte };
+  })];
+}
 export const descriviScelte = (scelte: { nome: string }[]) => (scelte.length ? ` (${scelte.map((s) => s.nome).join(", ")})` : "");
 
 /**
@@ -20,7 +31,8 @@ export function Componi(props: {
 }) {
   const [scelte, setScelte] = useState<Record<string, Scelta[]>>({});
   const tutte = useMemo(() => Object.values(scelte).flat(), [scelte]);
-  const valido = props.gruppi.every((g) => { const n = scelte[g.id]?.length ?? 0; return n >= g.min && n <= g.max; });
+  const nAggiunte = Object.entries(scelte).reduce((n, [id, l]) => n + (eAggiunte(id) ? l.length : 0), 0);
+  const valido = nAggiunte <= 10 && props.gruppi.every((g) => { const n = scelte[g.id]?.length ?? 0; return n >= g.min && n <= g.max; });
   const totale = prezzoComposto(props.base, tutte);
 
   const alterna = (g: GruppoScelte, s: Scelta) => setScelte((cur) => {
@@ -39,7 +51,7 @@ export function Componi(props: {
       {props.gruppi.map((g) => {
         const lista = scelte[g.id] ?? [];
         return (
-          <fieldset key={g.id} className={`componi-gruppo${g.id === ID_AGGIUNTE ? " componi-aggiunte" : ""}`}>
+          <fieldset key={g.id} className={`componi-gruppo${eAggiunte(g.id) ? " componi-aggiunte" : ""}`}>
             <legend>{g.nome} <span className="componi-regola">{regola(g)} · {lista.length} scelti</span></legend>
             {g.scelte.map((s) => {
               const scelta = lista.some((x) => x.id === s.id);
@@ -48,7 +60,7 @@ export function Componi(props: {
                 <label key={s.id} className={`componi-voce${scelta ? " scelta" : ""}${pieno ? " piena" : ""}`}>
                   <input type={g.max === 1 ? "radio" : "checkbox"} name={g.id} checked={scelta} disabled={pieno} onChange={() => alterna(g, s)} />
                   <span>{s.nome}</span>
-                  <span className="componi-prezzo">{s.sovrapprezzo_cent ? `+ ${euro(s.sovrapprezzo_cent)}` : g.id === ID_AGGIUNTE ? "gratis" : "incluso"}</span>
+                  <span className="componi-prezzo">{s.sovrapprezzo_cent ? `+ ${euro(s.sovrapprezzo_cent)}` : eAggiunte(g.id) ? "gratis" : "incluso"}</span>
                 </label>
               );
             })}
