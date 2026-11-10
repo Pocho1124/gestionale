@@ -643,3 +643,20 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .piatti-nome:disabled { cursor: default; }
 .piatti-q { min-width: 22px; text-align: center; font-size: 1.1rem; }
 .avviso-codice { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: .9rem; color: var(--pericolo); }
+
+/* Prenotazioni */
+.prenotazioni { display: grid; gap: 12px; }
+.prenotazione-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; background: var(--superficie); border: 1px solid var(--linea); border-radius: 12px; padding: 12px; }
+.prenotazione-form label { display: grid; gap: 3px; font-size: .85rem; font-weight: 600; }
+.prenotazione-form input, .prenotazione-form select { font-weight: 400; }
+.prenotazione-note { grid-column: 1 / -1; }
+.lista-prenotazioni { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.prenotazione { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--superficie); border: 1px solid var(--linea); border-left: 5px solid #3D7DD8; border-radius: 10px; padding: 8px 12px; }
+.prenotazione-ora { font-size: 1.25rem; font-variant-numeric: tabular-nums; min-width: 58px; }
+.prenotazione-chi { flex: 1; min-width: 200px; }
+.stato-pren-arrivata { border-left-color: var(--ok); opacity: .7; }
+.stato-pren-annullata, .stato-pren-non_presentata { border-left-color: var(--muto); opacity: .55; }
+.pannello-prenotazione { display: grid; gap: 6px; border: 1px solid #3D7DD8; background: color-mix(in srgb, #3D7DD8 10%, transparent); border-radius: 10px; padding: 8px 10px; }
+.tavolo-prenotato rect { fill: #3D7DD8; stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+.tavolo-prenotato text { text-anchor: middle; font: 700 11px var(--corpo); fill: #fff; pointer-events: none; }
+.pallino.stato-prenotato { background: #3D7DD8; }

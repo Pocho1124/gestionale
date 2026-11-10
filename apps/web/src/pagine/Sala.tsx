@@ -7,6 +7,7 @@ import { messaggioErrore } from "../lib/errori";
 import type { Aspetto } from "../lib/tipi";
 import { preparaImmagine } from "../lib/immagini";
 import { caricaImmagine, eliminaImmagine, sorgenteImmagine } from "../lib/archivio";
+import { Prenotazioni, oraBreve, type Prenotazione } from "../componenti/Prenotazioni";
 import { CodaRichieste, PannelloTavolo, suona, type CategoriaBreve, type ComandaStampa, type OrdineSala, type ProdottoBreve, type RichiestaSala } from "../componenti/ServizioSala";
 
 interface Sala { id: string; locale_id: string; nome: string; posizione: number; larghezza_m: number; profondita_m: number; sfondo_dati: string | null; sfondo_path: string | null; sfondo_opacita: number; pavimento: Pavimento }
@@ -92,7 +93,7 @@ const durataBreve = (m: number) => (m < 60 ? `${m}'` : `${Math.floor(m / 60)}h${
 export function Sala() {
   const { locale, puoModificare } = useSessione();
   const avvisa = useAvviso();
-  const [vista, setVista] = useState<"servizio" | "piantina" | "cartoncini">("servizio");
+  const [vista, setVista] = useState<"servizio" | "prenotazioni" | "piantina" | "cartoncini">("servizio");
   const [sale, setSale] = useState<Sala[]>([]);
   const [tavoli, setTavoli] = useState<Tavolo[]>([]);
   const [elementi, setElementi] = useState<Elemento[]>([]);
@@ -105,6 +106,7 @@ export function Sala() {
   const [prodotti, setProdotti] = useState<ProdottoBreve[]>([]);
   const [categorie, setCategorie] = useState<CategoriaBreve[]>([]);
   const [comande, setComande] = useState<ComandaStampa[]>([]);
+  const [prenotati, setPrenotati] = useState<Prenotazione[]>([]);
   const [suoni, setSuoni] = useState(() => { try { return localStorage.getItem("gestionale.suoni") === "1"; } catch { return false; } });
   const noti = useRef<Set<string> | null>(null);
 
@@ -127,6 +129,11 @@ export function Sala() {
     const k = await sb().from("comande_stampa").select("id, ordine_id, stato, tipo, errore, reparti(nome)").eq("locale_id", locale.id)
       .gte("creata_at", new Date(Date.now() - 24 * 3600_000).toISOString());
     if (!k.error) setComande(k.data as unknown as ComandaStampa[]);
+    // Prenotazioni di oggi ancora in attesa con il tavolo assegnato (da 3 ore fa a fine giornata)
+    const fine = new Date(); fine.setHours(24, 0, 0, 0);
+    const pr = await sb().from("prenotazioni").select("id, tavolo_id, nome, telefono, persone, data_ora, durata_min, note, stato").eq("locale_id", locale.id)
+      .eq("stato", "attiva").not("tavolo_id", "is", null).gte("data_ora", new Date(Date.now() - 3 * 3600_000).toISOString()).lt("data_ora", fine.toISOString()).order("data_ora");
+    if (!pr.error) setPrenotati(pr.data as Prenotazione[]);
     // Aggiunte (tabella assente prima dell'aggiornamento del database: si ignora)
     const ag = await sb().from("aggiunte").select("id, nome, prezzo_cent, disponibile, posizione, aggiunte_categorie(categoria_id)").eq("locale_id", locale.id);
     const aggiunte = ag.error ? [] : (ag.data as unknown as GrezzaAggiunta[]);
@@ -150,6 +157,7 @@ export function Sala() {
     if (!locale) return;
     const canale = sb().channel(`sala-${locale.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "sessioni_tavolo", filter: `locale_id=eq.${locale.id}` }, () => void carica())
+      .on("postgres_changes", { event: "*", schema: "public", table: "prenotazioni", filter: `locale_id=eq.${locale.id}` }, () => void carica())
       .on("postgres_changes", { event: "*", schema: "public", table: "tavoli", filter: `locale_id=eq.${locale.id}` }, () => void carica())
       .on("postgres_changes", { event: "*", schema: "public", table: "ordini", filter: `locale_id=eq.${locale.id}` }, () => void carica())
       .on("postgres_changes", { event: "*", schema: "public", table: "richieste_tavolo", filter: `locale_id=eq.${locale.id}` }, () => void carica())
@@ -162,6 +170,11 @@ export function Sala() {
 
   const tavoliSala = tavoli.filter((t) => t.sala_id === salaId && (vista !== "servizio" || t.attivo));
   const sessionePer = (id: string) => sessioni.find((s) => s.tavolo_id === id);
+  const primaPrenotazione = useMemo(() => {
+    const m = new Map<string, Prenotazione>();
+    for (const p of prenotati) if (p.tavolo_id && !m.has(p.tavolo_id)) m.set(p.tavolo_id, p);
+    return m;
+  }, [prenotati]);
   const tavoloSel = selezione?.tipo === "tavolo" ? tavoli.find((t) => t.id === selezione.id) ?? null : null;
   const elementoSel = selezione?.tipo === "elemento" ? elementi.find((x) => x.id === selezione.id) ?? null : null;
   const salaCorrente = sale.find((s) => s.id === salaId);
@@ -194,6 +207,7 @@ export function Sala() {
         )}
         <div className="schede-modo" role="tablist" style={{ maxWidth: 460 }}>
           <button role="tab" aria-selected={vista === "servizio"} onClick={() => setVista("servizio")}>Servizio</button>
+          <button role="tab" aria-selected={vista === "prenotazioni"} onClick={() => setVista("prenotazioni")}>Prenotazioni{prenotati.length ? ` (${prenotati.length})` : ""}</button>
           {puoModificare && <button role="tab" aria-selected={vista === "piantina"} onClick={() => setVista("piantina")}>Piantina</button>}
           {puoModificare && <button role="tab" aria-selected={vista === "cartoncini"} onClick={() => setVista("cartoncini")}>Cartoncini QR</button>}
         </div>
@@ -210,7 +224,7 @@ export function Sala() {
           onCodice={(tavolo) => { setSelezione({ tipo: "tavolo", id: tavolo }); const t = tavoli.find((z) => z.id === tavolo); if (t) setSalaId(t.sala_id); }} />
       )}
 
-      {vista !== "cartoncini" && (
+      {vista !== "cartoncini" && vista !== "prenotazioni" && (
         sale.length === 0 ? (
           <div className="vuoto">
             <p>Non ci sono ancora sale.</p>
@@ -226,12 +240,14 @@ export function Sala() {
                 <span className="legenda">
                   <span><i className="pallino stato-libero" />Libero</span><span><i className="pallino stato-aperto" />Aperto</span>
                   <span><i className="pallino stato-medio" />Oltre 1 h</span><span><i className="pallino stato-lungo" />Oltre 2 h</span>
+                  <span><i className="pallino stato-prenotato" />Prenotato</span>
                 </span>
               )}
             </div>
             <div className={`sala-layout${vista === "piantina" ? " modifica" : ""}`}>
               <Piantina sala={salaCorrente} tavoli={tavoliSala} elementi={elementi.filter((x) => x.sala_id === salaId)}
                 inAttesa={new Set([...richieste.map((r) => r.tavolo_id), ...ordini.filter((o) => o.stato === "da_confermare").map((o) => o.tavolo_id)])}
+                prenotate={vista === "servizio" ? primaPrenotazione : undefined}
                 sessionePer={sessionePer} conto={vista === "servizio" ? conto : undefined} modificabile={vista === "piantina"} selezione={selezione} onSeleziona={setSelezione}
                 onTavolo={async (t, patch) => {
                   setTavoli((ts) => ts.map((z) => (z.id === t.id ? { ...z, ...patch } : z)));
@@ -247,7 +263,8 @@ export function Sala() {
                 {vista === "servizio"
                   ? <PannelloTavolo tavolo={tavoloSel} sessione={tavoloSel ? sessionePer(tavoloSel.id) : undefined} ordini={ordini}
                       prodotti={prodotti} categorie={categorie} comande={comande} onFatto={carica}
-                      tavoli={tavoli.filter((t) => t.attivo)} aperti={new Set(sessioni.map((z) => z.tavolo_id))} />
+                      tavoli={tavoli.filter((t) => t.attivo)} aperti={new Set(sessioni.map((z) => z.tavolo_id))}
+                      prenotazione={tavoloSel ? primaPrenotazione.get(tavoloSel.id) : undefined} />
                   : <PannelloPiantina locale={locale.id} sala={salaCorrente!} tavolo={tavoloSel} elemento={elementoSel} tavoli={tavoli}
                       onFatto={carica} onSeleziona={setSelezione} />}
               </aside>
@@ -258,6 +275,7 @@ export function Sala() {
 
       </div>
 
+      {vista === "prenotazioni" && <Prenotazioni locale={locale.id} tavoli={tavoli.filter((t) => t.attivo)} onFatto={carica} />}
       {vista === "cartoncini" && <Cartoncini locale={locale} tavoli={tavoli.filter((t) => t.attivo)} sale={sale} />}
     </div>
   );
@@ -298,7 +316,7 @@ function Cruscotto(props: { tavoli: Tavolo[]; sessioni: SessioneT[]; ordini: Ord
 }
 
 export function Piantina(props: {
-  sala?: Sala; inAttesa?: Set<string>; conto?: (sessione: string) => number; tavoli: Tavolo[]; elementi: Elemento[]; sessionePer: (id: string) => SessioneT | undefined; modificabile: boolean;
+  sala?: Sala; inAttesa?: Set<string>; prenotate?: Map<string, Prenotazione>; conto?: (sessione: string) => number; tavoli: Tavolo[]; elementi: Elemento[]; sessionePer: (id: string) => SessioneT | undefined; modificabile: boolean;
   selezione: Selezione; onSeleziona: (s: Selezione) => void;
   onTavolo: (t: Tavolo, patch: Partial<Tavolo>) => void; onElemento: (e: Elemento, patch: Partial<Elemento>) => void;
 }) {
@@ -484,6 +502,11 @@ export function Piantina(props: {
             })()}
             {s && <g transform={`translate(${w / 2 + 6} ${-h / 2 - 6})`} className="tavolo-badge"><circle r={11} /><text dy={4}>{s.coperti}</text></g>}
             {props.inAttesa?.has(t.id) && <g transform={`translate(${-w / 2 - 6} ${-h / 2 - 6})`} className="tavolo-allerta"><circle r={13} /><text dy={5}>!</text></g>}
+            {!s && props.prenotate?.get(t.id) && (
+              <g transform={`translate(0 ${h / 2 + 30})`} className="tavolo-prenotato">
+                <rect x={-34} y={-11} width={68} height={20} rx={10} /><text dy={4}>📅 {oraBreve(props.prenotate.get(t.id)!.data_ora)}</text>
+              </g>
+            )}
           </g>
         );
       })}

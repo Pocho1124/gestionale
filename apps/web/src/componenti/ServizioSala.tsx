@@ -9,6 +9,7 @@ import type { GruppoScelte, Scelta } from "../lib/tipi";
 import { descriviScelte, prezzoComposto } from "./Componi";
 import { Pagamento } from "./Pagamento";
 import { AggiungiOrdine } from "./AggiungiOrdine";
+import { oraBreve, type Prenotazione } from "./Prenotazioni";
 import { euro } from "../lib/formato";
 
 interface RigaOrdine { nome: string; quantita: number; prezzo_cent: number; nota: string; opzioni?: { nome: string }[] }
@@ -138,6 +139,8 @@ export function PannelloTavolo(props: {
   comande?: ComandaStampa[]; onFatto: () => Promise<void>;
   /** Tutti i tavoli attivi e quelli aperti: servono a «Sposta» e «Unisci». */
   tavoli?: TavoloBreve[]; aperti?: Set<string>;
+  /** Prima prenotazione di oggi ancora in attesa su questo tavolo. */
+  prenotazione?: Prenotazione;
 }) {
   const avvisa = useAvviso();
   const { locale, ruolo } = useSessione();
@@ -169,6 +172,14 @@ export function PannelloTavolo(props: {
       {!sessione ? (
         <>
           <p className="muto">Libero · {tavolo.posti} posti</p>
+          {props.prenotazione && (
+            <div className="pannello-prenotazione">
+              <span>📅 Prenotato alle <b>{oraBreve(props.prenotazione.data_ora)}</b> · {props.prenotazione.nome} · {props.prenotazione.persone} persone
+                {props.prenotazione.note && <span className="muto piccolo"> · {props.prenotazione.note}</span>}</span>
+              <button className="btn btn-pieno btn-piccolo" disabled={attesa}
+                onClick={() => void esegui(() => sb().rpc("arriva_prenotazione", { p_prenotazione: props.prenotazione!.id }), `${props.prenotazione!.nome}: tavolo ${tavolo.nome} aperto`)}>Arrivati</button>
+            </div>
+          )}
           <div className="riga-form">
             <span>Coperti</span>
             <button className="btn btn-icona" onClick={() => setCoperti((c) => Math.max(1, c - 1))} aria-label="Meno">−</button>
