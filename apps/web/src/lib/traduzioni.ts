@@ -128,7 +128,7 @@ export function menuInLingua<M extends { categorie: { nome: string; descrizione:
 /** Testi fissi del menu (pagina, scheda del piatto, quiz «Trova il tuo vino», mappa). */
 export const TESTI_MENU = {
   it: {
-    trova: "🍷 Trova il tuo vino", viniPerRegione: "Vini per regione", mappa: "🗺️ Scegli dalla mappa", tutte: "Tutte", altreZone: "Altre zone",
+    indeciso: "Sei indeciso?", trova: "Trova il tuo vino in 3 domande", viniPerRegione: "Vini per regione", mappa: "🗺️ Scegli dalla mappa", tutte: "Tutte", altreZone: "Altre zone",
     categorie: "Categorie", vuoto: "Il menu sarà disponibile a breve.", apriScheda: "apri la scheda", esaurito: "Esaurito", da: "da ",
     siAbbinaCon: "🍷 Si abbina con ", o: " o ", allergeni: "Allergeni: ", infoAllergeni: "Per informazioni sugli allergeni rivolgersi al personale.",
     chiudi: "Chiudi", torna: "← Torna a ", calice: "Calice ", bottiglia: " · Bottiglia ", idealeCon: "Ideale con", sommelier: "Il sommelier consiglia",
@@ -142,7 +142,7 @@ export const TESTI_MENU = {
     corpi: { leggero: "Leggero", medio: "Equilibrato", strutturato: "Strutturato" } as Record<string, string>,
   },
   en: {
-    trova: "🍷 Find your wine", viniPerRegione: "Wines by region", mappa: "🗺️ Choose on the map", tutte: "All", altreZone: "Other areas",
+    indeciso: "Can't decide?", trova: "Find your wine in 3 questions", viniPerRegione: "Wines by region", mappa: "🗺️ Choose on the map", tutte: "All", altreZone: "Other areas",
     categorie: "Categories", vuoto: "The menu will be available soon.", apriScheda: "open details", esaurito: "Sold out", da: "from ",
     siAbbinaCon: "🍷 Pairs with ", o: " or ", allergeni: "Allergens: ", infoAllergeni: "For allergen information, please ask our staff.",
     chiudi: "Close", torna: "← Back to ", calice: "Glass ", bottiglia: " · Bottle ", idealeCon: "Ideal with", sommelier: "Our sommelier suggests",
@@ -156,7 +156,7 @@ export const TESTI_MENU = {
     corpi: { leggero: "Light", medio: "Balanced", strutturato: "Full-bodied" } as Record<string, string>,
   },
   es: {
-    trova: "🍷 Encuentra tu vino", viniPerRegione: "Vinos por región", mappa: "🗺️ Elige en el mapa", tutte: "Todas", altreZone: "Otras zonas",
+    indeciso: "¿Indeciso?", trova: "Encuentra tu vino en 3 preguntas", viniPerRegione: "Vinos por región", mappa: "🗺️ Elige en el mapa", tutte: "Todas", altreZone: "Otras zonas",
     categorie: "Categorías", vuoto: "El menú estará disponible en breve.", apriScheda: "abrir la ficha", esaurito: "Agotado", da: "desde ",
     siAbbinaCon: "🍷 Marida con ", o: " o ", allergeni: "Alérgenos: ", infoAllergeni: "Para información sobre alérgenos, consulte a nuestro personal.",
     chiudi: "Cerrar", torna: "← Volver a ", calice: "Copa ", bottiglia: " · Botella ", idealeCon: "Ideal con", sommelier: "Nuestro sumiller recomienda",

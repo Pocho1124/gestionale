@@ -92,7 +92,11 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
       )}
 
       {numeroVini >= 2 && (
-        <button className="menu-trova-vino" onClick={() => setQuiz(true)}>{T.trova}</button>
+        <button className="menu-trova-vino" onClick={() => setQuiz(true)}>
+          <span className="trova-icona" aria-hidden="true">?</span>
+          <span className="trova-testi"><strong>{T.indeciso}</strong><span>{T.trova}</span></span>
+          <span className="trova-freccia" aria-hidden="true">›</span>
+        </button>
       )}
 
       {tutteLeRegioni.length >= 2 && (

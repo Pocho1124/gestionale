@@ -56,7 +56,7 @@ const TESTI = {
     lang: "it", esaurito: "Esaurito", da: "da ", siAbbinaCon: "🍷 Si abbina con ", o: " o ", allergeni: "Allergeni: ",
     viniPerRegione: "Vini per regione", mappa: "🗺️ Scegli dalla mappa", tutte: "Tutte", altreZone: "Altre zone",
     scegliRegione: "Scegli una regione", tocca: "Tocca una regione illuminata", regioniItalia: "Regioni d'Italia", vini: "vini",
-    fonteMappa: "Confini: ISTAT (CC BY 4.0)", mappaTitolo: "Scegli la regione dalla mappa", trova: "🍷 Trova il tuo vino",
+    fonteMappa: "Confini: ISTAT (CC BY 4.0)", mappaTitolo: "Scegli la regione dalla mappa", indeciso: "Sei indeciso?", trova: "Trova il tuo vino in 3 domande",
     vuoto: "Il menu sarà disponibile a breve.", chiudi: "Chiudi", infoAllergeni: "Per informazioni sugli allergeni rivolgersi al personale.",
     aggiornato: "Aggiornato il ", categorie: "Categorie", menuDi: "Menu di ",
     tipi: { rosso: "Rosso", bianco: "Bianco", rosato: "Rosato", bollicine: "Bollicine", dolce: "Dolce" },
@@ -77,7 +77,7 @@ const TESTI = {
     lang: "en", esaurito: "Sold out", da: "from ", siAbbinaCon: "🍷 Pairs with ", o: " or ", allergeni: "Allergens: ",
     viniPerRegione: "Wines by region", mappa: "🗺️ Choose on the map", tutte: "All", altreZone: "Other areas",
     scegliRegione: "Choose a region", tocca: "Tap a highlighted region", regioniItalia: "Regions of Italy", vini: "wines",
-    fonteMappa: "Borders: ISTAT (CC BY 4.0)", mappaTitolo: "Choose the region on the map", trova: "🍷 Find your wine",
+    fonteMappa: "Borders: ISTAT (CC BY 4.0)", mappaTitolo: "Choose the region on the map", indeciso: "Can't decide?", trova: "Find your wine in 3 questions",
     vuoto: "The menu will be available soon.", chiudi: "Close", infoAllergeni: "For allergen information, please ask our staff.",
     aggiornato: "Updated on ", categorie: "Categories", menuDi: "Menu of ",
     tipi: { rosso: "Red", bianco: "White", rosato: "Rosé", bollicine: "Sparkling", dolce: "Dessert" },
@@ -102,7 +102,7 @@ const TESTI = {
     lang: "es", esaurito: "Agotado", da: "desde ", siAbbinaCon: "🍷 Marida con ", o: " o ", allergeni: "Alérgenos: ",
     viniPerRegione: "Vinos por región", mappa: "🗺️ Elige en el mapa", tutte: "Todas", altreZone: "Otras zonas",
     scegliRegione: "Elige una región", tocca: "Toca una región iluminada", regioniItalia: "Regiones de Italia", vini: "vinos",
-    fonteMappa: "Límites: ISTAT (CC BY 4.0)", mappaTitolo: "Elige la región en el mapa", trova: "🍷 Encuentra tu vino",
+    fonteMappa: "Límites: ISTAT (CC BY 4.0)", mappaTitolo: "Elige la región en el mapa", indeciso: "¿Indeciso?", trova: "Encuentra tu vino en 3 preguntas",
     vuoto: "El menú estará disponible en breve.", chiudi: "Cerrar", infoAllergeni: "Para información sobre alérgenos, consulte a nuestro personal.",
     aggiornato: "Actualizado el ", categorie: "Categorías", menuDi: "Menú de ",
     tipi: { rosso: "Tinto", bianco: "Blanco", rosato: "Rosado", bollicine: "Espumoso", dolce: "Dulce" },
@@ -366,7 +366,15 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 .scheda-corpo .prezzo{color:var(--p);font-size:1.15rem}
 .scheda-corpo p{margin:0}
 .scheda-chiudi{position:absolute;top:10px;right:10px;z-index:1;width:36px;height:36px;border-radius:999px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:1.4rem;line-height:1;cursor:pointer}
-.trova-vino{display:block;margin:14px auto 0;border:1px solid var(--p);background:transparent;color:var(--p);border-radius:999px;padding:8px 18px;font:600 .9rem var(--fc);letter-spacing:.04em;cursor:pointer}
+/* Sommelier digitale: «Sei indeciso?» in un riquadro come il resto del menu, con il punto interrogativo */
+.trova-vino{display:flex;align-items:center;gap:12px;width:min(380px,100%);margin:14px auto 0;padding:10px 16px 10px 10px;border-radius:16px;text-align:left;cursor:pointer;color:var(--t);font-family:var(--fc);background:color-mix(in srgb,var(--s) 90%,transparent);border:1px solid color-mix(in srgb,var(--p) 45%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:border-color .2s,transform .2s}
+.trova-vino:hover,.trova-vino:focus-visible{border-color:var(--p);transform:translateY(-1px);outline:none}
+.trova-icona{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:999px;background:var(--p);color:var(--s);font:700 1.45rem/1 var(--ft);box-shadow:0 0 0 4px color-mix(in srgb,var(--p) 22%,transparent)}
+.trova-testi{display:grid;gap:1px;min-width:0}
+.trova-testi strong{font:400 1.15rem/1.2 var(--ft);color:var(--p)}
+.trova-testi span{font-size:.82rem;opacity:.85}
+.trova-freccia{margin-left:auto;color:var(--p);font-size:1.5rem;line-height:1}
+@media (prefers-reduced-motion:no-preference){.trova-icona{animation:trova-respiro 3.2s ease-in-out infinite}@keyframes trova-respiro{0%,100%{box-shadow:0 0 0 4px color-mix(in srgb,var(--p) 22%,transparent)}50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--p) 8%,transparent)}}}
 .vino-info{margin:3px 0 0;font-size:.8rem;letter-spacing:.05em;color:var(--p)}
 .abbinamento{margin:4px 0 0;font-size:.82rem;font-style:italic;opacity:.85}
 .scheda-vino{color:var(--p);font-weight:600;letter-spacing:.04em}
@@ -416,7 +424,7 @@ html{scroll-padding-top:76px}
   <div class="lingue" role="navigation" aria-label="Lingua / Language">
     ${LINGUE.map(([l, bandiera, nome]) => `<a href="${l === "it" ? su || "./" : `${su}${l}/`}" hreflang="${l}" lang="${l}"${l === L.lang ? ' aria-current="page"' : ""}>${bandiera} ${nome}</a>`).join("\n    ")}
   </div>
-  ${numeroVini >= 2 ? `<button class="trova-vino">${esc(L.trova)}</button>` : ""}
+  ${numeroVini >= 2 ? `<button class="trova-vino"><span class="trova-icona" aria-hidden="true">?</span><span class="trova-testi"><strong>${esc(L.indeciso)}</strong><span>${esc(L.trova)}</span></span><span class="trova-freccia" aria-hidden="true">›</span></button>` : ""}
   ${filtroRegioni}
   ${mappa}
   ${menu.categorie.length ? `<nav aria-label="${esc(L.categorie)}">${menu.categorie.map((c) => `<a href="#c-${esc(c.id)}">${esc(c.nome)}</a>`).join("")}</nav>` : ""}
