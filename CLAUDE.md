@@ -100,8 +100,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 42 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (402 test)
+supabase/migrations/ 43 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (404 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -146,6 +146,7 @@ deploy/pi/           installer per il server
 |`collegamento\_automatico`|`gruppo\_aggiunte\_collegato()`: un gruppo senza voci proprie che si chiama come un gruppo di aggiunte le usa da solo (es. «Salumi»); il collegamento esplicito vale sempre|
 |`tagliere\_a\_prezzo`|«Componi il tuo tagliere»: le voci dei gruppi collegati alle aggiunte costano il prezzo dell'aggiunta (piatto, anche 0, + voci scelte)|
 |`sfondo\_carosello`|fino a 5 foto di sfondo in più che sfumano a turno (`sfondo\_carosello`, solo percorsi `<locale>/sfondo/…`), `sfondo\_intervallo` 4-30 s, `sfondo\_zoom`|
+|`sfondo\_carosello\_permessi`|`percorsi\_sfondo\_validi()` chiusa a PUBLIC/anon (il test `anon` sorveglia le funzioni pubbliche: ogni funzione nuova va revocata a `public`)|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -196,7 +197,7 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 402 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 404 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
   **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 16 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
