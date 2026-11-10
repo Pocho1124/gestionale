@@ -220,6 +220,7 @@ body{margin:0;background:var(--s);color:var(--t);font:16px/1.5 var(--fc);-webkit
 .sfondo-menu-testata{position:absolute;inset:0;border-radius:0 0 18px 18px}
 .sfondo-menu-img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.08)}
 .sfondo-menu-velo{position:absolute;inset:0;background:var(--s)}
+.lingue{display:flex;justify-content:center;gap:10px;margin:0 0 12px}.lingue a{color:var(--p);text-decoration:none;font-weight:700;border:1px solid currentColor;border-radius:999px;padding:6px 14px;font-size:.9rem}.lingue a[aria-current]{background:var(--p);color:var(--s)}
 .lingua{text-align:center;margin:8px 0 0;font-size:.85rem}.lingua a{color:var(--p);font-weight:700;text-decoration:none;border:1px solid currentColor;border-radius:999px;padding:3px 12px}
 .filtro-regioni{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:12px 0 0;font-size:.8rem}
 .filtro-regioni span{width:100%;text-align:center;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
@@ -338,6 +339,10 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
   </div></div>
   <footer>
     ${a.testo_piede ? `<p>${esc(a.testo_piede)}</p>` : ""}
+    <nav class="lingue" aria-label="Lingua / Language">
+      <a href="${lingua === "en" ? "../" : "./"}" hreflang="it" lang="it"${lingua === "en" ? "" : ' aria-current="page"'}>🇮🇹 Italiano</a>
+      <a href="${lingua === "en" ? "./" : "en/"}" hreflang="en" lang="en"${lingua === "en" ? ' aria-current="page"' : ""}>🇬🇧 English</a>
+    </nav>
     <p>${esc(L.infoAllergeni)}</p>
     <p>${esc(L.aggiornato)}${esc(aggiornato)}</p>
   </footer>

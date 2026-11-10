@@ -299,6 +299,11 @@ export function OrdinaTavolo() {
           onConferma={(scelte) => { cambiaRiga(componendo.p, scelte, 1); setComponendo(null); setMessaggio({ testo: `${nomeIn(lingua, componendo.p)} ${T.aggiuntoAlTuo}` }); }} />
       )}
 
+      <nav className="ordina-lingue" aria-label="Lingua / Language">
+        <button lang="it" aria-pressed={lingua === "it"} className={lingua === "it" ? "attiva" : ""} onClick={() => setLingua("it")}>🇮🇹 Italiano</button>
+        <button lang="en" aria-pressed={lingua === "en"} className={lingua === "en" ? "attiva" : ""} onClick={() => setLingua("en")}>🇬🇧 English</button>
+      </nav>
+
       {vista === "menu" && pezzi > 0 && (
         <button className="ordina-barra" onClick={() => setVista("carrello")}>
           {T.vedi} · {pezzi} {pezzi === 1 ? T.piatto : T.piatti} · {euro(totale)}

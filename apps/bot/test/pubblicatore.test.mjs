@@ -165,12 +165,15 @@ describe("pagina statica", () => {
     assert.match(html, /\.\.\/foto\/x\.jpg/);   // foto del piatto nella cartella superiore
     assert.match(html, /href="\.\.\/" hreflang="it">Italiano/);
     assert.match(html, /"base":"\.\.\/"/);
+    assert.match(html, /<a href="\.\.\/" hreflang="it" lang="it">🇮🇹 Italiano<\/a>\s*<a href="\.\/" hreflang="en" lang="en" aria-current="page">🇬🇧 English<\/a>/);
   });
 
   test("pagina italiana: collegamento alla versione inglese, testi invariati", () => {
     const html = pub.pagina(menuEsempio(), "ora");
     assert.match(html, /<html lang="it">/);
     assert.match(html, /href="en\/" hreflang="en">English/);
+    // In fondo: bandierine delle due lingue, l'italiano attivo
+    assert.match(html, /<nav class="lingue"[^>]*>\s*<a href="\.\/" hreflang="it" lang="it" aria-current="page">🇮🇹 Italiano<\/a>\s*<a href="en\/" hreflang="en" lang="en">🇬🇧 English<\/a>/);
     assert.match(html, /Per informazioni sugli allergeni rivolgersi al personale/);
   });
 });
