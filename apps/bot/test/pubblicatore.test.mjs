@@ -186,6 +186,9 @@ describe("pagina statica", () => {
     assert.match(html, /Alérgenos: /);
     assert.match(html, /"base":"\.\.\/"/);
     assert.match(html, /aria-current="page">🇪🇸 Español/);
+    const v = menuEsempio(); const p0 = v.categorie[0].prodotti[0];
+    p0.descrizione_es = "Rojo de buena estructura"; p0.nome = "Aglianico";
+    assert.match(pub.pagina(v, "ora", null, null, {}, "v1", "es"), /<p class="desc">Tinto de buena estructura<\/p>/);   // colore sistemato in pubblicazione
   });
 
   test("pagina italiana: lingue solo in fondo, testi invariati", () => {

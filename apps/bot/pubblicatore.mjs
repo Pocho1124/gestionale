@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { regioneDi } from "./regioni.mjs";
 import { MAPPA_ITALIA } from "./mappa-italia.mjs";
+import { coloriVino } from "./traduttore.mjs";
 
 const C = {
   url: obbligatoria("SUPABASE_URL").replace(/\/$/, ""),
@@ -136,8 +137,9 @@ export function menuInLingua(menu, lingua) {
     categorie: menu.categorie.map((c) => ({
       ...c, nome: x(c, "nome"), descrizione: x(c, "descrizione"),
       prodotti: c.prodotti.map((p) => ({
-        ...p, nome: x(p, "nome"), descrizione: x(p, "descrizione"),
-        vino: p.vino ? { ...p.vino, note: x(p.vino, "note") } : p.vino,
+        // Colori dei vini sistemati anche sulle traduzioni già salvate (Tinto/Blanco, Red/White; nomi propri invariati)
+        ...p, nome: x(p, "nome"), descrizione: coloriVino(lingua, x(p, "descrizione"), p.nome),
+        vino: p.vino ? { ...p.vino, note: coloriVino(lingua, x(p.vino, "note"), p.nome) } : p.vino,
         allergeni: (p.allergeni || []).map((a) => t.allergeniNomi[a] ?? a),
         etichette: (p.etichette || []).map((e) => t.etichetteNomi[e] ?? e),
       })),

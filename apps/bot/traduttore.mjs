@@ -176,8 +176,10 @@ async function traduciLingua({ L, lingua, righe, db, chiediModello, log, limite 
             required: daTradurre.map(([it]) => `${it}_${L.nome}`) },
         }) ?? {};
       } catch (e) {
+        // Una voce troppo lunga per il tempo concesso si salta per questo avvio: non blocca le altre né lo spagnolo
+        if (e?.name === "TimeoutError") { tentati.add(v.chiave); log(`Traduzione ${L.nome} troppo lenta, saltata (${t.tabella} «${String(x[campi[0][0]] ?? "").slice(0, 40)}»)`); continue; }
         log(`Traduzione non disponibile: ${e.message}`);
-        return { salvate, fermo: true };
+        return { salvate, fermo: true };   // modello spento o occupato: si riprova al giro successivo
       }
     }
     tentati.add(v.chiave);

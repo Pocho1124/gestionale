@@ -195,6 +195,17 @@ describe("traduzione del menu", () => {
     assert.equal(modifiche[0].corpo.descrizione_es, "Tinto con cuerpo");
   });
 
+  test("voce troppo lenta: saltata, le altre e lo spagnolo vanno avanti", async () => {
+    const { db, modifiche } = dbFinto({ prodotti: [riga(20, "Lenta", "Descrizione lunghissima"), riga(21, "Tagliere misto", "")] });
+    await traduciMenu({ db, locale: LOCALE, chiediModello: async (r) => {
+      if (JSON.parse(r.utente).nome === "Lenta") throw Object.assign(new Error("tempo scaduto"), { name: "TimeoutError" });
+      return /in spagnolo/.test(r.sistema) ? { nome_spagnolo: "Tabla mixta" } : modello(r);
+    } });
+    assert.ok(modifiche.some((m) => m.corpo.nome_en === "Mixed board"));
+    assert.ok(modifiche.some((m) => m.corpo.nome_es === "Tabla mixta"));
+    assert.ok(!modifiche.some((m) => m.percorso.includes(id(20))));
+  });
+
   test("al massimo «limite» voci per giro", async () => {
     const { db, modifiche } = dbFinto({ prodotti: Array.from({ length: 30 }, (_, i) => riga(100 + i, `Piatto ${i}`, "")) });
     await traduciMenu({ lingue: ["en"], db, chiediModello: async ({ utente }) => ({ nome_inglese: `Dish ${JSON.parse(utente).nome.split(" ")[1]}` }), locale: LOCALE, limite: 15 });
