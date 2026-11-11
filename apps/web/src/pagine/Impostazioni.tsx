@@ -83,12 +83,14 @@ function SezioneTelegram() {
 /** Impostazioni: utenti (amministratore e responsabile), reparti e stampanti, bot Telegram (amministratore). */
 export function Impostazioni() {
   const { ruolo } = useSessione();
+  // Ogni modifica al personale (nuovo utente, ruolo, rimozione) aggiorna anche la sezione dei codici
+  const [versionePersonale, setVersionePersonale] = useState(0);
   if (!puo(ruolo, "utenti")) return <div className="pagina"><h1>Impostazioni</h1><p className="muto">Non hai i permessi per le impostazioni.</p></div>;
   return (
     <div className="pagina">
       <div className="pagina-testa"><h1>Impostazioni</h1></div>
-      <SezioneUtenti />
-      <SezioneCodici />
+      <SezioneUtenti onCambio={() => setVersionePersonale((v) => v + 1)} />
+      <SezioneCodici versione={versionePersonale} />
       {puo(ruolo, "reparti") && <SezioneReparti />}
       {puo(ruolo, "impostazioni") && <SezioneTavolo />}
       {puo(ruolo, "impostazioni") && <SezionePos />}
@@ -216,7 +218,7 @@ function SezioneTavolo() {
 interface UtenteLocale { user_id: string; nome: string; accesso: string; ruolo: Ruolo; attivo: boolean; ultimo_accesso: string | null; gestibile: boolean }
 
 /** Codici personali: chi ha il codice, quali account sono postazioni condivise, durata e «solo il responsabile». */
-function SezioneCodici() {
+function SezioneCodici({ versione }: { versione: number }) {
   const { locale, ruolo, sessione } = useSessione();
   const { personale, ricarica } = useCodice();
   const avvisa = useAvviso();
@@ -234,7 +236,7 @@ function SezioneCodici() {
     setUtenti(u.data as UtenteLocale[]);
     if (s.data) setSicurezza(s.data as { durata_secondi: number; solo_responsabile: boolean });
     await ricarica();
-  }, [locale, avvisa, ricarica]);
+  }, [locale, avvisa, ricarica, versione]);
   useEffect(() => { void carica(); }, [carica]);
   if (!locale) return null;
 
@@ -308,7 +310,7 @@ function SezioneCodici() {
   );
 }
 
-function SezioneUtenti() {
+function SezioneUtenti({ onCambio }: { onCambio: () => void }) {
   const { locale, ruolo } = useSessione();
   const avvisa = useAvviso();
   const [utenti, setUtenti] = useState<UtenteLocale[]>([]);
@@ -328,6 +330,7 @@ function SezioneUtenti() {
     const { error } = await fn();
     if (error) avvisa(messaggioErrore(error), "errore"); else avvisa(ok);
     await carica();
+    onCambio();
   };
   async function crea(e: FormEvent) {
     e.preventDefault();
