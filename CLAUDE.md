@@ -64,7 +64,8 @@ servizio. `docker restart` NON rilegge le variabili.
 1. Commit su `main` → GitHub Actions (`.github/workflows/pipeline.yml`): test di dominio (vitest), build del backoffice,
 migrazioni + test pgTAP su `supabase/postgres`, poi immagine `ghcr.io/pocho1124/gestionale-migrator:latest`
 (contiene migrazioni, `apps/bot`, sito compilato, `deploy/pi` in `/deploy`, `deploy/cloudflare` in `/deploy/cloudflare`).
-2. Sul server: `sudo /opt/gestionale/aggiorna.sh --forza` → applica migrazioni, aggiorna sito e codice del bot, riavvia i servizi.
+L'immagine è **firmata con cosign** (keyless, identità OIDC del workflow `pipeline.yml` su `main`, job `rilascio` con `id-token: write`).
+2. Sul server: `sudo /opt/gestionale/aggiorna.sh --forza` → **verifica la firma** (`cosign verify`, identità del workflow del repo + issuer GitHub), poi usa il **digest verificato** (mai `:latest`) per applicare migrazioni, aggiornare sito e codice del bot, riavviare i servizi. Immagine non firmata o non verificabile: nessun aggiornamento, errore nel log (Cockpit → Registri, unità `gestionale-aggiorna`). cosign (versione e SHA256 fissati) lo installa `installa-pi.sh` in `/usr/local/bin/cosign`; per cambiare versione aggiornare script e `cosign-release` nella pipeline.
 3. Installer in `/deploy` dell'immagine, sempre con:
 `sudo docker run --rm --entrypoint cat ghcr.io/pocho1124/gestionale-migrator:latest /deploy/<nome>.sh > /tmp/<nome>.sh \&\& sudo bash /tmp/<nome>.sh`
 
@@ -227,7 +228,7 @@ jsdom solo come dipendenza di sviluppo). Atteso: 108 test superati. Usano `BOT\_
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
 6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; testi tradotti anche nella composizione dei piatti (Componi) e nei nomi delle scelte; spagnolo scrivibile a mano nel Catalogo.
 8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.
-9. Sicurezza (analisi del 10/11 e dell'11/11/2026, rapporto in `docs/analisi-sicurezza-2026-11-11.md`), ancora aperti: account del bot con ruolo dedicato (oggi responsabile); token DNS di Cloudflare limitato; password dedicata di `supabase_storage_admin`; Whisper su rete interna; firma dell'immagine con cosign e verifica in `aggiorna.sh`; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito).
+9. Sicurezza (analisi del 10/11 e dell'11/11/2026, rapporto in `docs/analisi-sicurezza-2026-11-11.md`), ancora aperti: account del bot con ruolo dedicato (oggi responsabile); token DNS di Cloudflare limitato; password dedicata di `supabase_storage_admin`; Whisper su rete interna; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito). Chiusa: aggiornamento automatico senza verifica (immagine firmata con cosign in CI, verificata per digest da `aggiorna.sh`; resta aperta l'approvazione manuale delle migrazioni e la fiducia nel primo installer, scaricato da `:latest`).
 
 ## Note pratiche
 

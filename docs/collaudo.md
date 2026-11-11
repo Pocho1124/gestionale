@@ -90,3 +90,10 @@ Annota qui sotto ciò che non va (pagina, cosa hai fatto, cosa è successo) e ma
 - [ ] Account cucina: vede solo lo schermo delle comande.
 - [ ] Anche dal proprio account (titolare compreso) l'apertura di un tavolo chiede nome + codice; il bot Telegram approva senza codice.
 - [ ] Account postazione: nel menu solo Sala e Cucina; un indirizzo come /catalogo riporta alla Sala.
+
+## Verifica firma degli aggiornamenti
+
+- [ ] Dopo l'installazione: `cosign version` sul server mostra `v3.1.4`.
+- [ ] Dopo una pipeline verde: `sudo /opt/gestionale/aggiorna.sh --forza` scrive «Firma verificata (ghcr.io/pocho1124/gestionale-migrator@sha256:…)» e prosegue.
+- [ ] Prova di rifiuto (fuori orario di servizio): in `/opt/gestionale/aggiorna.sh` cambiare temporaneamente `pocho1124` in `IDENTITA` con un nome errato e lanciarlo con `--forza`: deve fermarsi con «ERRORE SICUREZZA: firma … non verificata», uscita diversa da 0, nessuna migrazione applicata. Poi ripristinare rilanciando `installa-pi.sh`.
+- [ ] Il log (Cockpit → Registri → `gestionale-aggiorna`) mostra l'errore di firma.

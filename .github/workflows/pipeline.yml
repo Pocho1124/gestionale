@@ -85,6 +85,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # Solo qui: serve a cosign per la firma keyless (identità OIDC del workflow)
+      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Nome immagine (minuscolo)
@@ -97,6 +99,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        id: costruzione
         with:
           context: .
           file: deploy/migrator/Dockerfile
@@ -105,3 +108,12 @@ jobs:
           tags: |
             ${{ env.IMMAGINE }}:latest
             ${{ env.IMMAGINE }}:${{ github.sha }}
+      # Firma keyless per digest: il server la verifica in aggiorna.sh prima di applicare
+      # migrazioni e codice. La versione di cosign è la stessa installata sul server.
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+      - name: Firma l'immagine con cosign
+        env:
+          DIGEST: ${{ steps.costruzione.outputs.digest }}
+        run: cosign sign --yes "${IMMAGINE}@${DIGEST}"

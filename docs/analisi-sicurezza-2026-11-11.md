@@ -39,7 +39,7 @@ bot Telegram, pubblicatore, Worker, stampa, Whisper, installer, pipeline. Nessun
 
 | Gravità | Falla | Proposta |
 |-|-|-|
-| Alta | Aggiornamento automatico ogni 5 min dall'immagine `:latest` senza verifica: chi compromette GitHub o una dipendenza esegue codice sul server | firma cosign in CI e verifica in `aggiorna.sh`, uso del digest; approvazione manuale delle migrazioni |
+| ~~Alta~~ | ~~Aggiornamento automatico dall'immagine `:latest` senza verifica~~ | **Chiusa**: immagine firmata con cosign keyless in CI, `aggiorna.sh` verifica la firma e usa il digest. Resta da valutare l'approvazione manuale delle migrazioni |
 | Media | Token Cloudflare DNS sul server con modifica di tutta la zona | delegare `_acme-challenge` a una zona dedicata o token limitato |
 | Media | `archivio-installa.sh` riusa la password del superuser per `supabase_storage_admin` | password dedicata casuale |
 | Media | L'account del bot ha il ruolo di responsabile (utenti, impostazioni, magazzino) | ruolo dedicato con solo catalogo e sala |

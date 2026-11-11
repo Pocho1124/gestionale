@@ -8,25 +8,66 @@ LAN_CIDR="${LAN_CIDR:-192.168.111.0/24}"
 SITO=/opt/gestionale/sito
 mkdir -p /opt/gestionale "$SITO/www" "$SITO/conf"
 
+# ---------- 0. cosign (verifica della firma dell'immagine) ----------
+# Versione e SHA256 fissati (release ufficiale sigstore/cosign). Per aggiornarla: cambiare
+# COSIGN_VERSIONE e i due hash da cosign_checksums.txt della release, e la stessa versione
+# in .github/workflows/pipeline.yml (cosign-release).
+COSIGN_VERSIONE="v3.1.4"
+COSIGN_SHA256_AMD64="424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"
+COSIGN_SHA256_ARM64="ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"
+case "$(uname -m)" in
+  x86_64|amd64) COSIGN_ARCH=amd64; COSIGN_SHA256="$COSIGN_SHA256_AMD64" ;;
+  aarch64|arm64) COSIGN_ARCH=arm64; COSIGN_SHA256="$COSIGN_SHA256_ARM64" ;;
+  *) echo "Architettura non supportata per cosign: $(uname -m)"; exit 1 ;;
+esac
+if ! /usr/local/bin/cosign version 2>/dev/null | grep -q "GitVersion: *$COSIGN_VERSIONE"; then
+  echo "Installo cosign $COSIGN_VERSIONE"
+  TMP=$(mktemp)
+  curl -fsSL -o "$TMP" "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSIONE/cosign-linux-$COSIGN_ARCH"
+  if [ "$(sha256sum "$TMP" | cut -d' ' -f1)" != "$COSIGN_SHA256" ]; then
+    rm -f "$TMP"; echo "SHA256 di cosign non corrispondente: installazione interrotta"; exit 1
+  fi
+  install -m 755 -o root -g root "$TMP" /usr/local/bin/cosign
+  rm -f "$TMP"
+fi
+
 # ---------- 1. Script di aggiornamento ----------
 cat > /opt/gestionale/aggiorna.sh <<'SCRIPT'
 #!/bin/sh
 # Controlla se su GitHub c'è una nuova versione: aggiorna database e backoffice.
+# L'immagine viene usata solo se la firma cosign (keyless, workflow del repo su main) è valida,
+# e sempre per digest: ciò che si verifica è esattamente ciò che si esegue.
 set -eu
 exec 9>/opt/gestionale/.lock
 flock -n 9 || { echo "Aggiornamento già in corso"; exit 0; }
-IMG="ghcr.io/pocho1124/gestionale-migrator:latest"
+REPO="ghcr.io/pocho1124/gestionale-migrator"
 STATO=/opt/gestionale/versione-installata
 SITO=/opt/gestionale/sito
+IDENTITA='^https://github\.com/[Pp]ocho1124/gestionale/\.github/workflows/pipeline\.yml@refs/heads/main$'
+EMITTENTE="https://token.actions.githubusercontent.com"
 
-if ! docker pull -q "$IMG" >/dev/null 2>&1; then
+if ! docker pull -q "$REPO:latest" >/dev/null 2>&1; then
   echo "Registro non raggiungibile (offline?): riprovo al prossimo giro"
   exit 0
 fi
-NUOVA=$(docker image inspect -f '{{.Id}}' "$IMG")
+DIGEST=$(docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$REPO:latest" | grep "^$REPO@sha256:" | head -n1 || true)
+if [ -z "$DIGEST" ]; then
+  echo "ERRORE SICUREZZA: digest dell'immagine non determinabile. Nessun aggiornamento applicato."
+  exit 1
+fi
+IMG="$DIGEST"
+if ! /usr/local/bin/cosign verify --certificate-identity-regexp "$IDENTITA" \
+     --certificate-oidc-issuer "$EMITTENTE" "$IMG" >/dev/null 2>/opt/gestionale/.cosign-errore; then
+  echo "ERRORE SICUREZZA: firma dell'immagine $IMG non verificata (non firmata dal workflow del repo, oppure Sigstore non raggiungibile). Nessun aggiornamento applicato."
+  sed 's/^/  cosign: /' /opt/gestionale/.cosign-errore | head -n 5
+  logger -t gestionale-aggiorna -p auth.err "Firma immagine non verificata ($IMG): aggiornamento rifiutato" 2>/dev/null || true
+  exit 1
+fi
+NUOVA="$IMG"
 if [ "$NUOVA" = "$(cat "$STATO" 2>/dev/null || true)" ] && [ "${1:-}" != "--forza" ]; then
   exit 0
 fi
+echo "Firma verificata ($IMG)"
 
 echo "Nuova versione trovata: applico le migrazioni"
 PGPASSWORD=$(grep '^POSTGRES_PASSWORD=' /opt/supabase/.env | cut -d= -f2-)
