@@ -9,12 +9,14 @@ import type { Ruolo } from "./tipi";
  * e si inserisce il codice; per qualche minuto le azioni sono di quella persona, poi la postazione si blocca da sola.
  * Il controllo vero lo fa il database (puo() con il ruolo di chi ha inserito il codice): qui c'è solo il tastierino.
  */
-export interface Persona { id: string; nome: string; ruolo: Ruolo; ha_codice: boolean; postazione: boolean }
+export interface Persona { id: string; nome: string; ruolo: Ruolo; ha_codice: boolean; postazione: boolean; esente?: boolean }
 export interface Operatore { id: string; nome: string; ruolo: Ruolo; scade_at: string }
-interface StatoOperatore { chiede_codice: boolean; durata_secondi: number; solo_responsabile: boolean; operatore: Operatore | null; personale: Persona[] }
+interface StatoOperatore { chiede_codice: boolean; postazione?: boolean; codice_per_tutti?: boolean; durata_secondi: number; solo_responsabile: boolean; operatore: Operatore | null; personale: Persona[] }
 
 interface ValoreCodice {
   chiedeCodice: boolean;
+  /** L'account collegato è una postazione condivisa (non ha un «proprio» codice). */
+  postazione: boolean;
   soloResponsabile: boolean;
   operatore: Operatore | null;
   personale: Persona[];
@@ -90,14 +92,14 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const valore: ValoreCodice = {
-    chiedeCodice: !!stato?.chiede_codice, soloResponsabile: !!stato?.solo_responsabile,
+    chiedeCodice: !!stato?.chiede_codice, postazione: !!stato?.postazione, soloResponsabile: !!stato?.solo_responsabile,
     operatore: valido(stato?.operatore ?? null) ? stato!.operatore : null, personale: stato?.personale ?? [],
     richiedi, blocca, ricarica,
   };
   return (
     <Ctx.Provider value={valore}>
       {children}
-      {aperto !== false && locale && <Tastierino localeId={locale.id} motivo={aperto} personale={(stato?.personale ?? []).filter((p) => p.ha_codice && !p.postazione)} onFine={chiudi} />}
+      {aperto !== false && locale && <Tastierino localeId={locale.id} motivo={aperto} personale={(stato?.personale ?? []).filter((p) => p.ha_codice && !p.postazione && !p.esente)} onFine={chiudi} />}
     </Ctx.Provider>
   );
 }

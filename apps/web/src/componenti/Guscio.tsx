@@ -48,7 +48,7 @@ function useSottoScorta(localeId: string | undefined, attivo: boolean) {
 
 export function Guscio() {
   const { locale, locali, ruolo, puoModificare, scegliLocale, esci, sessione } = useSessione();
-  const { chiedeCodice, personale, ricarica } = useCodice();
+  const { chiedeCodice, postazione, personale, ricarica } = useCodice();
   const [mioCodice, setMioCodice] = useState(false);
   const daConfermare = useDaConfermare(locale?.id);
   const sottoScorta = useSottoScorta(locale?.id, puo(ruolo, "magazzino"));
@@ -81,7 +81,7 @@ export function Guscio() {
         <BarraOperatore />
         <div className="barra-utente">
           <span className="muto">{sessione?.user.email}</span>
-          {!cucina && !chiedeCodice && <button className="btn btn-piccolo" onClick={() => setMioCodice(true)}>🔑 Il mio codice</button>}
+          {!cucina && !postazione && <button className="btn btn-piccolo" onClick={() => setMioCodice(true)}>🔑 Il mio codice</button>}
           <button className="btn btn-piccolo" onClick={() => void esci()}>Esci</button>
         </div>
       </header>
