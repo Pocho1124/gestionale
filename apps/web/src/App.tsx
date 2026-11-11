@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ProviderSessione, useSessione } from "./lib/sessione";
+import { ProviderCodice } from "./lib/codice";
 import { ProviderAvvisi } from "./componenti/Avviso";
 import { Guscio } from "./componenti/Guscio";
 import { Accesso } from "./pagine/Accesso";
@@ -21,11 +22,14 @@ const Cucina = lazy(() => import("./pagine/Cucina").then((m) => ({ default: m.Cu
 const attesa = <p className="centrato muto">Caricamento…</p>;
 
 function AreaRiservata() {
-  const { pronta, sessione, locale, puoModificare } = useSessione();
+  const { pronta, sessione, locale, ruolo, puoModificare } = useSessione();
   if (!pronta) return <p className="centrato muto">Caricamento…</p>;
   if (!sessione) return <Accesso />;
   if (!locale) return <PrimoLocale />;
+  // La cucina vede solo lo schermo delle comande
+  const iniziale = ruolo === "cucina" ? "/cucina" : "/catalogo";
   return (
+    <ProviderCodice>
     <Suspense fallback={attesa}>
     <Routes>
       <Route element={<Guscio />}>
@@ -39,10 +43,11 @@ function AreaRiservata() {
         <Route path="/fatture" element={<Fatture />} />
         <Route path="/cucina" element={<Cucina />} />
         {puoModificare && <Route path="/aspetto" element={<Aspetto />} />}
-        <Route path="*" element={<Navigate to="/catalogo" replace />} />
+        <Route path="*" element={<Navigate to={iniziale} replace />} />
       </Route>
     </Routes>
     </Suspense>
+    </ProviderCodice>
   );
 }
 

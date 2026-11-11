@@ -5,6 +5,7 @@ import { LATI, dimensioni, sedie, stacco, stato, type Tavolo } from "./piantina"
 import { nomeFileXml, xmlFattura, type Fattura } from "./fatture";
 import { conAggiunte, prezzoMinimo } from "./aggiunte";
 import { animazioniCarosello } from "./carosello";
+import { puo, puoSala } from "./permessi";
 import { TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, menuInLingua, nomeIn } from "./traduzioni";
 
 const tavolo = (forma: Tavolo["forma"], posti: number): Tavolo =>
@@ -146,5 +147,15 @@ describe("sfondo a carosello", () => {
     expect(css).toContain("@keyframes carosello1{0%,25.000%{opacity:0}33.333%,58.333%{opacity:1}66.667%,100%{opacity:0}}");
     expect(animazioniCarosello(1, 8).css).toBe("");
     expect(animazioniCarosello(2, 1).animazione(1)).toBe("carosello1 8s linear infinite");   // intervallo minimo 4 s
+  });
+});
+
+describe("permessi sulle postazioni condivise", () => {
+  it("sulla postazione i comandi di sala si vedono tutti: decide il codice di chi li usa", () => {
+    expect(puo("cameriere", "ordini.annulla")).toBe(false);
+    expect(puoSala("cameriere", "ordini.annulla", true)).toBe(true);
+    expect(puoSala("cameriere", "ordini.annulla", false)).toBe(false);
+    expect(puoSala("cameriere", "cassa", true)).toBe(false);
+    expect(puoSala("cucina", "sala.comanda", true)).toBe(false);
   });
 });

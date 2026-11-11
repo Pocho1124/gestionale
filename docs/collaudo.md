@@ -78,3 +78,13 @@ Prima di iniziare: `git push`, pipeline verde, poi sul server `sudo /opt/gestion
 - [ ] HTTPS in loco: `https://gestionale.enotechiasantalucia.it` con il lucchetto (vedi CLAUDE.md, Da fare n. 1).
 
 Annota qui sotto ciò che non va (pagina, cosa hai fatto, cosa è successo) e mandalo con uno screenshot.
+
+## Codici personali e postazioni
+
+- [ ] Impostazioni → Codici personali: codice per ogni cameriere, caposala e responsabile; il tablet di sala segnato come «postazione condivisa».
+- [ ] Dal tablet senza codice: «Apri tavolo» mostra il tastierino (nome + codice); con il codice giusto il tavolo si apre e risulta «Segue il tavolo: <nome>».
+- [ ] Dopo il tempo scelto (o «🔒 Blocca») la postazione chiede di nuovo il codice; la schermata lasciata aperta non modifica nulla.
+- [ ] Con «solo il cameriere che lo segue» attivo: un altro cameriere non modifica il tavolo; il caposala sì e può «Prendi il tavolo».
+- [ ] Storno dal tablet: il cameriere non può, il caposala inserisce il suo codice e annulla l'ordine.
+- [ ] 5 codici sbagliati: la postazione si blocca 5 minuti.
+- [ ] Account cucina: vede solo lo schermo delle comande.

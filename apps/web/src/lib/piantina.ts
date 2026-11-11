@@ -8,7 +8,7 @@ export type TipoElemento = "muro" | "bancone" | "porta" | "finestra" | "colonna"
 export type Lato = "sinistra" | "destra" | "sopra" | "sotto";
 export interface Elemento { id: string; locale_id: string; sala_id: string; tipo: TipoElemento; x: number; y: number; w: number; h: number; rotazione: number; etichetta: string }
 export type Selezione = { tipo: "tavolo" | "elemento"; id: string } | null;
-export interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; coperto_cent?: number; nomi_clienti?: { nome: string }[] }
+export interface SessioneT { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; coperto_cent?: number; nomi_clienti?: { nome: string }[]; responsabile?: string | null }
 export interface Wifi { locale_id?: string; ssid: string; sicurezza: "WPA" | "WEP" | "nopass"; password: string; nascosta: boolean; url_ordini: string }
 
 export const W = 1000;

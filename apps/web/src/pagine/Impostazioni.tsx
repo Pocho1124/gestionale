@@ -7,6 +7,7 @@ import { useAvviso } from "../componenti/Avviso";
 import { messaggioErrore } from "../lib/errori";
 import { NOMI_RUOLO, puo, ruoliAssegnabili } from "../lib/permessi";
 import type { Ruolo } from "../lib/tipi";
+import { CambiaCodice, useCodice } from "../lib/codice";
 
 interface UtenteTelegram { id: string; telegram_id: number; nome: string; attivo: boolean }
 
@@ -87,6 +88,7 @@ export function Impostazioni() {
     <div className="pagina">
       <div className="pagina-testa"><h1>Impostazioni</h1></div>
       <SezioneUtenti />
+      <SezioneCodici />
       {puo(ruolo, "reparti") && <SezioneReparti />}
       {puo(ruolo, "impostazioni") && <SezioneTavolo />}
       {puo(ruolo, "impostazioni") && <SezionePos />}
@@ -212,6 +214,99 @@ function SezioneTavolo() {
 }
 
 interface UtenteLocale { user_id: string; nome: string; accesso: string; ruolo: Ruolo; attivo: boolean; ultimo_accesso: string | null; gestibile: boolean }
+
+/** Codici personali: chi ha il codice, quali account sono postazioni condivise, durata e «solo il responsabile». */
+function SezioneCodici() {
+  const { locale, ruolo, sessione } = useSessione();
+  const { personale, ricarica } = useCodice();
+  const avvisa = useAvviso();
+  const [utenti, setUtenti] = useState<UtenteLocale[]>([]);
+  const [sicurezza, setSicurezza] = useState({ durata_secondi: 120, solo_responsabile: false });
+  const [codice, setCodice] = useState<{ id: string; nome: string; proprio: boolean; ha: boolean } | null>(null);
+
+  const carica = useCallback(async () => {
+    if (!locale) return;
+    const [u, s] = await Promise.all([
+      sb().rpc("elenco_utenti", { p_locale: locale.id }),
+      sb().from("sicurezza_sala").select("durata_secondi, solo_responsabile").eq("locale_id", locale.id).maybeSingle(),
+    ]);
+    if (u.error) { avvisa(messaggioErrore(u.error), "errore"); return; }
+    setUtenti(u.data as UtenteLocale[]);
+    if (s.data) setSicurezza(s.data as { durata_secondi: number; solo_responsabile: boolean });
+    await ricarica();
+  }, [locale, avvisa, ricarica]);
+  useEffect(() => { void carica(); }, [carica]);
+  if (!locale) return null;
+
+  const azione = async (fn: () => PromiseLike<{ error: unknown }>, ok: string) => {
+    const { error } = await fn();
+    if (error) avvisa(messaggioErrore(error), "errore"); else avvisa(ok);
+    await carica();
+  };
+  const salvaSicurezza = (s: { durata_secondi: number; solo_responsabile: boolean }) => {
+    setSicurezza(s);
+    void azione(() => sb().rpc("imposta_sicurezza_sala", { p_locale: locale.id, p_durata_secondi: s.durata_secondi, p_solo_responsabile: s.solo_responsabile }), "Impostazioni salvate");
+  };
+  const persona = (id: string) => personale.find((p) => p.id === id);
+
+  return (
+    <section className="gruppo">
+      <legend>Codici personali</legend>
+      <p className="muto piccolo">
+        Sui dispositivi condivisi (tablet di sala, PC) segna l'account come <b>postazione</b>: per aprire tavoli, comandare, confermare,
+        incassare o stornare bisogna toccare il proprio nome e inserire il proprio codice, e l'azione vale con il ruolo di chi l'ha inserito
+        (un direttore può stornare anche dal tablet dei camerieri). Dopo il tempo scelto la postazione si blocca da sola: una schermata lasciata
+        aperta non modifica nulla. Il menu dal tavolo e il telefono dei clienti non cambiano.
+      </p>
+      <table className="tabella">
+        <thead><tr><th>Nome</th><th>Ruolo</th><th>Codice</th><th>Postazione condivisa</th><th /></tr></thead>
+        <tbody>
+          {utenti.filter((u) => u.attivo).map((u) => {
+            const p = persona(u.user_id), proprio = u.user_id === sessione?.user.id;
+            return (
+              <tr key={u.user_id}>
+                <td>{u.nome || u.accesso}</td>
+                <td>{NOMI_RUOLO[u.ruolo]}</td>
+                <td>{p?.postazione ? <span className="muto">—</span> : p?.ha_codice ? "✅ impostato" : <span className="muto">nessuno</span>}</td>
+                <td>{u.gestibile
+                  ? <input type="checkbox" checked={!!p?.postazione} aria-label={`${u.nome || u.accesso}: postazione condivisa`}
+                      onChange={(e) => void azione(() => sb().rpc("imposta_chiede_codice", { p_locale: locale.id, p_utente: u.user_id, p_valore: e.target.checked }),
+                        e.target.checked ? "Ora l'account chiede il codice personale per le azioni di sala" : "L'account torna personale")} />
+                  : p?.postazione ? "sì" : "no"}</td>
+                <td>{(u.gestibile || proprio) && !p?.postazione && (
+                  <span className="riga-form">
+                    <button className="btn btn-piccolo" onClick={() => setCodice({ id: u.user_id, nome: u.nome || u.accesso, proprio, ha: !!p?.ha_codice })}>
+                      {p?.ha_codice ? "Cambia codice" : "Imposta codice"}</button>
+                    {p?.ha_codice && u.gestibile && (
+                      <button className="btn btn-pericolo btn-piccolo" onClick={() => {
+                        if (confirm(`Togliere il codice di ${u.nome || u.accesso}? Non potrà più lavorare sulle postazioni finché non ne ha uno nuovo.`))
+                          void azione(() => sb().rpc("imposta_codice", { p_locale: locale.id, p_utente: u.user_id, p_codice: null }), "Codice tolto");
+                      }}>Togli</button>
+                    )}
+                  </span>
+                )}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {puo(ruolo, "impostazioni") && (
+        <div className="riga-form">
+          <label>Il codice vale per{" "}
+            <select value={sicurezza.durata_secondi} onChange={(e) => salvaSicurezza({ ...sicurezza, durata_secondi: Number(e.target.value) })}>
+              {[60, 120, 300, 600].map((s) => <option key={s} value={s}>{s < 120 ? `${s} secondi` : `${s / 60} minuti`}</option>)}
+            </select>
+          </label>
+          <label className="interruttore"><input type="checkbox" checked={sicurezza.solo_responsabile}
+            onChange={(e) => salvaSicurezza({ ...sicurezza, solo_responsabile: e.target.checked })} />
+            Ogni tavolo lo modifica solo il cameriere che lo segue (caposala e responsabili sempre)</label>
+        </div>
+      )}
+      {codice && <CambiaCodice localeId={locale.id} utente={codice.id} nome={codice.nome} proprio={codice.proprio} haCodice={codice.ha}
+        onChiudi={(fatto) => { setCodice(null); if (fatto) { avvisa("Codice salvato"); void carica(); } }} />}
+    </section>
+  );
+}
 
 function SezioneUtenti() {
   const { locale, ruolo } = useSessione();

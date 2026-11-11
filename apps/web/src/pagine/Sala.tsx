@@ -63,7 +63,7 @@ export function Sala() {
     const [s, t, x, e, o, r, p, c] = await Promise.all([
       sb().from("sale").select("*").eq("locale_id", locale.id).order("posizione").order("nome"),
       sb().from("tavoli").select("*").eq("locale_id", locale.id).order("nome"),
-      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at, codice_errati, coperto_cent, nomi_clienti(nome)").eq("locale_id", locale.id).is("chiusa_at", null),
+      sb().from("sessioni_tavolo").select("id, tavolo_id, coperti, codice, aperta_at, codice_errati, coperto_cent, responsabile, nomi_clienti(nome)").eq("locale_id", locale.id).is("chiusa_at", null),
       sb().from("elementi_sala").select("*").eq("locale_id", locale.id),
       sb().from("ordini").select("id, tavolo_id, sessione_id, stato, origine, nota, motivo, creato_at, righe_ordine(nome, quantita, prezzo_cent, nota, opzioni)")
         .eq("locale_id", locale.id).gte("creato_at", new Date(Date.now() - 24 * 3600_000).toISOString()).order("creato_at", { ascending: false }),

@@ -748,3 +748,30 @@ h1, h2 { font-family: var(--titoli); font-weight: 400; margin: 0; }
 .menu .menu-nav{top:8px;margin:16px 0 0;padding:10px 16px;border-radius:14px;background:color-mix(in srgb,var(--m-sfondo) 92%,transparent);border:1px solid color-mix(in srgb,var(--m-primario) 30%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .menu .menu-nav a:hover,.menu .menu-nav a:focus-visible{color:var(--m-primario);opacity:1}
 .menu .menu-categoria{scroll-margin-top:76px}
+
+/* ---------- Codici personali sulle postazioni condivise ---------- */
+.barra-operatore { display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.barra-operatore.bloccata { background: color-mix(in srgb, var(--accento) 18%, transparent); border-color: color-mix(in srgb, var(--accento) 60%, transparent);
+  color: inherit; cursor: pointer; padding: 6px 14px; font-weight: 600; }
+.tastierino { width: min(460px, 100%); gap: 14px; }
+.tastierino-motivo { background: color-mix(in srgb, var(--accento) 16%, transparent); border-radius: 10px; padding: 8px 10px; font-size: .9rem; }
+.tastierino-nomi { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; max-height: 55vh; overflow: auto; }
+.tastierino-nome { display: grid; justify-items: center; gap: 4px; padding: 14px 8px; border: 1px solid var(--linea); border-radius: 14px; background: var(--sfondo);
+  cursor: pointer; min-height: 112px; touch-action: manipulation; }
+.tastierino-nome:active, .tastierino-tasto:active { transform: scale(.97); }
+.tastierino-iniziale { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--primario); color: var(--su-primario);
+  font: 1.3rem var(--titoli); }
+.tastierino-punti { display: flex; justify-content: center; gap: 14px; min-height: 22px; }
+.tastierino-punti span { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--primario); }
+.tastierino-punti span.pieno { background: var(--primario); }
+.tastierino-errore { color: var(--pericolo); font-weight: 600; }
+.tastierino-tasti { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tastierino-tasto { min-height: 64px; border-radius: 16px; border: 1px solid var(--linea); background: var(--sfondo); font-size: 1.6rem; font-weight: 600;
+  cursor: pointer; touch-action: manipulation; font-variant-numeric: tabular-nums; }
+.tastierino-entra { min-height: 52px; font-size: 1.1rem; }
+.tastierino-annulla { justify-self: center; }
+.responsabile-tavolo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.cambia-codice { text-align: left; }
+.cambia-codice label { display: grid; gap: 4px; font-weight: 600; font-size: .9rem; }
+.cambia-codice input { font-size: 1.2rem; letter-spacing: .3em; }

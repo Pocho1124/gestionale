@@ -27,7 +27,8 @@ function useDaConfermare(localeId?: string) {
   return n;
 }
 
-import { NOMI_RUOLO, puo } from "../lib/permessi";
+import { NOMI_RUOLO, puo, puoSala } from "../lib/permessi";
+import { BarraOperatore, CambiaCodice, useCodice } from "../lib/codice";
 
 /** Articoli di magazzino sotto la scorta minima (solo quelli con una scorta impostata), ricontati ogni due minuti. */
 function useSottoScorta(localeId: string | undefined, attivo: boolean) {
@@ -47,9 +48,12 @@ function useSottoScorta(localeId: string | undefined, attivo: boolean) {
 
 export function Guscio() {
   const { locale, locali, ruolo, puoModificare, scegliLocale, esci, sessione } = useSessione();
+  const { chiedeCodice, personale, ricarica } = useCodice();
+  const [mioCodice, setMioCodice] = useState(false);
   const daConfermare = useDaConfermare(locale?.id);
   const sottoScorta = useSottoScorta(locale?.id, puo(ruolo, "magazzino"));
   if (!locale) return null;
+  const cucina = ruolo === "cucina";
   return (
     <div className="guscio">
       <header className="barra nascondi-stampa">
@@ -62,9 +66,9 @@ export function Guscio() {
           {ruolo && <span className="pill">{NOMI_RUOLO[ruolo]}</span>}
         </div>
         <nav className="barra-nav">
-          <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>
+          {!cucina && <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>}
           {puo(ruolo, "cucina.avanza") && <NavLink to="/cucina">Cucina</NavLink>}
-          <NavLink to="/catalogo">Catalogo</NavLink>
+          {!cucina && <NavLink to="/catalogo">Catalogo</NavLink>}
           {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
           {puo(ruolo, "catalogo") && <NavLink to="/enciclopedia">Vini</NavLink>}
           {puo(ruolo, "magazzino") && <NavLink to="/magazzino" title={sottoScorta ? `${sottoScorta} articoli sotto la scorta minima` : undefined}>
@@ -72,15 +76,19 @@ export function Guscio() {
           {puo(ruolo, "cassa") && <NavLink to="/cassa">Cassa</NavLink>}
           {puo(ruolo, "cassa") && <NavLink to="/fatture">Fatture</NavLink>}
           {puo(ruolo, "utenti") && <NavLink to="/impostazioni">Impostazioni</NavLink>}
-          <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>
+          {!cucina && <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>}
         </nav>
+        <BarraOperatore />
         <div className="barra-utente">
           <span className="muto">{sessione?.user.email}</span>
+          {!cucina && !chiedeCodice && <button className="btn btn-piccolo" onClick={() => setMioCodice(true)}>🔑 Il mio codice</button>}
           <button className="btn btn-piccolo" onClick={() => void esci()}>Esci</button>
         </div>
       </header>
       <main className="contenuto"><Outlet /></main>
-      {ruolo && ruolo !== "cucina" && <NotificheSala localeId={locale.id} localeNome={locale.nome} gestisceConto={puo(ruolo, "sala.chiudi")} />}
+      {mioCodice && sessione && <CambiaCodice localeId={locale.id} utente={sessione.user.id} nome="" proprio
+        haCodice={!!personale.find((p) => p.id === sessione.user.id)?.ha_codice} onChiudi={(fatto) => { setMioCodice(false); if (fatto) void ricarica(); }} />}
+      {ruolo && ruolo !== "cucina" && <NotificheSala localeId={locale.id} localeNome={locale.nome} gestisceConto={puoSala(ruolo, "sala.chiudi", chiedeCodice)} />}
     </div>
   );
 }

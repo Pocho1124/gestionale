@@ -4,7 +4,8 @@ import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
 import { stampaConto } from "../lib/conto";
 import { useSessione } from "../lib/sessione";
-import { puo } from "../lib/permessi";
+import { puoSala } from "../lib/permessi";
+import { nomePersona, useCodice } from "../lib/codice";
 import type { GruppoScelte, Scelta } from "../lib/tipi";
 import { descriviScelte, prezzoComposto } from "./Componi";
 import { Pagamento } from "./Pagamento";
@@ -17,7 +18,7 @@ export interface OrdineSala { id: string; tavolo_id: string; sessione_id: string
 export interface RichiestaSala { id: string; tavolo_id: string; righe: { prodotto_id: string; quantita: number; nota?: string; opzioni?: string[] }[]; nota: string; creato_at: string; nomi_clienti?: { nome: string } | { nome: string }[] | null }
 export interface ProdottoBreve { id: string; nome: string; prezzo_cent: number; disponibile: boolean; visibile: boolean; categoria_id: string; gruppi: GruppoScelte[]; aggiunte: Scelta[] }
 export interface CategoriaBreve { id: string; nome: string }
-interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; coperto_cent?: number; nomi_clienti?: { nome: string }[] }
+interface SessioneBreve { id: string; tavolo_id: string; coperti: number; codice: string; aperta_at: string; codice_errati?: number; coperto_cent?: number; nomi_clienti?: { nome: string }[]; responsabile?: string | null }
 export interface ComandaStampa { id: string; ordine_id: string | null; stato: string; tipo: string; errore: string; reparti: { nome: string } | null }
 interface TavoloBreve { id: string; nome: string; posti: number }
 
@@ -143,7 +144,8 @@ export function PannelloTavolo(props: {
   prenotazione?: Prenotazione;
 }) {
   const avvisa = useAvviso();
-  const { locale, ruolo } = useSessione();
+  const { locale, ruolo, sessione: accesso } = useSessione();
+  const { chiedeCodice, operatore, personale } = useCodice();
   const { tavolo, sessione } = props;
   const [destinazione, setDestinazione] = useState<{ modo: "sposta" | "unisci"; tavolo: string } | null>(null);
   const [cassa, setCassa] = useState<string | null>(null);   // sessione del conto aperto nel popup
@@ -223,6 +225,13 @@ export function PannelloTavolo(props: {
           )}
           {!!sessione.nomi_clienti?.length && <p>👤 {sessione.nomi_clienti.map((n) => n.nome).join(", ")}</p>}
           <div className="codice-tavolo"><span className="muto piccolo">Codice del tavolo</span><strong>{sessione.codice}</strong></div>
+          <p className="responsabile-tavolo">
+            👤 Segue il tavolo: <b>{sessione.responsabile ? nomePersona(personale, sessione.responsabile) : "nessuno in particolare"}</b>
+            {sessione.responsabile !== (chiedeCodice ? operatore?.id : accesso?.user.id) && (
+              <button className="btn btn-piccolo" disabled={attesa}
+                onClick={() => void esegui(() => sb().rpc("prendi_tavolo", { p_sessione: sessione.id }), `Ora segui tu il tavolo ${tavolo.nome}`)}>Prendi il tavolo</button>
+            )}
+          </p>
           {(sessione.codice_errati ?? 0) >= 10 && (
             <p className="avviso-codice">⚠️ Codice sbagliato {sessione.codice_errati} volte: i telefoni sono bloccati.
               <button className="btn btn-piccolo" disabled={attesa}
@@ -240,7 +249,7 @@ export function PannelloTavolo(props: {
                   <button className="btn btn-pieno btn-piccolo" onClick={() => void esegui(() => sb().rpc("decidi_ordine", { p_ordine: o.id, p_conferma: true, p_motivo: "" }), "Ordine confermato")}>Conferma</button>
                 </>}
                 {PROSSIMO[o.stato] && <button className="btn btn-piccolo" onClick={() => void esegui(() => sb().rpc("avanza_ordine", { p_ordine: o.id, p_stato: PROSSIMO[o.stato]!.stato }), "Aggiornato")}>→ {PROSSIMO[o.stato]!.etichetta}</button>}
-                {puo(ruolo, "ordini.annulla") && !["rifiutato", "annullato"].includes(o.stato) && (
+                {puoSala(ruolo, "ordini.annulla", chiedeCodice) && !["rifiutato", "annullato"].includes(o.stato) && (
                   <button className="btn btn-pericolo btn-piccolo" onClick={() => {
                     const motivo = prompt("Motivo dell'annullamento (resta nello storico):", "");
                     if (motivo !== null) void esegui(() => sb().rpc("annulla_ordine", { p_ordine: o.id, p_motivo: motivo }), "Ordine annullato: il magazzino è stato ripristinato");
@@ -267,7 +276,7 @@ export function PannelloTavolo(props: {
             if (errore) { avvisa(errore, "errore"); return; }
             setPreconti(segnaPreconto(sessione.id));
           }}>🖨️ Stampa preconto</button>
-          {puo(ruolo, "sala.chiudi") ? (
+          {puoSala(ruolo, "sala.chiudi", chiedeCodice) ? (
             preconti.includes(sessione.id) ? (
               <button className="btn btn-pericolo btn-chiudi-tavolo" disabled={attesa} onClick={() => setCassa(sessione.id)}>💶 Chiudi tavolo · {euro(conto)}</button>
             ) : <button className="btn btn-testo piccolo" onClick={() => setCassa(sessione.id)}>Incassa senza preconto</button>
