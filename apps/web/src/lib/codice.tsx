@@ -227,8 +227,9 @@ export function CambiaCodice(props: { localeId: string; utente: string; nome: st
     e.preventDefault();
     if (!/^\d{4,6}$/.test(nuovo)) { setErrore("Il codice deve avere da 4 a 6 cifre"); return; }
     if (nuovo !== ripeti) { setErrore("I due codici non coincidono"); return; }
-    const { error } = await sb().rpc("imposta_codice", { p_locale: props.localeId, p_utente: props.utente, p_codice: nuovo, p_attuale: props.proprio && props.haCodice ? attuale : null });
-    if (error) { setErrore(error.message); return; }
+    const { data, error } = await sb().rpc("imposta_codice", { p_locale: props.localeId, p_utente: props.utente, p_codice: nuovo, p_attuale: props.proprio && props.haCodice ? attuale : null });
+    const esito = data as { errore?: string } | null;
+    if (error || esito?.errore) { setErrore(error?.message ?? esito?.errore ?? "Errore"); return; }
     props.onChiudi(true);
   }
   return (

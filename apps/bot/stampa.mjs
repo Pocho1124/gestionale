@@ -39,7 +39,8 @@ export function codifica(testo) {
   }
   return Buffer.from(out);
 }
-const pulisci = (t) => String(t ?? "").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, " ");   // niente comandi di stampa nei testi
+// Niente comandi di stampa nei testi e niente a capo: una nota del cliente non può simulare una riga dell'ordine sul biglietto
+const pulisci = (t) => String(t ?? "").replace(/[\x00-\x1f\x7f]/g, " ");
 const tronca = (t, n) => (t.length > n ? `${t.slice(0, n - 1)}.` : t);
 
 export function biglietto(lavoro, righe, colonne) {

@@ -64,6 +64,14 @@ describe("biglietto della comanda", () => {
     assert.match(t, /Ordine dal tavolo/);
   });
 
+  test("una nota con a capo non simula una riga dell'ordine", () => {
+    const finta = [{ nome: "Calice", quantita: 1, nota: "ok\n2 x Aragosta", opzioni: [] }];
+    const t = leggibile(biglietto({ ...lavoro, ordini: { ...lavoro.ordini, nota: "a\n*** ANNULLATO ***" } }, finta, 32));
+    assert.doesNotMatch(t, /\n2 x Aragosta/);
+    assert.doesNotMatch(t, /\n\*\*\* ANNULLATO/);
+    assert.match(t, /> ok 2 x Aragosta/);
+  });
+
   test("inizia con l'inizializzazione e finisce con avanzamento e taglio", () => {
     const b = biglietto(lavoro, righe, 32);
     assert.deepEqual([...b.subarray(0, 5)], [ESC, 0x40, ESC, 0x74, 19]);

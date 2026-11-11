@@ -854,7 +854,8 @@ const prossima = (lista) => lista.reduce((m, x) => Math.max(m, x.posizione ?? 0)
 
 // ---------------------------------------------------------------- Conversazione
 const inAttesa = new Map();   // id -> { azione, catalogo, chat, scade }
-let ultimaModifica = null;    // operazioni per /annulla
+/** Operazioni per /annulla, una per chat: lo /annulla di una persona non tocca le modifiche di un'altra. */
+const ultimeModifiche = new Map();
 
 const AIUTO =
   "Scrivimi cosa vuoi cambiare nel menu, ad esempio:\n" +
@@ -1033,6 +1034,7 @@ export async function gestisciMessaggio(m) {
     return invia(chat, "Foto scartata: non ho modificato nulla.");
   }
   if (testo === "/annulla") {
+    const ultimaModifica = ultimeModifiche.get(String(chat));
     if (!ultimaModifica) return invia(chat, "Non c'è nessuna modifica da annullare.");
     for (const op of ultimaModifica) {
       // Solo le tabelle che il bot modifica; i filtri sono costruiti dal bot con UUID già validati
@@ -1040,7 +1042,7 @@ export async function gestisciMessaggio(m) {
       if (op.inserisci) await db(op.tabella, { metodo: "POST", corpo: op.inserisci, unisci: !!op.unisci });
       else await db(`${op.tabella}?${op.filtro ?? `id=eq.${uuid(op.id)}`}`, op.elimina ? { metodo: "DELETE" } : { metodo: "PATCH", corpo: op.patch });
     }
-    ultimaModifica = null;
+    ultimeModifiche.delete(String(chat));
     aggiornaMenuPubblico();
     return invia(chat, "↩️ Ultima modifica annullata.");
   }
@@ -1107,16 +1109,20 @@ const notificati = new Set();
 let erroreSalaSegnalato = false;
 const avvioBot = new Date().toISOString();
 
-/** Utenti gestiti dal backoffice (Impostazioni), aggiornati ogni 30 s; quelli del file di configurazione restano sempre validi. */
-let utentiWeb = new Set();
+/**
+ * Utenti gestiti dal backoffice (Impostazioni), aggiornati ogni 30 s. Quelli del file di configurazione valgono anche senza
+ * tabella, ma chi è disattivato nel backoffice resta fuori anche se è nel file.
+ */
+let utentiWeb = new Set(), utentiSospesi = new Set();
 async function aggiornaUtenti() {
   try {
-    const righe = await db(`telegram_utenti?select=telegram_id&locale_id=eq.${C.locale}&attivo=eq.true`);
-    utentiWeb = new Set(righe.map((r) => String(r.telegram_id)));
+    const righe = await db(`telegram_utenti?select=telegram_id,attivo&locale_id=eq.${C.locale}`);
+    utentiWeb = new Set(righe.filter((r) => r.attivo).map((r) => String(r.telegram_id)));
+    utentiSospesi = new Set(righe.filter((r) => !r.attivo).map((r) => String(r.telegram_id)));
   } catch { /* tabella non ancora presente o rete: si tiene l'elenco precedente */ }
 }
-export const autorizzato = (id) => C.utenti.has(String(id)) || utentiWeb.has(String(id));
-const tuttiGliUtenti = () => new Set([...C.utenti, ...utentiWeb]);
+export const autorizzato = (id) => !utentiSospesi.has(String(id)) && (C.utenti.has(String(id)) || utentiWeb.has(String(id)));
+const tuttiGliUtenti = () => new Set([...C.utenti, ...utentiWeb].filter((u) => !utentiSospesi.has(u)));
 
 export async function controllaSala() {
   const quindici = encodeURIComponent(new Date(Date.now() - 15 * 60_000).toISOString());
@@ -1220,7 +1226,7 @@ export async function gestisciPulsante(q) {
   }
   try {
     const { esito, annulla } = await esegui(pend.azione, pend.catalogo);
-    ultimaModifica = annulla;
+    ultimeModifiche.set(String(q.message.chat.id), annulla);
     aggiornaMenuPubblico();
     await tg("answerCallbackQuery", { callback_query_id: q.id, text: "Fatto" });
     return chiudi(`${q.message.text.replace(/\n\nConfermi\?$/, "")}\n\n✅ ${esito} Scrivi /annulla per tornare indietro.`);

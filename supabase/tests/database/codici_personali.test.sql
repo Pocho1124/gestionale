@@ -45,7 +45,7 @@ set local role authenticated;
 
 select pg_temp.come((select v::text from ctx where k = 'sara'));
 select throws_ok($$ select public.imposta_codice((select v from ctx where k = 'locale'), (select v from ctx where k = 'marco'), '9035') $$, '42501', null, 'Un cameriere non cambia il codice di un collega');
-select throws_ok($$ select public.imposta_codice((select v from ctx where k = 'locale'), (select v from ctx where k = 'sara'), '9035') $$, '42501', null, 'Per cambiare il proprio codice serve quello attuale');
+select is(public.imposta_codice((select v from ctx where k = 'locale'), (select v from ctx where k = 'sara'), '9035') ->> 'errore', 'Il codice attuale non è corretto', 'Per cambiare il proprio codice serve quello attuale');
 select lives_ok($$ select public.imposta_codice((select v from ctx where k = 'locale'), (select v from ctx where k = 'sara'), '9035', '2580') $$, 'Con il codice attuale si cambia');
 -- Account personale senza codice richiesto: come prima
 select lives_ok($$ select public.apri_tavolo('c0d30000-0000-0000-0000-000000000003', 2) $$, 'Sul proprio account il cameriere lavora come prima');
