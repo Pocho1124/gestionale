@@ -435,6 +435,32 @@ footer{margin-top:26px;font-size:.82rem;opacity:.7;text-align:center}
 html{scroll-padding-top:76px}
 .menu > nav{top:8px;margin:16px 0 0;padding:10px 16px;border-radius:14px;background:color-mix(in srgb,var(--s) 92%,transparent);border:1px solid color-mix(in srgb,var(--p) 30%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .menu > nav a:hover,.menu > nav a:focus-visible{color:var(--p);opacity:1}
+/* Telefono e tablet: lingue in una sola riga, regioni e categorie che scorrono di lato, categoria attiva evidenziata,
+   due colonne di piatti sul tablet (sopra 760 px) */
+.lingue{flex-wrap:nowrap;gap:0;width:max-content;max-width:100%;margin:14px auto 0;padding:3px;border-radius:999px;border:1px solid color-mix(in srgb,var(--p) 45%,transparent);background:color-mix(in srgb,var(--s) 80%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.lingue a,.lingue a[aria-current]{border:0;padding:6px 12px;white-space:nowrap;font-size:clamp(.7rem,3.1vw,.85rem)}
+.lingue a{background:transparent}
+.menu > nav{scroll-snap-type:x proximity;scroll-padding-inline:16px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12px,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(90deg,transparent,#000 12px,#000 calc(100% - 22px),transparent)}
+.menu > nav a{scroll-snap-align:start;transition:background-color .2s,color .2s,box-shadow .2s}
+.menu > nav a[aria-current="true"]{background:var(--p);color:var(--s);border-color:var(--p);opacity:1}
+.menu.elegante > nav a[aria-current="true"]{background:transparent;color:var(--p);box-shadow:inset 0 -2px 0 var(--p)}
+@media (max-width:600px){
+  .lingue a,.lingue a[aria-current]{padding:6px 9px}
+  .filtro-scelte{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity;scroll-padding-inline:14px;margin-inline:-14px;padding-inline:14px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent,#000 8px,#000 calc(100% - 24px),transparent)}
+  .filtro-scelte::-webkit-scrollbar{display:none}
+  .filtro-regioni button{flex:none;scroll-snap-align:start;padding:7px 14px}
+  .menu .cat{padding:16px 14px 6px;border-radius:16px}
+  .menu .piatto.apribile{min-height:44px}
+}
+@media (min-width:760px){
+  .menu{max-width:1040px;padding-inline:28px}
+  .menu > header,.menu .filtro-regioni{max-width:720px;margin-inline:auto}
+  .menu.lista .piatti,.menu.elegante .piatti{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
+  .menu.lista .piatti > .regione-titolo,.menu.elegante .piatti > .regione-titolo{grid-column:1/-1}
+  .menu.lista .piatti > .piatto:last-child,.menu.elegante .piatti > .piatto:last-child{border-bottom:1px solid color-mix(in srgb,var(--t) 12%,transparent)}
+  .menu .riga h3{font-size:1.2rem}
+  .menu .desc{font-size:1rem}
+}
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 </style>
 </head>
@@ -471,6 +497,21 @@ html{scroll-padding-top:76px}
   // Foto del carosello: dopo il caricamento della pagina, così il menu compare subito
   addEventListener("load", () => document.querySelectorAll("[data-sfondo]").forEach((e) => { e.style.backgroundImage = "url('" + e.dataset.sfondo.replace(/['()]/g, "") + "')"; }));
   const D = JSON.parse(document.getElementById("dati").textContent);
+  // Barra delle categorie: evidenzia quella che si sta leggendo e la porta in vista (scorre di lato sul telefono)
+  const voci = [...document.querySelectorAll(".menu > nav a")];
+  if (voci.length && "IntersectionObserver" in window) {
+    const barra = voci[0].parentElement, visibili = new Set();
+    const spia = new IntersectionObserver((cambi) => {
+      cambi.forEach((c) => (c.isIntersecting ? visibili.add(c.target.id) : visibili.delete(c.target.id)));
+      const attuale = [...document.querySelectorAll(".menu .cat")].find((s) => visibili.has(s.id));
+      voci.forEach((a) => {
+        const on = !!attuale && a.getAttribute("href") === "#" + attuale.id;
+        if (on && a.getAttribute("aria-current") !== "true") barra.scrollTo({ left: a.offsetLeft - (barra.clientWidth - a.clientWidth) / 2, behavior: "smooth" });
+        if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+      });
+    }, { rootMargin: "-90px 0px -55% 0px" });
+    document.querySelectorAll(".menu .cat").forEach((s) => spia.observe(s));
+  }
   const per = new Map();
   D.categorie.forEach((c) => c.prodotti.forEach((p) => per.set(p.id, Object.assign({ categoria: c.id }, p))));
   const T = D.t, TIPI = T.tipi, CORPI = T.corpi;

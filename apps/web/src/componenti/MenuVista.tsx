@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { centesimi, formatta } from "@gest/core";
 import type { Aspetto, MenuPubblico } from "../lib/tipi";
 import { caricaFont, pilaFont } from "../lib/font";
@@ -41,6 +41,28 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
   useEffect(() => { caricaFont(aspetto.font_titoli); caricaFont(aspetto.font_testo); },
     [aspetto.font_titoli, aspetto.font_testo]);
 
+  // Barra delle categorie: evidenzia quella che si sta leggendo e la porta in vista (come la pagina pubblica)
+  const radice = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const r = radice.current;
+    if (!r || typeof IntersectionObserver === "undefined") return;
+    const voci = [...r.querySelectorAll<HTMLAnchorElement>(".menu-nav a")];
+    const barra = voci[0]?.parentElement;
+    if (!barra) return;
+    const visibili = new Set<string>();
+    const spia = new IntersectionObserver((cambi) => {
+      cambi.forEach((c) => (c.isIntersecting ? visibili.add(c.target.id) : visibili.delete(c.target.id)));
+      const attuale = [...r.querySelectorAll(".menu-categoria")].find((s) => visibili.has(s.id));
+      for (const a of voci) {
+        const on = !!attuale && a.getAttribute("href") === `#${attuale.id}`;
+        if (on && a.getAttribute("aria-current") !== "true") barra.scrollTo({ left: a.offsetLeft - (barra.clientWidth - a.clientWidth) / 2, behavior: "smooth" });
+        if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+      }
+    }, { rootMargin: "-90px 0px -55% 0px" });
+    r.querySelectorAll(".menu-categoria").forEach((s) => spia.observe(s));
+    return () => spia.disconnect();
+  }, [menu, regione]);
+
   const logo = sorgenteImmagine(aspetto.logo_path, aspetto.logo_dati, aspetto.logo_url);
   const sfondo = sorgenteImmagine(aspetto.sfondo_path, aspetto.sfondo_dati);
   const stile = {
@@ -73,7 +95,7 @@ export function MenuVista({ menu: menuOriginale, aspetto, lingua = "it", onLingu
   ) : null;
 
   return (
-    <div className={`menu menu-${aspetto.layout}${foto ? ` con-foto con-foto-${modo}` : ""}`} style={stile}>
+    <div ref={radice} className={`menu menu-${aspetto.layout}${foto ? ` con-foto con-foto-${modo}` : ""}${onLingua ? " menu-schermo" : ""}`} style={stile}>
       {modo === "pagina" && foto}
       <header className="menu-testata">
         {modo === "testata" && foto}
