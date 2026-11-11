@@ -223,18 +223,18 @@ function SezioneCodici({ versione }: { versione: number }) {
   const { personale, ricarica } = useCodice();
   const avvisa = useAvviso();
   const [utenti, setUtenti] = useState<UtenteLocale[]>([]);
-  const [sicurezza, setSicurezza] = useState({ durata_secondi: 120, solo_responsabile: false, codice_per_tutti: false });
+  const [sicurezza, setSicurezza] = useState({ durata_secondi: 120, solo_responsabile: false, codice_obbligatorio: false });
   const [codice, setCodice] = useState<{ id: string; nome: string; proprio: boolean; ha: boolean } | null>(null);
 
   const carica = useCallback(async () => {
     if (!locale) return;
     const [u, s] = await Promise.all([
       sb().rpc("elenco_utenti", { p_locale: locale.id }),
-      sb().from("sicurezza_sala").select("durata_secondi, solo_responsabile, codice_per_tutti").eq("locale_id", locale.id).maybeSingle(),
+      sb().from("sicurezza_sala").select("durata_secondi, solo_responsabile, codice_obbligatorio").eq("locale_id", locale.id).maybeSingle(),
     ]);
     if (u.error) { avvisa(messaggioErrore(u.error), "errore"); return; }
     setUtenti(u.data as UtenteLocale[]);
-    if (s.data) setSicurezza(s.data as { durata_secondi: number; solo_responsabile: boolean; codice_per_tutti: boolean });
+    if (s.data) setSicurezza(s.data as { durata_secondi: number; solo_responsabile: boolean; codice_obbligatorio: boolean });
     await ricarica();
   }, [locale, avvisa, ricarica, versione]);
   useEffect(() => { void carica(); }, [carica]);
@@ -245,10 +245,10 @@ function SezioneCodici({ versione }: { versione: number }) {
     if (error) avvisa(messaggioErrore(error), "errore"); else avvisa(ok);
     await carica();
   };
-  const salvaSicurezza = (s: { durata_secondi: number; solo_responsabile: boolean; codice_per_tutti: boolean }) => {
+  const salvaSicurezza = (s: { durata_secondi: number; solo_responsabile: boolean; codice_obbligatorio: boolean }) => {
     setSicurezza(s);
     void azione(() => sb().rpc("imposta_sicurezza_sala", { p_locale: locale.id, p_durata_secondi: s.durata_secondi, p_solo_responsabile: s.solo_responsabile,
-      p_codice_per_tutti: s.codice_per_tutti }), "Impostazioni salvate");
+      p_codice_obbligatorio: puo(ruolo, "cassa") ? s.codice_obbligatorio : null }), "Impostazioni salvate");
   };
   const persona = (id: string) => personale.find((p) => p.id === id);
 
@@ -256,11 +256,12 @@ function SezioneCodici({ versione }: { versione: number }) {
     <section className="gruppo">
       <legend>Codici personali</legend>
       <p className="muto piccolo">
-        Sui dispositivi condivisi (tablet di sala, PC) segna l'account come <b>postazione</b>: per aprire tavoli, comandare, confermare,
-        incassare o stornare bisogna toccare il proprio nome e inserire il proprio codice, e l'azione vale con il ruolo di chi l'ha inserito
-        (un direttore può stornare anche dal tablet dei camerieri). Dopo il tempo scelto la postazione si blocca da sola: una schermata lasciata
-        aperta non modifica nulla. Con <b>«Chiedi il codice su tutti gli account»</b> lo chiede anche sull'account personale di ognuno;
-        segna come <b>esente</b> il bot Telegram, che approva richieste e conti dal telefono. Il menu dal tavolo e il telefono dei clienti non cambiano.
+        Per aprire tavoli, comandare, confermare, incassare o stornare bisogna sempre toccare il proprio nome e inserire il proprio codice,
+        su qualsiasi account (titolare compreso): l'azione vale con il ruolo di chi l'ha inserito e dopo il tempo scelto si blocca da sola,
+        così una schermata lasciata aperta non modifica nulla. Sui dispositivi condivisi (tablet di sala, PC) crea un account da cameriere e
+        segnalo come <b>postazione</b>: lì si lavora solo in sala e in cucina; catalogo, aspetto del sito, magazzino, cassa e impostazioni si
+        gestiscono solo dal proprio account. Il bot Telegram è <b>esente</b> (approva richieste e conti dal telefono). Il menu dal tavolo e il
+        telefono dei clienti non cambiano.
       </p>
       <table className="tabella">
         <thead><tr><th>Nome</th><th>Ruolo</th><th>Codice</th><th>Postazione condivisa</th><th>Esente (bot)</th><th /></tr></thead>
@@ -272,12 +273,12 @@ function SezioneCodici({ versione }: { versione: number }) {
                 <td>{u.nome || u.accesso}</td>
                 <td>{NOMI_RUOLO[u.ruolo]}</td>
                 <td>{p?.postazione ? <span className="muto">—</span> : p?.ha_codice ? "✅ impostato" : <span className="muto">nessuno</span>}</td>
-                <td>{u.gestibile
+                <td>{u.gestibile && (["cameriere", "caposala"] as Ruolo[]).includes(u.ruolo)
                   ? <input type="checkbox" checked={!!p?.postazione} aria-label={`${u.nome || u.accesso}: postazione condivisa`}
                       onChange={(e) => void azione(() => sb().rpc("imposta_chiede_codice", { p_locale: locale.id, p_utente: u.user_id, p_valore: e.target.checked }),
                         e.target.checked ? "Ora l'account chiede il codice personale per le azioni di sala" : "L'account torna personale")} />
                   : p?.postazione ? "sì" : "no"}</td>
-                <td>{u.gestibile
+                <td>{u.gestibile && !p?.postazione
                   ? <input type="checkbox" checked={!!p?.esente} aria-label={`${u.nome || u.accesso}: esente dal codice`}
                       onChange={(e) => void azione(() => sb().rpc("imposta_esente_codice", { p_locale: locale.id, p_utente: u.user_id, p_valore: e.target.checked }),
                         e.target.checked ? "Account esente: lavora senza codice" : "L'account chiede di nuovo il codice")} />
@@ -306,13 +307,14 @@ function SezioneCodici({ versione }: { versione: number }) {
               {[60, 120, 300, 600].map((s) => <option key={s} value={s}>{s < 120 ? `${s} secondi` : `${s / 60} minuti`}</option>)}
             </select>
           </label>
-          <label className="interruttore"><input type="checkbox" checked={sicurezza.codice_per_tutti}
+          <label className="interruttore"><input type="checkbox" checked={sicurezza.codice_obbligatorio} disabled={!puo(ruolo, "cassa")}
             onChange={(e) => {
+              if (!e.target.checked && !confirm("Senza l'obbligo del codice chi usa un account personale lavora in sala senza codice. Spegnerlo solo in emergenza: continuare?")) return;
               const senza = utenti.filter((u) => u.attivo && u.ruolo !== "cucina" && !persona(u.user_id)?.ha_codice && !persona(u.user_id)?.esente && !persona(u.user_id)?.postazione);
               if (e.target.checked && senza.length && !confirm(`Senza codice: ${senza.map((u) => u.nome || u.accesso).join(", ")}. Finché non ne hanno uno non potranno lavorare in sala. Attivare lo stesso?`)) return;
-              salvaSicurezza({ ...sicurezza, codice_per_tutti: e.target.checked });
+              salvaSicurezza({ ...sicurezza, codice_obbligatorio: e.target.checked });
             }} />
-            Chiedi il codice su tutti gli account (non solo sulle postazioni)</label>
+            Codice obbligatorio su tutti gli account (lo cambia solo il titolare: tenerlo attivo)</label>
           <label className="interruttore"><input type="checkbox" checked={sicurezza.solo_responsabile}
             onChange={(e) => salvaSicurezza({ ...sicurezza, solo_responsabile: e.target.checked })} />
             Ogni tavolo lo modifica solo il cameriere che lo segue (caposala e responsabili sempre)</label>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useSessione } from "../lib/sessione";
 import { sb } from "../lib/supabase";
 import { NotificheSala } from "./NotificheSala";
@@ -52,8 +52,12 @@ export function Guscio() {
   const [mioCodice, setMioCodice] = useState(false);
   const daConfermare = useDaConfermare(locale?.id);
   const sottoScorta = useSottoScorta(locale?.id, puo(ruolo, "magazzino"));
+  const percorso = useLocation().pathname;
   if (!locale) return null;
   const cucina = ruolo === "cucina";
+  // Sulla postazione condivisa si lavora solo in sala e in cucina
+  if (postazione && !["/sala", "/cucina"].includes(percorso)) return <Navigate to="/sala" replace />;
+  const ridotto = cucina || postazione;
   return (
     <div className="guscio">
       <header className="barra nascondi-stampa">
@@ -68,15 +72,15 @@ export function Guscio() {
         <nav className="barra-nav">
           {!cucina && <NavLink to="/sala">Sala{daConfermare > 0 && <span className="contatore">{daConfermare}</span>}</NavLink>}
           {puo(ruolo, "cucina.avanza") && <NavLink to="/cucina">Cucina</NavLink>}
-          {!cucina && <NavLink to="/catalogo">Catalogo</NavLink>}
-          {puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
-          {puo(ruolo, "catalogo") && <NavLink to="/enciclopedia">Vini</NavLink>}
-          {puo(ruolo, "magazzino") && <NavLink to="/magazzino" title={sottoScorta ? `${sottoScorta} articoli sotto la scorta minima` : undefined}>
+          {!ridotto && <NavLink to="/catalogo">Catalogo</NavLink>}
+          {!ridotto && puoModificare && <NavLink to="/aspetto">Aspetto</NavLink>}
+          {!ridotto && puo(ruolo, "catalogo") && <NavLink to="/enciclopedia">Vini</NavLink>}
+          {!ridotto && puo(ruolo, "magazzino") && <NavLink to="/magazzino" title={sottoScorta ? `${sottoScorta} articoli sotto la scorta minima` : undefined}>
             Magazzino{sottoScorta > 0 && <span className="contatore contatore-scorta" aria-label={`${sottoScorta} sotto scorta`}>{sottoScorta}</span>}</NavLink>}
-          {puo(ruolo, "cassa") && <NavLink to="/cassa">Cassa</NavLink>}
-          {puo(ruolo, "cassa") && <NavLink to="/fatture">Fatture</NavLink>}
-          {puo(ruolo, "utenti") && <NavLink to="/impostazioni">Impostazioni</NavLink>}
-          {!cucina && <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>}
+          {!ridotto && puo(ruolo, "cassa") && <NavLink to="/cassa">Cassa</NavLink>}
+          {!ridotto && puo(ruolo, "cassa") && <NavLink to="/fatture">Fatture</NavLink>}
+          {!ridotto && puo(ruolo, "utenti") && <NavLink to="/impostazioni">Impostazioni</NavLink>}
+          {!ridotto && <a href={`/m/${locale.slug}`} target="_blank" rel="noreferrer">Menu clienti ↗</a>}
         </nav>
         <BarraOperatore />
         <div className="barra-utente">

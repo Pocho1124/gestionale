@@ -101,7 +101,7 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
 supabase/migrations/ 46 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (451 test)
+supabase/tests/database/  test pgTAP (457 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -149,7 +149,7 @@ deploy/pi/           installer per il server
 |`sfondo\_carosello`|fino a 5 foto di sfondo in più che sfumano a turno (`sfondo\_carosello`, solo percorsi `<locale>/sfondo/…`), `sfondo\_intervallo` 4-30 s, `sfondo\_zoom`|
 |`sfondo\_carosello\_permessi`|`percorsi\_sfondo\_validi()` chiusa a PUBLIC/anon (il test `anon` sorveglia le funzioni pubbliche: ogni funzione nuova va revocata a `public`)|
 |`codici\_personali`|codice personale (4-6 cifre, bcrypt) per ogni persona; account «postazione» (`membri.chiede\_codice`): le azioni di sala valgono solo dopo nome + codice e con il ruolo di chi l'ha inserito (`puo()` → `ruolo\_effettivo`), scadenza `sicurezza\_sala.durata\_secondi`; `responsabile` del tavolo (il cameriere che apre/approva/comanda), con `solo\_responsabile` gli altri camerieri non lo modificano (`prendi\_tavolo` dal caposala in su); 5 errori per dispositivo → 5 min, 10 sullo stesso codice → 15 min; `audit\_log.operatore`; conto, nomi e pagamenti si guardano con `puo\_account`|
-|`codice\_per\_tutti`|`sicurezza\_sala.codice\_per\_tutti`: il codice si chiede su tutti gli account, non solo sulle postazioni; `membri.esente\_codice` per il bot Telegram (`imposta\_esente\_codice`)|
+|`codice\_sempre`|codice obbligatorio su ogni account per le azioni sui tavoli (`sicurezza\_sala.codice\_obbligatorio`, attivo sui locali esistenti, lo spegne solo il titolare); bot Telegram esente (`membri.esente\_codice`); postazione solo cameriere/caposala e solo sala e cucina (`e\_postazione`, `puo\_account`); chi inserisce il codice vede conto e pagamenti|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -161,7 +161,7 @@ deploy/pi/           installer per il server
 |magazzino, reparti, utenti, catalogo, impostazioni|✅|✅|—|—|—|
 |cassa|✅|—|—|—|—|
 
-Sulle **postazioni** (account con «chiede il codice») le prime cinque righe valgono con il ruolo di chi ha inserito il codice personale, non con quello dell'account: un caposala o il titolare possono stornare anche dal tablet dei camerieri. La cucina vede solo lo schermo delle comande.
+Le prime cinque righe richiedono **sempre** il codice personale (su ogni account, titolare compreso; esente solo il bot Telegram) e valgono con il ruolo di chi l'ha inserito: un caposala o il titolare possono stornare anche dal tablet dei camerieri. Le **postazioni** condivise (account da cameriere o caposala) lavorano solo in sala e in cucina; catalogo, aspetto, magazzino, cassa e impostazioni solo dal proprio account. La cucina vede solo lo schermo delle comande.
 
 ## Componenti
 
@@ -202,7 +202,7 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 451 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 457 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
   **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 18 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,

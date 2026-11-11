@@ -88,3 +88,5 @@ Annota qui sotto ciò che non va (pagina, cosa hai fatto, cosa è successo) e ma
 - [ ] Storno dal tablet: il cameriere non può, il caposala inserisce il suo codice e annulla l'ordine.
 - [ ] 5 codici sbagliati: la postazione si blocca 5 minuti.
 - [ ] Account cucina: vede solo lo schermo delle comande.
+- [ ] Anche dal proprio account (titolare compreso) l'apertura di un tavolo chiede nome + codice; il bot Telegram approva senza codice.
+- [ ] Account postazione: nel menu solo Sala e Cucina; un indirizzo come /catalogo riporta alla Sala.

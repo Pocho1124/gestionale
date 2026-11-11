@@ -11,7 +11,7 @@ import type { Ruolo } from "./tipi";
  */
 export interface Persona { id: string; nome: string; ruolo: Ruolo; ha_codice: boolean; postazione: boolean; esente?: boolean }
 export interface Operatore { id: string; nome: string; ruolo: Ruolo; scade_at: string }
-interface StatoOperatore { chiede_codice: boolean; postazione?: boolean; codice_per_tutti?: boolean; durata_secondi: number; solo_responsabile: boolean; operatore: Operatore | null; personale: Persona[] }
+interface StatoOperatore { chiede_codice: boolean; postazione?: boolean; codice_obbligatorio?: boolean; durata_secondi: number; solo_responsabile: boolean; operatore: Operatore | null; personale: Persona[] }
 
 interface ValoreCodice {
   chiedeCodice: boolean;
