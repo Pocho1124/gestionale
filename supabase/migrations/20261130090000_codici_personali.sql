@@ -411,3 +411,5 @@ revoke execute on function public.sessione_accesso(), public.ruolo_di(uuid, uuid
 grant execute on function public.stato_operatore(uuid), public.entra_operatore(uuid, uuid, text), public.esci_operatore(uuid),
   public.imposta_codice(uuid, uuid, text, text), public.imposta_chiede_codice(uuid, uuid, boolean),
   public.imposta_sicurezza_sala(uuid, int, boolean), public.prendi_tavolo(uuid) to authenticated;
+-- puo_account è nelle regole di lettura di nomi_clienti e pagamenti: le regole girano con i permessi di chi legge
+grant execute on function public.puo_account(uuid, text) to authenticated;
