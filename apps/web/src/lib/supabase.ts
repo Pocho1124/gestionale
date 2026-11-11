@@ -8,7 +8,7 @@ export const RPC_CON_CODICE = new Set([
   "registra_pagamento", "annulla_pagamento", "esito_pos", "imposta_sconto", "imposta_coperto", "imposta_coperti", "sposta_tavolo",
   "unisci_tavoli", "arriva_prenotazione", "gestisci_conto", "ristampa_comanda", "sblocca_codice_tavolo", "prendi_tavolo",
 ]);
-interface Custode { richiedi: () => Promise<boolean>; rifiutato: () => Promise<boolean> }
+interface Custode { richiedi: () => Promise<boolean>; rifiutato: () => Promise<boolean>; dopo: () => void }
 let custode: Custode | null = null;
 /** Tastierino del codice personale (lib/codice.tsx): chiede il codice prima dell'azione e, se il database rifiuta, una volta ancora. */
 export const impostaCustode = (c: Custode | null) => { custode = c; };
@@ -37,9 +37,13 @@ export async function inizializzaSupabase(): Promise<void> {
     if (!guardia || !RPC_CON_CODICE.has(fn)) return rpc(fn, args, opzioni);
     return (async () => {
       if (!(await guardia.richiedi())) return annullata;
-      const r = await rpc(fn, args, opzioni);
-      if (r.error?.code !== "42501" || r.error.message !== "Permesso negato") return r;
-      return (await guardia.rifiutato()) ? await rpc(fn, args, opzioni) : r;
+      try {
+        const r = await rpc(fn, args, opzioni);
+        if (r.error?.code !== "42501" || r.error.message !== "Permesso negato") return r;
+        return (await guardia.rifiutato()) ? await rpc(fn, args, opzioni) : r;
+      } finally {
+        guardia.dopo();   // codice a ogni azione: la postazione si blocca subito dopo
+      }
     })();
   }) as typeof c.rpc;
   client = c;

@@ -101,8 +101,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 47 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (467 test)
+supabase/migrations/ 48 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (472 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -152,6 +152,7 @@ deploy/pi/           installer per il server
 |`codici\_personali`|codice personale (4-6 cifre, bcrypt) per ogni persona; account «postazione» (`membri.chiede\_codice`): le azioni di sala valgono solo dopo nome + codice e con il ruolo di chi l'ha inserito (`puo()` → `ruolo\_effettivo`), scadenza `sicurezza\_sala.durata\_secondi`; `responsabile` del tavolo (il cameriere che apre/approva/comanda), con `solo\_responsabile` gli altri camerieri non lo modificano (`prendi\_tavolo` dal caposala in su); 5 errori per dispositivo → 5 min, 10 sullo stesso codice → 15 min; `audit\_log.operatore`; conto, nomi e pagamenti si guardano con `puo\_account`|
 |`codice\_sempre`|codice obbligatorio su ogni account per le azioni sui tavoli (`sicurezza\_sala.codice\_obbligatorio`, attivo sui locali esistenti, lo spegne solo il titolare); bot Telegram esente (`membri.esente\_codice`); postazione solo cameriere/caposala e solo sala e cucina (`e\_postazione`, `puo\_account`); chi inserisce il codice vede conto e pagamenti|
 |`rinforzi\_codici`|blocco crescente sul codice di una persona (ogni 10 errori: 15 min, 1 h, … 24 h, conteggio non azzerato), il «codice attuale» sbagliato nel cambio codice conta come tentativo (`imposta\_codice` restituisce `{errore}`), postazioni ed esenti senza codice, esenzione solo dal titolare, prenotazioni senza codice|
+|`codice\_ogni\_azione`|`durata\_secondi` 0 (predefinita e impostata sui locali esistenti): il backoffice chiede nome + codice a ogni azione di sala e blocca subito dopo, il server tiene il codice valido 30 s; validità 30-900 s ancora sceglibile|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -204,7 +205,7 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 467 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 472 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
   **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 18 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,

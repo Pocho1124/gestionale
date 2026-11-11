@@ -83,7 +83,7 @@ Annota qui sotto ciò che non va (pagina, cosa hai fatto, cosa è successo) e ma
 
 - [ ] Impostazioni → Codici personali: codice per ogni cameriere, caposala e responsabile; il tablet di sala segnato come «postazione condivisa».
 - [ ] Dal tablet senza codice: «Apri tavolo» mostra il tastierino (nome + codice); con il codice giusto il tavolo si apre e risulta «Segue il tavolo: <nome>».
-- [ ] Dopo il tempo scelto (o «🔒 Blocca») la postazione chiede di nuovo il codice; la schermata lasciata aperta non modifica nulla.
+- [ ] Con «Chiedi il codice: a ogni azione» (predefinito) ogni apertura, comanda, conferma, incasso o storno chiede nome + codice, anche subito dopo un'altra azione.
 - [ ] Con «solo il cameriere che lo segue» attivo: un altro cameriere non modifica il tavolo; il caposala sì e può «Prendi il tavolo».
 - [ ] Storno dal tablet: il cameriere non può, il caposala inserisce il suo codice e annulla l'ordine.
 - [ ] 5 codici sbagliati: la postazione si blocca 5 minuti.

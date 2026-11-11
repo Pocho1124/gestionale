@@ -223,7 +223,7 @@ function SezioneCodici({ versione }: { versione: number }) {
   const { personale, ricarica } = useCodice();
   const avvisa = useAvviso();
   const [utenti, setUtenti] = useState<UtenteLocale[]>([]);
-  const [sicurezza, setSicurezza] = useState({ durata_secondi: 120, solo_responsabile: false, codice_obbligatorio: false });
+  const [sicurezza, setSicurezza] = useState({ durata_secondi: 0, solo_responsabile: false, codice_obbligatorio: false });
   const [codice, setCodice] = useState<{ id: string; nome: string; proprio: boolean; ha: boolean } | null>(null);
 
   const carica = useCallback(async () => {
@@ -302,9 +302,9 @@ function SezioneCodici({ versione }: { versione: number }) {
       </table>
       {puo(ruolo, "impostazioni") && (
         <div className="riga-form">
-          <label>Il codice vale per{" "}
+          <label>Chiedi il codice{" "}
             <select value={sicurezza.durata_secondi} onChange={(e) => salvaSicurezza({ ...sicurezza, durata_secondi: Number(e.target.value) })}>
-              {[60, 120, 300, 600].map((s) => <option key={s} value={s}>{s < 120 ? `${s} secondi` : `${s / 60} minuti`}</option>)}
+              {[0, 60, 120, 300, 600].map((s) => <option key={s} value={s}>{s === 0 ? "a ogni azione (consigliato)" : `con validità di ${s < 120 ? `${s} secondi` : `${s / 60} minuti`}`}</option>)}
             </select>
           </label>
           <label className="interruttore"><input type="checkbox" checked={sicurezza.codice_obbligatorio} disabled={!puo(ruolo, "cassa")}

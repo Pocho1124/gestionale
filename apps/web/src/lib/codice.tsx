@@ -15,6 +15,8 @@ interface StatoOperatore { chiede_codice: boolean; postazione?: boolean; codice_
 
 interface ValoreCodice {
   chiedeCodice: boolean;
+  /** Il codice si chiede a ogni azione (nessuna validità a tempo). */
+  ogniAzione: boolean;
   /** L'account collegato è una postazione condivisa (non ha un «proprio» codice). */
   postazione: boolean;
   soloResponsabile: boolean;
@@ -55,9 +57,11 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [stato?.operatore]);
 
+  // Durata 0: il codice si chiede a ogni azione (nessuna finestra di validità sullo schermo)
+  const ogniAzione = (s: StatoOperatore | null) => !!s && s.durata_secondi === 0;
   const richiedi = useCallback((motivo = "") => {
     const s = statoRef.current;
-    if (!s?.chiede_codice || valido(s.operatore)) return Promise.resolve(true);
+    if (!s?.chiede_codice || (!ogniAzione(s) && valido(s.operatore))) return Promise.resolve(true);
     attesa.current?.(false);
     setAperto(motivo);
     return new Promise<boolean>((risolvi) => { attesa.current = risolvi; });
@@ -75,9 +79,16 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
         setStato(statoRef.current);
         return richiedi("Codice scaduto o permesso riservato a un ruolo superiore (es. caposala): inserisci il codice di chi può farlo.");
       },
+      dopo: () => {
+        const s = statoRef.current;
+        if (!s?.chiede_codice || !ogniAzione(s) || !locale) return;
+        statoRef.current = { ...s, operatore: null };
+        setStato(statoRef.current);
+        void sb().rpc("esci_operatore", { p_locale: locale.id });
+      },
     });
     return () => impostaCustode(null);
-  }, [richiedi]);
+  }, [richiedi, locale]);
 
   const chiudi = (ok: boolean, operatore?: Operatore) => {
     if (operatore) setStato((s) => (s ? { ...s, operatore } : s));
@@ -92,7 +103,7 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const valore: ValoreCodice = {
-    chiedeCodice: !!stato?.chiede_codice, postazione: !!stato?.postazione, soloResponsabile: !!stato?.solo_responsabile,
+    chiedeCodice: !!stato?.chiede_codice, ogniAzione: ogniAzione(stato), postazione: !!stato?.postazione, soloResponsabile: !!stato?.solo_responsabile,
     operatore: valido(stato?.operatore ?? null) ? stato!.operatore : null, personale: stato?.personale ?? [],
     richiedi, blocca, ricarica,
   };
@@ -194,7 +205,7 @@ function Tastierino(props: { localeId: string; motivo: string; personale: Person
 
 /** Barra della postazione: chi è di turno (con il tempo che resta) e il tasto per bloccare subito. */
 export function BarraOperatore() {
-  const { chiedeCodice, operatore, blocca, richiedi } = useCodice();
+  const { chiedeCodice, ogniAzione, operatore, blocca, richiedi } = useCodice();
   const [, aggiorna] = useState(0);
   useEffect(() => {
     if (!operatore) return;
@@ -202,6 +213,7 @@ export function BarraOperatore() {
     return () => clearInterval(t);
   }, [operatore]);
   if (!chiedeCodice) return null;
+  if (ogniAzione) return <span className="barra-operatore bloccata" title="Ogni apertura, comanda, incasso o storno chiede nome e codice">🔒 Codice personale a ogni azione</span>;
   if (!operatore) return (
     <button className="barra-operatore bloccata" onClick={() => void richiedi()} title="Le azioni di sala chiedono il codice personale">
       🔒 Postazione bloccata · tocca per entrare
