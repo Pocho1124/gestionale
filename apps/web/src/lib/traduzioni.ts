@@ -27,6 +27,27 @@ export const nomeIn = (l: Lingua, x: { nome: string; nome_en?: string; nome_es?:
 export const descrizioneIn = (l: Lingua, x: { descrizione: string; descrizione_en?: string; descrizione_es?: string; descrizione_de?: string }) => tradotto(l, x, "descrizione");
 export const allergeniIn = (l: Lingua, a: string[]) => a.map((x) => ALLERGENI[l][x] ?? x);
 
+type SceltaLingua = { nome: string; gruppo?: string; gruppo_nome?: string };
+/** Voci a scelta e aggiunte nella lingua scelta; il gruppo dell'aggiunta resta in italiano (raggruppa), quello tradotto va in gruppo_nome. */
+export const scelteIn = <S extends SceltaLingua>(l: Lingua, scelte: S[]): S[] => (l === "it" ? scelte
+  : scelte.map((c) => ({ ...c, nome: tradotto(l, c, "nome"), ...(c.gruppo ? { gruppo_nome: tradotto(l, c, "gruppo") } : {}) })));
+/** Gruppi di scelte di un piatto (es. «Formato») con le loro voci nella lingua scelta. */
+export const gruppiIn = <G extends { nome: string; scelte: SceltaLingua[] }>(l: Lingua, gruppi: G[]): G[] => (l === "it" ? gruppi
+  : gruppi.map((g) => ({ ...g, nome: tradotto(l, g, "nome"), scelte: scelteIn(l, g.scelte) })));
+
+/** Testi della composizione del piatto (Componi), anche per le aggiunte divise per gruppo. */
+export const TESTI_COMPONI = {
+  it: { base: "Base", scegli: "scegli", da: "da", a: "a", finoA: "fino a", scelti: "scelti", nessuna: "Nessuna voce disponibile: chiedi al personale.",
+    gratis: "gratis", incluso: "incluso", annulla: "Annulla", aggiungi: "Aggiungi", componi: "Componi", chiudi: "Chiudi", aggiunte: "Aggiunte", altreAggiunte: "Altre aggiunte" },
+  en: { base: "Base", scegli: "choose", da: "from", a: "to", finoA: "up to", scelti: "selected", nessuna: "Nothing available: please ask our staff.",
+    gratis: "free", incluso: "included", annulla: "Cancel", aggiungi: "Add", componi: "Choose", chiudi: "Close", aggiunte: "Extras", altreAggiunte: "Other extras" },
+  es: { base: "Base", scegli: "elige", da: "de", a: "a", finoA: "hasta", scelti: "elegidos", nessuna: "Nada disponible: pregunta a nuestro personal.",
+    gratis: "gratis", incluso: "incluido", annulla: "Cancelar", aggiungi: "Añadir", componi: "Elegir", chiudi: "Cerrar", aggiunte: "Extras", altreAggiunte: "Otros extras" },
+  de: { base: "Grundpreis", scegli: "wähle", da: "von", a: "bis", finoA: "bis zu", scelti: "gewählt", nessuna: "Nichts verfügbar: Bitte frag unser Personal.",
+    gratis: "gratis", incluso: "inklusive", annulla: "Abbrechen", aggiungi: "Hinzufügen", componi: "Wählen", chiudi: "Schließen", aggiunte: "Extras", altreAggiunte: "Weitere Extras" },
+} satisfies Record<Lingua, Record<string, string>>;
+export type TestiComponi = (typeof TESTI_COMPONI)["it"];
+
 /** Testi fissi della pagina del tavolo. */
 export const TESTI_TAVOLO = {
   it: {
@@ -137,18 +158,19 @@ const ETICHETTE: Record<Lingua, Record<string, string>> = {
 };
 
 /** Menu con i testi del locale nella lingua scelta: nomi, descrizioni, note dei vini, allergeni ed etichette (dove manca resta l'italiano). */
-export function menuInLingua<M extends { categorie: { nome: string; descrizione: string;
+export function menuInLingua<M extends { categorie: { nome: string; descrizione: string; aggiunte?: SceltaLingua[];
   prodotti: { nome: string; descrizione: string; allergeni: string[]; etichette: string[];
-    vino?: { note: string } | null }[] }[] }>(menu: M, l: Lingua): M {
+    vino?: { note: string } | null; opzioni?: { nome: string; scelte: SceltaLingua[] }[] }[] }[] }>(menu: M, l: Lingua): M {
   if (l === "it") return menu;
   return {
     ...menu,
     categorie: menu.categorie.map((c) => ({
-      ...c, nome: tradotto(l, c, "nome"), descrizione: tradotto(l, c, "descrizione"),
+      ...c, nome: tradotto(l, c, "nome"), descrizione: tradotto(l, c, "descrizione"), aggiunte: c.aggiunte && scelteIn(l, c.aggiunte),
       prodotti: c.prodotti.map((p) => ({
         ...p, nome: tradotto(l, p, "nome"), descrizione: tradotto(l, p, "descrizione"), allergeni: allergeniIn(l, p.allergeni),
         etichette: p.etichette.map((e) => ETICHETTE[l][e] ?? e),
         vino: p.vino ? { ...p.vino, note: tradotto(l, p.vino, "note") } : p.vino,
+        opzioni: p.opzioni && gruppiIn(l, p.opzioni),
       })),
     })),
   };

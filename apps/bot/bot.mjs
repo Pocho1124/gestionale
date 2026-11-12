@@ -14,7 +14,7 @@ export function uuid(v) {
   if (typeof v !== "string" || !UUID.test(v)) throw new Error("identificativo non valido");
   return v;
 }
-const TABELLE_ANNULLA = new Set(["prodotti", "categorie", "vini", "abbinamenti", "foto_prodotti", "enciclopedia_vini"]);
+const TABELLE_ANNULLA = new Set(["prodotti", "categorie", "vini", "abbinamenti", "foto_prodotti", "enciclopedia_vini", "gruppi_opzioni", "opzioni", "aggiunte_categorie"]);
 function uuidConfigurazione(nome) {
   const v = (process.env[nome] ?? "").trim();
   if (!UUID.test(v)) { console.error(`${nome} mancante o non valido: deve essere l'UUID del locale`); process.exit(1); }
@@ -367,14 +367,17 @@ export function interpretaConRegole(testo, cat) {
 
   const via = testo.match(/^\s*(?:elimina|cancella|rimuovi|togli)\s+(?:la\s+|il\s+)?(categoria|piatto)?\s*(.+)$/i);
   if (via && !/\bdal menu\b|\bfoto\b|abbinament/i.test(testo)) {
+    // Eliminare toglie il piatto ai clienti: vale solo il nome esatto (un nome simile si propone, non si usa)
+    const nome = norm(via[2].replace(/^(la|il|lo|l'|i|le|gli)\s*/i, "").replace(/[.!]+$/, "").trim());
+    const esatto = (e, tipo) => (norm(e.nome) === nome ? null : { azione: "chiarisci", testo: `Per eliminare serve il nome esatto: scrivi «elimina ${tipo}${e.nome}».` });
     if ((via[1] ?? "").toLowerCase() === "categoria") {
       const c = trova(via[2], cat.categorie);
-      return c ? { azione: "elimina_categoria", categoria: c } : { azione: "non_trovato", cosa: via[2] };
+      return c ? esatto(c, "la categoria ") ?? { azione: "elimina_categoria", categoria: c } : { azione: "non_trovato", cosa: via[2] };
     }
     const p = trova(via[2], cat.prodotti);
-    if (p) return { azione: "elimina_piatto", prodotto: p };
+    if (p) return esatto(p, "") ?? { azione: "elimina_piatto", prodotto: p };
     const c = trova(via[2], cat.categorie);
-    if (c && norm(c.nome) === norm(via[2].replace(/^(la|il|lo|l'|i|le|gli)\s+/i, ""))) return { azione: "elimina_categoria", categoria: c };
+    if (c && norm(c.nome) === nome) return { azione: "elimina_categoria", categoria: c };
     return { azione: "non_trovato", cosa: via[2] };
   }
 
@@ -702,6 +705,26 @@ export function anteprima(a, cat) {
   }
 }
 
+/**
+ * Righe che il database elimina a cascata con i piatti (scelte, scheda del vino, foto, abbinamenti): /annulla le rimette.
+ * Un piatto con la ricetta di magazzino non si elimina dal bot (non potrebbe ripristinarla): si elimina dal backoffice.
+ */
+async function righeCollegate(ids) {
+  if (!ids.length) return [];
+  const lista = ids.map(uuid).join(",");
+  const [ricette, gruppi, vini, foto, abbinamenti] = await Promise.all([
+    db(`componenti?prodotto_id=in.(${lista})&select=prodotto_id&limit=1`),
+    db(`gruppi_opzioni?prodotto_id=in.(${lista})&select=*`),
+    db(`vini?prodotto_id=in.(${lista})&select=*`),
+    db(`foto_prodotti?prodotto_id=in.(${lista})&select=*`),
+    db(`abbinamenti?or=(piatto_id.in.(${lista}),vino_id.in.(${lista}))&select=*`),
+  ]);
+  if (ricette.length) throw new Error("ha una ricetta di magazzino collegata: eliminalo dal backoffice (Catalogo)");
+  const opzioni = gruppi.length ? await db(`opzioni?gruppo_id=in.(${gruppi.map((g) => uuid(g.id)).join(",")})&select=*`) : [];
+  return [["gruppi_opzioni", gruppi], ["opzioni", opzioni], ["vini", vini], ["foto_prodotti", foto], ["abbinamenti", abbinamenti]]
+    .filter(([, righe]) => righe.length).map(([tabella, righe]) => ({ tabella, inserisci: righe }));
+}
+
 /** Esegue l'azione e restituisce le operazioni per annullarla. */
 async function esegui(a, cat) {
   switch (a.azione) {
@@ -792,16 +815,21 @@ async function esegui(a, cat) {
     case "elimina_piatto": {
       const [riga] = await db(`prodotti?id=eq.${uuid(a.prodotto.id)}&select=*`);
       if (!riga) throw new Error("Il piatto non esiste più");
+      const collegate = await righeCollegate([riga.id]);
       await db(`prodotti?id=eq.${uuid(a.prodotto.id)}`, { metodo: "DELETE" });
-      return { esito: `«${a.prodotto.nome}» eliminato.`, annulla: [{ tabella: "prodotti", inserisci: [riga] }] };
+      return { esito: `«${a.prodotto.nome}» eliminato.`, annulla: [{ tabella: "prodotti", inserisci: [riga] }, ...collegate] };
     }
     case "elimina_categoria": {
       const [riga] = await db(`categorie?id=eq.${uuid(a.categoria.id)}&select=*`);
       if (!riga) throw new Error("La categoria non esiste più");
       const piatti = await db(`prodotti?categoria_id=eq.${uuid(a.categoria.id)}&select=*`);
+      const collegate = await righeCollegate(piatti.map((p) => p.id));
+      const aggiunte = await db(`aggiunte_categorie?categoria_id=eq.${uuid(a.categoria.id)}&select=*`);
       await db(`categorie?id=eq.${uuid(a.categoria.id)}`, { metodo: "DELETE" });
       const annulla = [{ tabella: "categorie", inserisci: [riga] }];
       if (piatti.length) annulla.push({ tabella: "prodotti", inserisci: piatti });
+      annulla.push(...collegate);
+      if (aggiunte.length) annulla.push({ tabella: "aggiunte_categorie", inserisci: aggiunte });
       return { esito: `Categoria «${a.categoria.nome}» eliminata${piatti.length ? ` con ${piatti.length} piatti` : ""}.`, annulla };
     }
     case "aggiungi_categoria": {

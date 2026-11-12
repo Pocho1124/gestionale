@@ -26,6 +26,8 @@ interface ValoreCodice {
   richiedi: (motivo?: string) => Promise<boolean>;
   blocca: () => Promise<void>;
   ricarica: () => Promise<void>;
+  /** Finestra del conto: il codice inserito vale per tutte le azioni finché non si chiama la funzione restituita. */
+  trattieni: () => () => void;
 }
 
 const Ctx = createContext<ValoreCodice | null>(null);
@@ -38,6 +40,9 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
   const attesa = useRef<((ok: boolean) => void) | null>(null);
   const statoRef = useRef<StatoOperatore | null>(null);
   statoRef.current = stato;
+  const [trattenuto, setTrattenuto] = useState(0);
+  const trattenutoRef = useRef(0);
+  trattenutoRef.current = trattenuto;
 
   const ricarica = useCallback(async () => {
     if (!locale || !ruolo) { setStato(null); return; }
@@ -61,7 +66,7 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
   const ogniAzione = (s: StatoOperatore | null) => !!s && s.durata_secondi === 0;
   const richiedi = useCallback((motivo = "") => {
     const s = statoRef.current;
-    if (!s?.chiede_codice || (!ogniAzione(s) && valido(s.operatore))) return Promise.resolve(true);
+    if (!s?.chiede_codice || ((!ogniAzione(s) || trattenutoRef.current > 0) && valido(s.operatore))) return Promise.resolve(true);
     attesa.current?.(false);
     setAperto(motivo);
     return new Promise<boolean>((risolvi) => { attesa.current = risolvi; });
@@ -81,7 +86,7 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
       },
       dopo: () => {
         const s = statoRef.current;
-        if (!s?.chiede_codice || !ogniAzione(s) || !locale) return;
+        if (!s?.chiede_codice || !ogniAzione(s) || trattenutoRef.current > 0 || !locale) return;
         statoRef.current = { ...s, operatore: null };
         setStato(statoRef.current);
         void sb().rpc("esci_operatore", { p_locale: locale.id });
@@ -102,10 +107,39 @@ export function ProviderCodice({ children }: { children: ReactNode }) {
     setStato((s) => (s ? { ...s, operatore: null } : s));
   }, [locale]);
 
+  // Finestra del conto aperta: il codice di chi l'ha inserito si rinnova sul server ogni 15 s (al massimo 10 minuti);
+  // chiusa la finestra, con il codice a ogni azione la postazione si blocca subito
+  const trattieni = useCallback(() => {
+    setTrattenuto((n) => n + 1);
+    let fatto = false;
+    return () => {
+      if (fatto) return;
+      fatto = true;
+      setTrattenuto((n) => n - 1);
+      const s = statoRef.current;
+      if (trattenutoRef.current <= 1 && s?.chiede_codice && ogniAzione(s) && locale) {
+        statoRef.current = { ...s, operatore: null };
+        setStato(statoRef.current);
+        void sb().rpc("esci_operatore", { p_locale: locale.id });
+      }
+    };
+  }, [locale]);
+  const operatoreId = stato?.operatore?.id;
+  useEffect(() => {
+    if (!trattenuto || !operatoreId || !locale) return;
+    const rinnova = async () => {
+      const { data } = await sb().rpc("trattieni_operatore", { p_locale: locale.id });
+      setStato((s) => (!s?.operatore ? s : { ...s, operatore: data ? { ...s.operatore, scade_at: data as string } : null }));
+    };
+    void rinnova();
+    const t = setInterval(() => void rinnova(), 15000);
+    return () => clearInterval(t);
+  }, [trattenuto, operatoreId, locale]);
+
   const valore: ValoreCodice = {
     chiedeCodice: !!stato?.chiede_codice, ogniAzione: ogniAzione(stato), postazione: !!stato?.postazione, soloResponsabile: !!stato?.solo_responsabile,
     operatore: valido(stato?.operatore ?? null) ? stato!.operatore : null, personale: stato?.personale ?? [],
-    richiedi, blocca, ricarica,
+    richiedi, blocca, ricarica, trattieni,
   };
   return (
     <Ctx.Provider value={valore}>
@@ -205,7 +239,8 @@ function Tastierino(props: { localeId: string; motivo: string; personale: Person
 
 /** Barra della postazione: chi è di turno (con il tempo che resta) e il tasto per bloccare subito. */
 export function BarraOperatore() {
-  const { chiedeCodice, ogniAzione, operatore, blocca, richiedi } = useCodice();
+  const { chiedeCodice, ogniAzione: aOgniAzione, operatore, blocca, richiedi } = useCodice();
+  const ogniAzione = aOgniAzione && !operatore;   // con il conto aperto si vede chi sta incassando
   const [, aggiorna] = useState(0);
   useEffect(() => {
     if (!operatore) return;

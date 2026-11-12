@@ -399,7 +399,7 @@ function SezioneUtenti({ onCambio }: { onCambio: () => void }) {
       {assegnabili.length > 0 && (
         <form className="riga-form" onSubmit={crea} autoComplete="off">
           <input placeholder="Nome (es. Sara)" maxLength={120} value={nuovo.nome} onChange={(e) => setNuovo({ ...nuovo, nome: e.target.value })} required />
-          <input placeholder="Nome utente o email" autoCapitalize="none" value={nuovo.accesso} onChange={(e) => setNuovo({ ...nuovo, accesso: e.target.value.toLowerCase() })} required />
+          <input placeholder="Nome utente (es. mario.rossi)" autoCapitalize="none" pattern="[a-z0-9._\-]{2,40}" title="Da 2 a 40 tra lettere, numeri, punto e trattino: niente email" value={nuovo.accesso} onChange={(e) => setNuovo({ ...nuovo, accesso: e.target.value.toLowerCase().replace(/\s/g, "") })} required />
           <input type="password" placeholder="Password (min. 10)" autoComplete="new-password" value={nuovo.password} onChange={(e) => setNuovo({ ...nuovo, password: e.target.value })} required />
           <select value={nuovo.ruolo} onChange={(e) => setNuovo({ ...nuovo, ruolo: e.target.value as Ruolo })}>
             {assegnabili.map((r) => <option key={r} value={r}>{NOMI_RUOLO[r]}</option>)}

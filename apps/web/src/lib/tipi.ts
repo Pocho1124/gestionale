@@ -40,8 +40,12 @@ export interface MenuPubblico {
 }
 
 /** Gruppo di scelte di un piatto componibile (es. «Salumi», da 1 a 3 voci). */
-export interface GruppoScelte { id: string; nome: string; min: number; max: number; scelte: Scelta[] }
-export interface Scelta { id: string; nome: string; sovrapprezzo_cent: number; /** solo aggiunte: «Salumi», «Formaggi»… */ gruppo?: string }
+export interface GruppoScelte { id: string; nome: string; min: number; max: number; scelte: Scelta[]; nome_en?: string; nome_es?: string; nome_de?: string }
+export interface Scelta {
+  id: string; nome: string; sovrapprezzo_cent: number; /** solo aggiunte: «Salumi», «Formaggi»… (in italiano: raggruppa) */ gruppo?: string;
+  nome_en?: string; nome_es?: string; nome_de?: string; gruppo_en?: string; gruppo_es?: string; gruppo_de?: string;
+  /** Gruppo dell'aggiunta nella lingua del cliente (solo da mostrare) */ gruppo_nome?: string;
+}
 
 export interface SchedaVino {
   tipo: "rosso" | "bianco" | "rosato" | "bollicine" | "dolce";

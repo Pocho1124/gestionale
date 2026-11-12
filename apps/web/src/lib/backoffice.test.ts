@@ -6,7 +6,7 @@ import { nomeFileXml, xmlFattura, type Fattura } from "./fatture";
 import { conAggiunte, prezzoMinimo } from "./aggiunte";
 import { animazioniCarosello } from "./carosello";
 import { puo, puoSala } from "./permessi";
-import { TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, menuInLingua, nomeIn } from "./traduzioni";
+import { TESTI_COMPONI, TESTI_MENU, TESTI_TAVOLO, allergeniIn, descrizioneIn, gruppiIn, menuInLingua, nomeIn, scelteIn } from "./traduzioni";
 
 const tavolo = (forma: Tavolo["forma"], posti: number): Tavolo =>
   ({ id: "t", locale_id: "l", sala_id: "s", nome: "1", posti, forma, x: 0, y: 0, rotazione: 0, qr_token: "q", attivo: true });
@@ -137,6 +137,24 @@ describe("aggiunte divise per gruppo", () => {
     const voci = (...p: number[]) => p.map((c) => ({ sovrapprezzo_cent: c }));
     expect(prezzoMinimo(0, [{ min: 1, scelte: voci(600, 400, 500) }, { min: 0, scelte: voci(300) }])).toBe(400);
     expect(prezzoMinimo(1000, [{ min: 2, scelte: voci(0, 0, 0) }])).toBe(1000);
+  });
+});
+
+describe("scelte dei piatti tradotte", () => {
+  it("gruppi e voci nella lingua del cliente, dove manca resta l'italiano", () => {
+    const g = gruppiIn("es", [{ id: "g", nome: "Formato", nome_es: "Tamaño", min: 1, max: 1,
+      scelte: [{ id: "a", nome: "Calice", nome_es: "Copa", sovrapprezzo_cent: 0 }, { id: "b", nome: "Bottiglia", sovrapprezzo_cent: 0 }] }]);
+    expect(g[0].nome).toBe("Tamaño");
+    expect(g[0].scelte.map((s) => s.nome)).toEqual(["Copa", "Bottiglia"]);
+  });
+  it("aggiunte: gruppo tradotto solo da mostrare, raggruppate e con gli id invariati", () => {
+    const tutte = scelteIn("de", [
+      { id: "1", nome: "Miele", nome_de: "Honig", gruppo: "Dolci", gruppo_de: "Süßes", sovrapprezzo_cent: 100 },
+      { id: "2", nome: "Burrata", gruppo: "", sovrapprezzo_cent: 300 },
+    ]);
+    const gruppi = conAggiunte([], tutte, TESTI_COMPONI.de);
+    expect(gruppi.map((x) => [x.id, x.nome])).toEqual([["aggiunte:Dolci", "Extras · Süßes"], ["aggiunte", "Weitere Extras"]]);
+    expect(gruppi[0].scelte[0]).toMatchObject({ id: "1", nome: "Honig" });
   });
 });
 

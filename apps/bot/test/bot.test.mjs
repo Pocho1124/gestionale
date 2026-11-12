@@ -169,6 +169,15 @@ describe("interprete a regole", () => {
   test("nome inesistente in un'eliminazione: nessuna azione distruttiva", () => {
     assert.deepEqual(bot.interpretaConRegole("elimina la capricciosa", catalogo), { azione: "non_trovato", cosa: "capricciosa" });
   });
+
+  test("eliminazione solo con il nome esatto: con un nome simile chiede quello esatto", () => {
+    assert.deepEqual(bot.interpretaConRegole("elimina la margherita", catalogo), { azione: "elimina_piatto", prodotto: MARGHERITA });
+    const simile = bot.interpretaConRegole("elimina la margherit", catalogo);
+    assert.equal(simile.azione, "chiarisci");
+    assert.match(simile.testo, /elimina Margherita/);
+    assert.equal(bot.interpretaConRegole("elimina la categoria pizza", catalogo).azione, "chiarisci");
+    assert.equal(bot.interpretaConRegole("elimina la categoria Pizze", catalogo).azione, "elimina_categoria");
+  });
 });
 
 describe("anteprima", () => {
@@ -264,6 +273,41 @@ describe("anteprima → conferma → /annulla", () => {
     rete.azzera();
     await scrivi("/annulla");
     assert.match(ultimoMessaggio().text, /nessuna modifica da annullare/);
+  });
+
+  test("eliminazione di un vino: /annulla rimette piatto, scelte, scheda, foto e abbinamenti", async () => {
+    const GRUPPO = { id: id(40), prodotto_id: AGLIANICO.id, nome: "Formato" };
+    const OPZIONE = { id: id(41), gruppo_id: GRUPPO.id, nome: "Calice" };
+    const FOTO = { prodotto_id: AGLIANICO.id, percorso: "x/prodotti/y.webp" };
+    const ABB = { piatto_id: GENOVESE.id, vino_id: AGLIANICO.id, motivo: "" };
+    rete.quando("GET", "/rest/v1/prodotti?id=eq.", [AGLIANICO]).quando("GET", "/rest/v1/componenti", [])
+      .quando("GET", "/rest/v1/gruppi_opzioni", [GRUPPO]).quando("GET", "/rest/v1/opzioni?gruppo_id", [OPZIONE])
+      .quando("GET", "/rest/v1/vini?prodotto_id", VINI).quando("GET", "/rest/v1/foto_prodotti", [FOTO])
+      .quando("GET", "/rest/v1/abbinamenti?or=", [ABB]).quando("DELETE", "/rest/v1/prodotti", [])
+      .quando("POST", "/rest/v1/", [{}]);
+    try {
+      await scrivi("elimina Aglianico");
+      const msg = ultimoMessaggio();
+      await premi(pulsanti(msg).find((b) => b.callback_data.startsWith("ok:")).callback_data, msg.text);
+      assert.equal(rete.trova("DELETE", "/rest/v1/prodotti").length, 1);
+      rete.azzera();
+      await scrivi("/annulla");
+      assert.deepEqual(rete.trova("POST", "/rest/v1/").map((c) => [c.url.split("/rest/v1/")[1], c.corpo]),
+        [["prodotti", [AGLIANICO]], ["gruppi_opzioni", [GRUPPO]], ["opzioni", [OPZIONE]], ["vini", VINI], ["foto_prodotti", [FOTO]], ["abbinamenti", [ABB]]]);
+    } finally { configuraRete(); }
+  });
+
+  test("piatto con ricetta di magazzino: il bot non lo elimina", async () => {
+    rete.quando("GET", "/rest/v1/prodotti?id=eq.", [GENOVESE]).quando("GET", "/rest/v1/componenti", [{ prodotto_id: GENOVESE.id }])
+      .quando("GET", "/rest/v1/gruppi_opzioni", []).quando("GET", "/rest/v1/vini?prodotto_id", []).quando("GET", "/rest/v1/foto_prodotti", [])
+      .quando("GET", "/rest/v1/abbinamenti?or=", []);
+    try {
+      await scrivi("elimina Genovese");
+      const msg = ultimoMessaggio();
+      await premi(pulsanti(msg).find((b) => b.callback_data.startsWith("ok:")).callback_data, msg.text);
+      assert.equal(scritture().length, 0);
+      assert.match(rete.trova("POST", "/editMessageText").at(-1).corpo.text, /ricetta di magazzino/);
+    } finally { configuraRete(); }
   });
 
   test("❌ Annulla: nessuna modifica", async () => {

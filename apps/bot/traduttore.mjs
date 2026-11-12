@@ -41,8 +41,8 @@ export function sembraItaliano(originale, tradotto) {
   const italiane = parole.filter((p) => PAROLE_ITALIANE.has(p)).length;
   return italiane >= 2 && italiane / parole.length >= 0.2;
 }
-/** I nomi dei piatti possono restare uguali (Bruschetta, Burrata); categorie, descrizioni e note devono essere tradotti. */
-const descrittivo = (tabella, campo) => campo !== "nome" || tabella === "categorie";
+/** I nomi dei piatti e delle voci possono restare uguali (Bruschetta, Burrata); categorie, gruppi di scelte, descrizioni e note no. */
+const descrittivo = (tabella, campo) => campo !== "nome" || tabella === "categorie" || tabella === "gruppi_opzioni";
 
 /** Lingue di arrivo: suffisso delle colonne, colonna dello stato, nome per il modello e per i campi della risposta. */
 export const LINGUE = {
@@ -75,6 +75,10 @@ const TABELLE = [
   { tabella: "categorie", chiave: "id", tipo: "categoria", campi: [["nome", 80], ["descrizione", 500]], extra: "" },
   { tabella: "prodotti", chiave: "id", tipo: "piatto", campi: [["nome", 120], ["descrizione", 1000]], extra: ",vini(prodotto_id)" },
   { tabella: "vini", chiave: "prodotto_id", tipo: "note del vino", campi: [["note", 600]], extra: "" },
+  // Scelte dei piatti: gruppo (es. «Formato»), voce (es. «Calice»), aggiunta con il suo gruppo (es. «Miele», «Dolci»)
+  { tabella: "gruppi_opzioni", chiave: "id", tipo: "gruppo di scelte di un piatto", campi: [["nome", 80]], extra: "" },
+  { tabella: "opzioni", chiave: "id", tipo: "voce a scelta di un piatto", campi: [["nome", 80]], extra: "" },
+  { tabella: "aggiunte", chiave: "id", tipo: "aggiunta a un piatto e suo gruppo", campi: [["nome", 60], ["gruppo", 40]], extra: "" },
 ];
 const lettura = (t, lingue) => `${t.tabella}?select=${[t.chiave, ...t.campi.map(([it]) => it),
   ...lingue.flatMap((l) => [...t.campi.map(([it]) => it + LINGUE[l].suffisso), LINGUE[l].stato])].join(",")}${t.extra}`;

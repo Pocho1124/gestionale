@@ -7,7 +7,8 @@ import type { GruppoScelte, Scelta } from "./tipi";
  */
 const ID_AGGIUNTE = "aggiunte";
 export const eAggiunte = (id: string) => id === ID_AGGIUNTE || id.startsWith(`${ID_AGGIUNTE}:`);
-export function conAggiunte(gruppi: GruppoScelte[], tutte: Scelta[] | undefined): GruppoScelte[] {
+export function conAggiunte(gruppi: GruppoScelte[], tutte: Scelta[] | undefined,
+  testi: { aggiunte: string; altreAggiunte: string } = { aggiunte: "Aggiunte", altreAggiunte: "Altre aggiunte" }): GruppoScelte[] {
   // Le aggiunte già scelte in un gruppo collegato del piatto (id «gruppo:aggiunta», es. tagliere «Salumi») non si ripetono sotto
   const nelPiatto = new Set(gruppi.flatMap((g) => g.scelte.map((s) => s.id.split(":")[1]).filter(Boolean)));
   const aggiunte = (tutte ?? []).filter((a) => !nelPiatto.has(a.id));
@@ -15,7 +16,8 @@ export function conAggiunte(gruppi: GruppoScelte[], tutte: Scelta[] | undefined)
   const nomi = [...new Set(aggiunte.map((a) => a.gruppo?.trim() ?? ""))].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b, "it"));
   return [...gruppi, ...nomi.map((n) => {
     const scelte = aggiunte.filter((a) => (a.gruppo?.trim() ?? "") === n);
-    return { id: n ? `${ID_AGGIUNTE}:${n}` : ID_AGGIUNTE, nome: n ? `Aggiunte · ${n}` : nomi.length > 1 ? "Altre aggiunte" : "Aggiunte",
+    const etichetta = scelte[0]?.gruppo_nome?.trim() || n;   // gruppo nella lingua del cliente, se tradotto
+    return { id: n ? `${ID_AGGIUNTE}:${n}` : ID_AGGIUNTE, nome: n ? `${testi.aggiunte} · ${etichetta}` : nomi.length > 1 ? testi.altreAggiunte : testi.aggiunte,
       min: 0, max: Math.min(10, scelte.length), scelte };
   })];
 }

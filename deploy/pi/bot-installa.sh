@@ -34,7 +34,7 @@ RIGA=$("${PSQL[@]}" -c "select id || '|' || organizzazione_id from public.locali
 [[ -n "$RIGA" ]] || { echo "Locale non trovato."; exit 1; }
 LOCALE_ID=${RIGA%%|*}; ORG_ID=${RIGA##*|}
 
-# 4. Account dedicato del bot con ruolo di responsabile, limitato a questo locale
+# 4. Account dedicato del bot, limitato a questo locale
 EMAIL="bot-telegram-${SLUG}@gestionale.local"
 PASSWORD=$(openssl rand -hex 24)
 ID_BOT=$("${PSQL[@]}" -c "select id from auth.users where email = '$EMAIL'")
@@ -49,10 +49,12 @@ else
       -H @<(printf 'apikey: %s\nAuthorization: Bearer %s\n' "$SERVICE" "$SERVICE") -H "Content-Type: application/json" --data @-
 fi
 [[ -n "$ID_BOT" ]] || { echo "Creazione dell'account del bot non riuscita."; exit 1; }
-"${PSQL[@]}" -c "insert into public.membri (organizzazione_id, user_id, ruolo, locale_id)
-                 values ('$ORG_ID', '$ID_BOT', 'manager', '$LOCALE_ID')
-                 on conflict (organizzazione_id, user_id) do update set ruolo = 'manager', locale_id = excluded.locale_id" >/dev/null
-echo "Account del bot pronto: $EMAIL (responsabile del locale $SLUG)"
+# Ruolo di responsabile ma «account_bot»: solo catalogo e sala (niente utenti, impostazioni, magazzino, struttura della sala)
+"${PSQL[@]}" -c "insert into public.membri (organizzazione_id, user_id, ruolo, locale_id, esente_codice, account_bot)
+                 values ('$ORG_ID', '$ID_BOT', 'manager', '$LOCALE_ID', true, true)
+                 on conflict (organizzazione_id, user_id) do update set ruolo = 'manager', locale_id = excluded.locale_id,
+                   esente_codice = true, account_bot = true" >/dev/null
+echo "Account del bot pronto: $EMAIL (solo catalogo e sala del locale $SLUG)"
 
 # 5. Configurazione (solo root) e servizio
 umask 077

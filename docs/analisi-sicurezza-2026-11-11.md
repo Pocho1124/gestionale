@@ -42,12 +42,12 @@ bot Telegram, pubblicatore, Worker, stampa, Whisper, installer, pipeline. Nessun
 | ~~Alta~~ | ~~Aggiornamento automatico dall'immagine `:latest` senza verifica~~ | **Chiusa**: immagine firmata con cosign keyless in CI, `aggiorna.sh` verifica la firma e usa il digest. Resta da valutare l'approvazione manuale delle migrazioni |
 | Media | Token Cloudflare DNS sul server con modifica di tutta la zona | delegare `_acme-challenge` a una zona dedicata o token limitato |
 | Media | `archivio-installa.sh` riusa la password del superuser per `supabase_storage_admin` | password dedicata casuale |
-| Media | L'account del bot ha il ruolo di responsabile (utenti, impostazioni, magazzino) | ruolo dedicato con solo catalogo e sala |
-| Media | `/annulla` dopo un'eliminazione dal bot ripristina solo la riga principale (foto, scheda vino, abbinamenti no) | salvare anche le tabelle collegate o eliminazione logica |
-| Bassa | Eliminazioni dal bot con nome riconosciuto in modo approssimato | per «elimina» chiedere il nome esatto |
+| ~~Media~~ | ~~L'account del bot ha il ruolo di responsabile~~ | **Chiusa** (12/11, `bot_ruolo_dedicato`): solo catalogo e sala, niente utenti, impostazioni, magazzino, struttura del locale, chiusura e storno |
+| ~~Media~~ | ~~`/annulla` dopo un'eliminazione dal bot ripristina solo la riga principale~~ | **Chiusa** (12/11): ripristina scelte, scheda del vino, foto, abbinamenti e aggiunte della categoria; piatti con ricetta di magazzino non si eliminano dal bot |
+| ~~Bassa~~ | ~~Eliminazioni dal bot con nome approssimato~~ | **Chiusa** (12/11): «elimina» vale solo con il nome esatto |
 | Bassa | Whisper e `/ora` del pubblicatore senza autenticazione sulla rete Docker condivisa con il database | rete interna dedicata, `cap_drop`, `no-new-privileges` |
 | Bassa | Backoffice in HTTP sulla rete locale (provvisorio) | attivare HTTPS in loco (Da fare n. 1) |
 | Bassa | Modello GGUF scaricato senza SHA256; `JWT_SECRET` in `argv` di openssl; token di stampa valido 5 anni | verifica dell'hash; segreto da file; token più breve |
 | Bassa | CI: `persist-credentials` sui checkout, immagini base senza digest, `npm ci` senza `--ignore-scripts` | fissare i digest e disattivare gli script di installazione |
-| Bassa | `crea_utente` accetta un'email arbitraria già confermata | solo nomi utente o invito |
+| ~~Bassa~~ | ~~`crea_utente` accetta un'email arbitraria già confermata~~ | **Chiusa** (12/11, `utenti_solo_nome`): solo nomi utente |
 | Bassa | Codici a 4 cifre ammessi | consigliare 6 cifre al personale |

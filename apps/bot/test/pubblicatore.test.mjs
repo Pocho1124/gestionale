@@ -224,6 +224,16 @@ describe("pagina statica", () => {
     assert.match(html, /"maiuscole":true/, "nel quiz «keinen Rotwein» con la maiuscola");
   });
 
+  test("scelte del piatto componibile tradotte: gruppo e voci, dove manca resta l'italiano", () => {
+    const m = menuEsempio();
+    const p = m.categorie.flatMap((c) => c.prodotti).find((x) => x.opzioni?.length);
+    p.opzioni[0].nome_de = "Wurstwaren"; p.opzioni[0].scelte[0].nome_de = "Rohschinken";
+    const g = pub.menuInLingua(m, "de").categorie.flatMap((c) => c.prodotti).find((x) => x.id === p.id).opzioni[0];
+    assert.equal(g.nome, "Wurstwaren");
+    assert.deepEqual(g.scelte.map((c) => c.nome), ["Rohschinken", "Culatello"]);
+    assert.equal(pub.menuInLingua(m, "it").categorie.flatMap((c) => c.prodotti).find((x) => x.id === p.id).opzioni[0].nome, "Salumi");
+  });
+
   test("pagina italiana: lingue in alto sopra «Trova il tuo vino», testi invariati", () => {
     const html = pub.pagina(menuEsempio(), "ora");
     assert.match(html, /<html lang="it">/);

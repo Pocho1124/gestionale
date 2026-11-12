@@ -9,13 +9,16 @@ const LOCALE = "00000000-0000-4000-8000-000000000001";
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 /** Database finto: restituisce le righe date e registra le modifiche. */
-function dbFinto({ categorie = [], prodotti = [], vini = [] } = {}) {
+function dbFinto({ categorie = [], prodotti = [], vini = [], gruppi_opzioni = [], opzioni = [], aggiunte = [] } = {}) {
   const modifiche = [];
   const db = async (percorso, opz = {}) => {
     if (opz.metodo === "PATCH") { modifiche.push({ percorso, corpo: opz.corpo }); return []; }
     if (percorso.startsWith("categorie?")) return categorie;
     if (percorso.startsWith("prodotti?")) return prodotti;
     if (percorso.startsWith("vini?")) return vini;
+    if (percorso.startsWith("gruppi_opzioni?")) return gruppi_opzioni;
+    if (percorso.startsWith("opzioni?")) return opzioni;
+    if (percorso.startsWith("aggiunte?")) return aggiunte;
     throw new Error(`percorso inatteso: ${percorso}`);
   };
   return { db, modifiche };
@@ -51,6 +54,16 @@ describe("controllo delle traduzioni", () => {
 });
 
 describe("traduzione del menu", () => {
+  test("scelte dei piatti: gruppi, voci e aggiunte con il loro gruppo", async () => {
+    const voce = (n, nome, extra = {}) => ({ id: id(n), nome, nome_en: "", traduzione_da: "", ...extra });
+    const { db, modifiche } = dbFinto({ gruppi_opzioni: [voce(5, "Formato")], opzioni: [voce(6, "Calice")],
+      aggiunte: [voce(7, "Miele", { gruppo: "Dolci", gruppo_en: "" }), voce(8, "Burrata", { gruppo: "", gruppo_en: "" })] });
+    assert.equal(await traduciMenu({ lingue: ["en"], db, chiediModello: modello, locale: LOCALE }), 4);
+    assert.deepEqual(modifiche.map((m) => m.percorso.split("&")[0]), [`gruppi_opzioni?id=eq.${id(5)}`, `opzioni?id=eq.${id(6)}`, `aggiunte?id=eq.${id(7)}`, `aggiunte?id=eq.${id(8)}`]);
+    assert.deepEqual(modifiche[2].corpo, { nome_en: "EN Miele", gruppo_en: "EN Dolci", traduzione_da: impronta("Miele", "Dolci") });
+    assert.deepEqual(modifiche[3].corpo, { nome_en: "EN Burrata", gruppo_en: "", traduzione_da: impronta("Burrata", "") }, "gruppo vuoto resta vuoto");
+  });
+
   test("traduce nomi e descrizioni delle voci nuove e salva l'impronta dell'italiano", async () => {
     const { db, modifiche } = dbFinto({ categorie: [riga(1, "Taglieri")], prodotti: [riga(2, "Tagliere misto", "Salumi e formaggi per 2")] });
     assert.equal(await traduciMenu({ lingue: ["en"], db, chiediModello: modello, locale: LOCALE }), 2);

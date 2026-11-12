@@ -6,6 +6,7 @@ import { useAvviso } from "./Avviso";
 import { messaggioErrore } from "../lib/errori";
 import { stampaConto } from "../lib/conto";
 import { useSessione } from "../lib/sessione";
+import { useCodice } from "../lib/codice";
 import { puo } from "../lib/permessi";
 import { euro, euroTesto } from "../lib/formato";
 
@@ -38,6 +39,7 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
   const avvisa = useAvviso();
   const naviga = useNavigate();
   const { locale, ruolo } = useSessione();
+  const { trattieni } = useCodice();
   const [conto, setConto] = useState<StatoConto | null>(null);
   const [terminali, setTerminali] = useState<Terminale[]>([]);
   const [modo, setModo] = useState<Modo>("tutto");
@@ -69,6 +71,8 @@ export function Pagamento(props: { sessioneId: string; tavolo: { id: string; nom
     setConto(data as StatoConto);
   }, [props.sessioneId, avvisa]);
   useEffect(() => { void carica(); }, [carica]);
+  // Un solo codice per tutto il conto (pagamenti, POS, sconto, chiusura) finché la finestra resta aperta
+  useEffect(() => trattieni(), [trattieni]);
   useEffect(() => {
     if (!locale) return;
     void sb().from("terminali_pos").select("id, nome").eq("locale_id", locale.id).eq("attivo", true).order("posizione").order("nome")

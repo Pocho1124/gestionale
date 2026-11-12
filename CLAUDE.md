@@ -101,8 +101,8 @@ apps/bot/            Servizi Node 22 senza dipendenze esterne
   trascrizione/      servizio Whisper (Python)
   test/              test node:test di bot, pubblicatore, pagina pubblica (jsdom) e Worker (esclusi dall'immagine)
 packages/core/       logica di dominio condivisa (denaro, divisione alla romana, resto; test vitest)
-supabase/migrations/ 48 migrazioni (vedi sotto)
-supabase/tests/database/  test pgTAP (472 test)
+supabase/migrations/ 52 migrazioni (vedi sotto)
+supabase/tests/database/  test pgTAP (500 test)
 deploy/migrator/     Dockerfile dell'immagine, applica.sh (migrazioni), test.sh (pgTAP)
 deploy/cloudflare/menu-worker.js   Worker del menu pubblico
 deploy/pi/           installer per il server
@@ -153,6 +153,10 @@ deploy/pi/           installer per il server
 |`codice\_sempre`|codice obbligatorio su ogni account per le azioni sui tavoli (`sicurezza\_sala.codice\_obbligatorio`, attivo sui locali esistenti, lo spegne solo il titolare); bot Telegram esente (`membri.esente\_codice`); postazione solo cameriere/caposala e solo sala e cucina (`e\_postazione`, `puo\_account`); chi inserisce il codice vede conto e pagamenti|
 |`rinforzi\_codici`|blocco crescente sul codice di una persona (ogni 10 errori: 15 min, 1 h, … 24 h, conteggio non azzerato), il «codice attuale» sbagliato nel cambio codice conta come tentativo (`imposta\_codice` restituisce `{errore}`), postazioni ed esenti senza codice, esenzione solo dal titolare, prenotazioni senza codice|
 |`codice\_ogni\_azione`|`durata\_secondi` 0 (predefinita e impostata sui locali esistenti): il backoffice chiede nome + codice a ogni azione di sala e blocca subito dopo, il server tiene il codice valido 30 s; validità 30-900 s ancora sceglibile|
+|`conto\_un\_codice`|finestra del conto con un solo codice: il backoffice chiama `trattieni\_operatore` ogni 15 s finché la finestra è aperta (60 s dall'ultimo rinnovo, max 10 min dall'inserimento, `operatori\_attivi.entrato\_at`); chiusa la finestra la postazione si blocca|
+|`bot\_ruolo\_dedicato`|`membri.account\_bot` (`e\_account\_bot`): il bot resta responsabile per il catalogo ma `puo\_account` gli nega utenti, impostazioni, magazzino, reparti, cassa; niente `sala.chiudi`/`ordini.annulla`; regole restrittive su locali, aspetto, sale, tavoli, piantina, Wi-Fi e `rigenera\_qr\_tavolo`|
+|`utenti\_solo\_nome`|`crea\_utente` accetta solo nomi utente (2-40 tra lettere, numeri, punto, trattino): niente email arbitrarie già confermate|
+|`scelte\_tradotte`|`nome\_en/es/de` e stati della traduzione su `gruppi\_opzioni`, `opzioni`, `aggiunte` (anche `gruppo\_en/es/de`), esposti da `menu\_pubblico`; comande e conto restano in italiano|
 
 ### Ruoli e capacità (`puo()`)
 
@@ -205,11 +209,11 @@ Vini (enciclopedia), Cucina (schermo delle comande), Magazzino, Cassa con report
 ## Test
 
 * **Database**: `sh deploy/migrator/applica.sh supabase/migrations` poi `sh deploy/migrator/test.sh supabase/tests/database`
-(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 472 test superati.
+(su un PostgreSQL con pgTAP; in CI usa `supabase/postgres`). Atteso: 500 test superati.
 * **Backoffice**: `pnpm --filter web build` (TypeScript + Vite; pagine caricate su richiesta). **Core**: `vitest` in `packages/core`.
-  **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 18 test.
+  **Logica del backoffice** (moduli senza React, `apps/web/src/**/*.test.ts`): da `packages/core` `npx vitest run --config vitest.backoffice.config.mjs`. Atteso: 20 test.
 * **Servizi** (`apps/bot/test/`, job `servizi` della pipeline): `cd apps/bot && npm ci && npm test` (`node --test`,
-jsdom solo come dipendenza di sviluppo). Atteso: 108 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
+jsdom solo come dipendenza di sviluppo). Atteso: 113 test superati. Usano `BOT\_TEST=1` / `PUBBLICATORE\_TEST=1`
 (non avviano i servizi) e `fetch` simulato (`test/simula.mjs`): nessuna chiamata reale a Telegram, Supabase, Ollama, Cloudflare.
   * `bot.test.mjs`: regole, IA vincolata (numeri solo dal testo, enum), anteprima → conferma → /annulla, notifiche di sala.
   * `pubblicatore.test.mjs`: D1/KV, immagini versionate e pulizia, percorsi, escape dell'HTML.
@@ -227,9 +231,9 @@ jsdom solo come dipendenza di sviluppo). Atteso: 108 test superati. Usano `BOT\_
 3. QR stampabili con il nuovo dominio (non ancora stampato nulla).
 4. Verifiche sul posto: seguire `docs/collaudo.md` (scaletta completa, compresi stampa reale, accessi, menu in inglese e spagnolo).
 5. Backup: aggiungere immagini Storage (patch pronta), prova di ripristino.
-6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico; testi tradotti anche nella composizione dei piatti (Componi) e nei nomi delle scelte; spagnolo scrivibile a mano nel Catalogo.
+6. Valutare llama.cpp con `llm-confronto.sh`; registratore telematico (serve modello/protocollo dell'RT); traduzioni delle scelte e delle aggiunte scrivibili a mano (oggi solo automatiche).
 8. Collegamento diretto del POS (servizio che aggiorna `pagamenti` con `esito_pos`): serve il modello del terminale / il protocollo. Invio fatture allo SDI tramite intermediario.
-9. Sicurezza (analisi del 10/11 e dell'11/11/2026, rapporto in `docs/analisi-sicurezza-2026-11-11.md`), ancora aperti: account del bot con ruolo dedicato (oggi responsabile); token DNS di Cloudflare limitato; password dedicata di `supabase_storage_admin`; Whisper su rete interna; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare; `crea\_utente` con email arbitraria già confermata (valutare solo nomi utente o invito). Chiusa: aggiornamento automatico senza verifica (immagine firmata con cosign in CI, verificata per digest da `aggiorna.sh`; resta aperta l'approvazione manuale delle migrazioni e la fiducia nel primo installer, scaricato da `:latest`).
+9. Sicurezza (analisi del 10/11 e dell'11/11/2026, rapporto in `docs/analisi-sicurezza-2026-11-11.md`), ancora aperti: token DNS di Cloudflare limitato; password dedicata di `supabase_storage_admin`; Whisper su rete interna; font del menu pubblico ospitati sul Worker invece che da Google (privacy) per una CSP più stretta; regola di rate limiting nel WAF di Cloudflare. Chiuse (12/11): account del bot con permessi dedicati; `crea\_utente` solo con nomi utente; eliminazioni dal bot solo con il nome esatto e `/annulla` completo. Chiusa: aggiornamento automatico senza verifica (immagine firmata con cosign in CI, verificata per digest da `aggiorna.sh`; resta aperta l'approvazione manuale delle migrazioni e la fiducia nel primo installer, scaricato da `:latest`).
 
 ## Note pratiche
 

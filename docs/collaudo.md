@@ -20,6 +20,8 @@ Prima di iniziare: `git push`, pipeline verde, poi sul server `sudo /opt/gestion
   Nel Catalogo, aprendo «🇬🇧 In inglese» di un piatto, compare la traduzione con la scritta «automatica».
 - [ ] Correggi a mano una traduzione: diventa «scritta a mano» e non cambia più; «↺ Torna alla traduzione automatica» la fa rifare.
 - [ ] Cambia il nome italiano di un piatto: entro un paio di minuti cambia anche quello inglese.
+- [ ] Catalogo: «🇪🇸 In spagnolo» e «🇩🇪 In tedesco» di un piatto e i campi accanto al nome della categoria si scrivono a mano e restano («scritta a mano»).
+- [ ] Pagina del tavolo in English/Español/Deutsch: «Componi» di un tagliere con gruppi, voci, «Extras · …», pulsanti e regole («choose 2») nella lingua scelta; la comanda stampata resta in italiano.
 - [ ] Menu pubblico `https://menu.enotechiasantalucia.it/enotechia-santalucia/` (dopo pochi secondi):
   - [ ] **🇮🇹 Italiano / 🇬🇧 English / 🇪🇸 Español** in alto, sopra «Trova il tuo vino» (pagina del tavolo: sotto il numero del tavolo), e non più in fondo; con English: nomi tradotti, gli altri in italiano, allergeni in inglese;
   - [ ] con Español: nomi, descrizioni, note dei vini, allergeni e testi della pagina in spagnolo (anche pagina del tavolo e menu interno `/m/`);
@@ -84,6 +86,7 @@ Annota qui sotto ciò che non va (pagina, cosa hai fatto, cosa è successo) e ma
 - [ ] Impostazioni → Codici personali: codice per ogni cameriere, caposala e responsabile; il tablet di sala segnato come «postazione condivisa».
 - [ ] Dal tablet senza codice: «Apri tavolo» mostra il tastierino (nome + codice); con il codice giusto il tavolo si apre e risulta «Segue il tavolo: <nome>».
 - [ ] Con «Chiedi il codice: a ogni azione» (predefinito) ogni apertura, comanda, conferma, incasso o storno chiede nome + codice, anche subito dopo un'altra azione.
+- [ ] Incasso: apri «Conto» di un tavolo, inserisci il codice al primo pagamento; pagamento successivo, sconto e chiusura nella stessa finestra non lo chiedono più; chiusa la finestra, l'azione successiva lo chiede di nuovo.
 - [ ] Con «solo il cameriere che lo segue» attivo: un altro cameriere non modifica il tavolo; il caposala sì e può «Prendi il tavolo».
 - [ ] Storno dal tablet: il cameriere non può, il caposala inserisce il suo codice e annulla l'ordine.
 - [ ] 5 codici sbagliati: la postazione si blocca 5 minuti.

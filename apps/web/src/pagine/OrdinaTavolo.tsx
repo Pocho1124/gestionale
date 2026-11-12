@@ -8,7 +8,7 @@ import { prezzoMinimo } from "../lib/aggiunte";
 import { ASPETTO_PREDEFINITO } from "./MenuPubblico";
 import { sorgenteImmagine } from "../lib/archivio";
 import { euro } from "../lib/formato";
-import { LINGUE, TESTI_TAVOLO, allergeniIn, descrizioneIn, nomeIn, useLingua } from "../lib/lingua";
+import { LINGUE, TESTI_COMPONI, TESTI_TAVOLO, allergeniIn, descrizioneIn, gruppiIn, nomeIn, scelteIn, useLingua } from "../lib/lingua";
 
 interface InfoTavolo { tavolo: string; slug: string; locale: string; aperto: boolean; chiedi_nome?: boolean; nome_obbligatorio?: boolean }
 interface RigaCarrello { chiave: string; piatto: PiattoMenu; quantita: number; nota: string; scelte: Scelta[]; prezzo: number }
@@ -51,6 +51,7 @@ export function OrdinaTavolo() {
   const [invio, setInvio] = useState(false);
   const [lingua, setLingua] = useLingua();
   const T = TESTI_TAVOLO[lingua];
+  const TC = TESTI_COMPONI[lingua];
 
   const carica = useCallback(async () => {
     const { data } = await sb().rpc("tavolo_cliente", { p_token: token });
@@ -190,7 +191,7 @@ export function OrdinaTavolo() {
                 <span className="menu-prezzo">{componibile(p) ? T.da : ""}{euro(componibile(p) ? prezzoMinimo(p.prezzo_cent, p.opzioni) : p.prezzo_cent)}</span>
               </div>
               {descrizioneIn(lingua, p) && <p className="menu-desc">{descrizioneIn(lingua, p)}</p>}
-              {componibile(p) && <p className="menu-allergeni">{T.componiPiacere}{p.opzioni.map((g) => g.nome).join(", ")}</p>}
+              {componibile(p) && <p className="menu-allergeni">{T.componiPiacere}{gruppiIn(lingua, p.opzioni).map((g) => g.nome).join(", ")}</p>}
               {p.disponibile && (c.aggiunte?.length ?? 0) > 0 && nelCarrello(p) > (carrello[chiaveRiga(p.id, [])]?.quantita ?? 0) && !componibile(p) && (
                 <p className="menu-allergeni">{nelCarrello(p) - (carrello[chiaveRiga(p.id, [])]?.quantita ?? 0)} {T.conAggiunte}</p>
               )}
@@ -199,7 +200,7 @@ export function OrdinaTavolo() {
                 {p.disponibile ? (componibile(p) ? (
                   <>
                     {nelCarrello(p) > 0 && <strong>{nelCarrello(p)} {T.nelTuoOrdine}</strong>}
-                    <button onClick={() => setComponendo({ p, gruppi: conAggiunte(p.opzioni, c.aggiunte) })} aria-label={`${T.componi} ${nomeIn(lingua, p)}`}>{T.componi}</button>
+                    <button onClick={() => setComponendo({ p, gruppi: conAggiunte(gruppiIn(lingua, p.opzioni), scelteIn(lingua, c.aggiunte ?? []), TC) })} aria-label={`${T.componi} ${nomeIn(lingua, p)}`}>{T.componi}</button>
                   </>
                 ) : (
                   <>
@@ -207,7 +208,7 @@ export function OrdinaTavolo() {
                     {carrello[chiaveRiga(p.id, [])] && <strong>{carrello[chiaveRiga(p.id, [])]!.quantita}</strong>}
                     <button onClick={() => cambia(p, 1)} aria-label={`${T.aggiungi} ${nomeIn(lingua, p)}`}>{carrello[chiaveRiga(p.id, [])] ? "+" : T.aggiungi}</button>
                     {(c.aggiunte?.length ?? 0) > 0 && (
-                      <button className="ordina-aggiunte" onClick={() => setComponendo({ p, gruppi: conAggiunte([], c.aggiunte) })}
+                      <button className="ordina-aggiunte" onClick={() => setComponendo({ p, gruppi: conAggiunte([], scelteIn(lingua, c.aggiunte ?? []), TC) })}
                         aria-label={`${T.aggiuntePer} ${nomeIn(lingua, p)}`}>{T.aggiunte}</button>
                     )}
                   </>
@@ -300,7 +301,7 @@ export function OrdinaTavolo() {
       )}
 
       {componendo && (
-        <Componi nome={nomeIn(lingua, componendo.p)} base={componendo.p.prezzo_cent} gruppi={componendo.gruppi} variante="menu" onChiudi={() => setComponendo(null)}
+        <Componi nome={nomeIn(lingua, componendo.p)} base={componendo.p.prezzo_cent} gruppi={componendo.gruppi} variante="menu" testi={TC} onChiudi={() => setComponendo(null)}
           onConferma={(scelte) => { cambiaRiga(componendo.p, scelte, 1); setComponendo(null); setMessaggio({ testo: `${nomeIn(lingua, componendo.p)} ${T.aggiuntoAlTuo}` }); }} />
       )}
 

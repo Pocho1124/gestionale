@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { GruppoScelte, Scelta } from "../lib/tipi";
 import { euro } from "../lib/formato";
 import { conAggiunte, eAggiunte } from "../lib/aggiunte";
+import { TESTI_COMPONI, type TestiComponi } from "../lib/traduzioni";
 
 export { conAggiunte };
 
@@ -16,7 +17,10 @@ export const descriviScelte = (scelte: { nome: string }[]) => (scelte.length ? `
 export function Componi(props: {
   nome: string; base: number; gruppi: GruppoScelte[]; variante: "menu" | "gestionale";
   onConferma: (scelte: Scelta[]) => void; onChiudi: () => void;
+  /** Testi nella lingua del cliente (pagina del tavolo); in sala resta l'italiano. */
+  testi?: TestiComponi;
 }) {
+  const t = props.testi ?? TESTI_COMPONI.it;
   const [scelte, setScelte] = useState<Record<string, Scelta[]>>({});
   const tutte = useMemo(() => Object.values(scelte).flat(), [scelte]);
   const nAggiunte = Object.entries(scelte).reduce((n, [id, l]) => n + (eAggiunte(id) ? l.length : 0), 0);
@@ -30,18 +34,18 @@ export function Componi(props: {
     if (lista.length >= g.max) return cur;
     return { ...cur, [g.id]: [...lista, s] };
   });
-  const regola = (g: GruppoScelte) => g.min === g.max ? `scegli ${g.max}` : g.min > 0 ? `da ${g.min} a ${g.max}` : `fino a ${g.max}`;
+  const regola = (g: GruppoScelte) => g.min === g.max ? `${t.scegli} ${g.max}` : g.min > 0 ? `${t.da} ${g.min} ${t.a} ${g.max}` : `${t.finoA} ${g.max}`;
 
   const corpo = (
     <div className="componi">
       <h3>{props.nome}</h3>
-      {props.base > 0 && <p className="componi-base">Base {euro(props.base)}</p>}
+      {props.base > 0 && <p className="componi-base">{t.base} {euro(props.base)}</p>}
       {props.gruppi.map((g) => {
         const lista = scelte[g.id] ?? [];
         return (
           <fieldset key={g.id} className={`componi-gruppo${eAggiunte(g.id) ? " componi-aggiunte" : ""}`}>
-            <legend>{g.nome} <span className="componi-regola">{regola(g)} · {lista.length} scelti</span></legend>
-            {g.scelte.length === 0 && <p className="componi-vuoto">Nessuna voce disponibile: chiedi al personale.</p>}
+            <legend>{g.nome} <span className="componi-regola">{regola(g)} · {lista.length} {t.scelti}</span></legend>
+            {g.scelte.length === 0 && <p className="componi-vuoto">{t.nessuna}</p>}
             {g.scelte.map((s) => {
               const scelta = lista.some((x) => x.id === s.id);
               const pieno = !scelta && g.max > 1 && lista.length >= g.max;
@@ -49,7 +53,7 @@ export function Componi(props: {
                 <label key={s.id} className={`componi-voce${scelta ? " scelta" : ""}${pieno ? " piena" : ""}`}>
                   <input type={g.max === 1 ? "radio" : "checkbox"} name={g.id} checked={scelta} disabled={pieno} onChange={() => alterna(g, s)} />
                   <span>{s.nome}</span>
-                  <span className="componi-prezzo">{s.sovrapprezzo_cent ? `+ ${euro(s.sovrapprezzo_cent)}` : eAggiunte(g.id) ? "gratis" : "incluso"}</span>
+                  <span className="componi-prezzo">{s.sovrapprezzo_cent ? `+ ${euro(s.sovrapprezzo_cent)}` : eAggiunte(g.id) ? t.gratis : t.incluso}</span>
                 </label>
               );
             })}
@@ -57,21 +61,21 @@ export function Componi(props: {
         );
       })}
       <div className="componi-azioni">
-        <button className="componi-annulla" onClick={props.onChiudi}>Annulla</button>
-        <button className="componi-conferma" disabled={!valido} onClick={() => props.onConferma(tutte)}>Aggiungi · {euro(totale)}</button>
+        <button className="componi-annulla" onClick={props.onChiudi}>{t.annulla}</button>
+        <button className="componi-conferma" disabled={!valido} onClick={() => props.onConferma(tutte)}>{t.aggiungi} · {euro(totale)}</button>
       </div>
     </div>
   );
   return props.variante === "menu" ? (
     <div className="scheda-sfondo" onClick={props.onChiudi}>
-      <div className="scheda-piatto" role="dialog" aria-modal="true" aria-label={`Componi ${props.nome}`} onClick={(e) => e.stopPropagation()}>
-        <button className="scheda-chiudi" onClick={props.onChiudi} aria-label="Chiudi">×</button>
+      <div className="scheda-piatto" role="dialog" aria-modal="true" aria-label={`${t.componi} ${props.nome}`} onClick={(e) => e.stopPropagation()}>
+        <button className="scheda-chiudi" onClick={props.onChiudi} aria-label={t.chiudi}>×</button>
         <div className="scheda-corpo">{corpo}</div>
       </div>
     </div>
   ) : (
     <div className="popup-sfondo" onClick={props.onChiudi}>
-      <div className="popup componi-popup" role="dialog" aria-modal="true" aria-label={`Componi ${props.nome}`} onClick={(e) => e.stopPropagation()}>{corpo}</div>
+      <div className="popup componi-popup" role="dialog" aria-modal="true" aria-label={`${t.componi} ${props.nome}`} onClick={(e) => e.stopPropagation()}>{corpo}</div>
     </div>
   );
 }

@@ -187,6 +187,8 @@ export function menuInLingua(menu, lingua) {
         vino: p.vino ? { ...p.vino, note: coloriVino(lingua, x(p.vino, "note"), p.nome) } : p.vino,
         allergeni: (p.allergeni || []).map((a) => t.allergeniNomi[a] ?? a),
         etichette: (p.etichette || []).map((e) => t.etichetteNomi[e] ?? e),
+        // Scelte del piatto componibile (gruppi e voci) tradotte come il resto
+        opzioni: (p.opzioni || []).map((g) => ({ ...g, nome: x(g, "nome"), scelte: (g.scelte || []).map((c) => ({ ...c, nome: x(c, "nome") })) })),
       })),
     })),
   };
